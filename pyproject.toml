@@ -53,6 +53,7 @@ ignore = [
 dev = [
     "ipykernel>=7.2.0",
     "nbformat>=5.10.4",
+    "pypdf>=6.9.2",
     "pytest>=9.0.2",
     "pyyaml>=6.0.3",
 ]

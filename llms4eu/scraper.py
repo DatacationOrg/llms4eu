@@ -139,6 +139,57 @@ def extract_page_content(html: str, url: str) -> PageContent:
     )
 
 
+def remove_boilerplate(
+    pages: list[PageContent], threshold: float = 0.3
+) -> list[PageContent]:
+    """Remove paragraphs and headings that appear on more than `threshold` fraction of pages."""
+    if len(pages) < 2:
+        return pages
+
+    min_occurrences = max(2, int(len(pages) * threshold))
+
+    # Count how many pages each paragraph / heading text appears on
+    paragraph_counts: dict[str, int] = {}
+    heading_counts: dict[str, int] = {}
+
+    for page in pages:
+        for text in set(page.paragraphs):
+            paragraph_counts[text] = paragraph_counts.get(text, 0) + 1
+        for h in {h.text for h in page.headings}:
+            heading_counts[h] = heading_counts.get(h, 0) + 1
+
+    boilerplate_paragraphs = {
+        t for t, c in paragraph_counts.items() if c >= min_occurrences
+    }
+    boilerplate_headings = {
+        t for t, c in heading_counts.items() if c >= min_occurrences
+    }
+
+    if boilerplate_paragraphs or boilerplate_headings:
+        logger.info(
+            f"Removing boilerplate: {len(boilerplate_paragraphs)} paragraphs, "
+            + f"{len(boilerplate_headings)} headings (threshold={threshold})"
+        )
+
+    cleaned: list[PageContent] = []
+    for page in pages:
+        cleaned.append(
+            PageContent(
+                url=page.url,
+                title=page.title,
+                meta_description=page.meta_description,
+                headings=[
+                    h for h in page.headings if h.text not in boilerplate_headings
+                ],
+                paragraphs=[
+                    p for p in page.paragraphs if p not in boilerplate_paragraphs
+                ],
+                internal_links=page.internal_links,
+            )
+        )
+    return cleaned
+
+
 def crawl_site(
     start_url: str, client: httpx.Client, max_pages: int = MAX_PAGES_PER_SITE
 ) -> list[PageContent]:
@@ -192,6 +243,7 @@ def scrape_urls(
             logger.info(f"Crawling {url} (up to {max_pages} pages)...")
             pages = crawl_site(url, client, max_pages=max_pages)
             if pages:
+                pages = remove_boilerplate(pages)
                 logger.success(f"Finished {url} — {len(pages)} pages scraped")
                 results.append(SiteResult(site_url=url, pages=pages))
             else:
