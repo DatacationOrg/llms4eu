@@ -3,7 +3,7 @@ from pathlib import Path
 from urllib.parse import urljoin, urlparse
 
 import httpx
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, Tag
 from fpdf import FPDF
 from loguru import logger
 
@@ -15,6 +15,7 @@ URLS = [
 ]
 
 MAX_PAGES_PER_SITE = 50
+MIN_PARAGRAPH_LENGTH = 40
 
 HEADERS = {
     "User-Agent": (
@@ -112,17 +113,39 @@ def extract_page_content(html: str, url: str) -> PageContent:
         if normalized and _is_same_domain(normalized, base_domain):
             raw_links.append(normalized)
 
-    # Remove script/style elements before extracting text
-    for element in soup(["script", "style", "nav", "footer", "header"]):
+    # Remove script/style/boilerplate elements before extracting text
+    for element in soup(["script", "style", "nav", "footer", "header", "aside"]):
         element.decompose()
 
+    # Remove newsletter sections and filter/result widgets
+    to_remove: list[Tag] = []
+    for section in soup.find_all("section"):
+        css_classes = list(section.get_attribute_list("class"))
+        if any(
+            kw in str(cls)
+            for cls in css_classes
+            for kw in ("Newsletter", "newsletter", "filterbox")
+        ):
+            to_remove.append(section)
+    for div in soup.find_all("div"):
+        css_classes = list(div.get_attribute_list("class"))
+        if any("filterbox" in str(cls) for cls in css_classes):
+            to_remove.append(div)
+    for el in to_remove:
+        el.decompose()
+
+    # Prefer <main> or <article> content to avoid site-wide boilerplate
+    content_root = soup.find("main") or soup.find("article") or soup
+
     paragraphs = [
-        p.get_text(strip=True) for p in soup.find_all("p") if p.get_text(strip=True)
+        p.get_text(strip=True)
+        for p in content_root.find_all("p")
+        if len(p.get_text(strip=True)) >= MIN_PARAGRAPH_LENGTH
     ]
 
     headings: list[Heading] = []
     for level in range(1, 4):
-        for h in soup.find_all(f"h{level}"):
+        for h in content_root.find_all(f"h{level}"):
             text = h.get_text(strip=True)
             if text:
                 headings.append(Heading(level=level, text=text))
@@ -140,7 +163,7 @@ def extract_page_content(html: str, url: str) -> PageContent:
 
 
 def remove_boilerplate(
-    pages: list[PageContent], threshold: float = 0.3
+    pages: list[PageContent], threshold: float = 0.1
 ) -> list[PageContent]:
     """Remove paragraphs and headings that appear on more than `threshold` fraction of pages."""
     if len(pages) < 2:
@@ -356,6 +379,6 @@ def print_summary(results: list[SiteResult]) -> None:
 
 
 if __name__ == "__main__":
-    data = scrape_urls()
+    data = scrape_urls(["https://turispain.es/"])
     save_results_as_pdfs(data)
     print_summary(data)
