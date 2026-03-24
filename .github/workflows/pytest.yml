@@ -1,0 +1,42 @@
+name: Run Pytest
+on:
+  # Manual trigger via button for any branch / PR
+  workflow_dispatch: {}
+
+  # Automatically on push to these branches
+  push:
+    branches:
+      - dev
+      - prod
+
+  # Automatically for pull requests targeting these branches
+  pull_request:
+    branches:
+      - dev
+      - prod
+
+jobs:
+  tests:
+    name: python
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-python: true
+          cache-dependency-glob: |
+            pyproject.toml
+            uv.lock
+            .python-version
+      - name: Setup git user
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+      - name: Run pytest in uv environment (update uv.lock if needed)
+        run: |
+          uv sync
+          uv run pytest -k 'not test_precommit_hooks'

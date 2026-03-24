@@ -1,0 +1,44 @@
+name: Run pre-commit hooks
+on:
+  # Manual trigger via button for any branch / PR
+  workflow_dispatch:
+
+  # Automatically on push to these branches
+  push:
+    branches:
+      - dev
+      - prod
+
+  # Automatically for pull requests targeting these branches
+  pull_request:
+    branches:
+      - dev
+      - prod
+
+jobs:
+  pre-commit:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+      - name: Cache pre-commit environment
+        uses: actions/cache@v5
+        with:
+          path: ~/.cache/pre-commit
+          key: ${{ runner.os }}-pre-commit-${{ hashFiles('**/.pre-commit-config.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pre-commit-
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-python: true
+          cache-dependency-glob: |
+            pyproject.toml
+            uv.lock
+            .python-version
+      - name: Run pre-commit hooks on all files (locked uv environment)
+        run: |
+          uv sync --locked
+          uvx prek run --all-files

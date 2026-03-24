@@ -1,0 +1,39 @@
+name: Check uv.lock Vulnerabilities Weekly
+
+# Run workflow on a schedule and when triggered manually, on prod
+on:
+  schedule:
+    # Runs every Sunday at 03:00 UTC (adjust as needed)
+    - cron: "0 3 * * 0"
+  workflow_dispatch: {}
+
+jobs:
+  pre-commit:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          ref: prod
+
+      - name: Cache pre-commit environment
+        uses: actions/cache@v5
+        with:
+          path: ~/.cache/pre-commit
+          key: ${{ runner.os }}-pre-commit-${{ hashFiles('**/.pre-commit-config.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pre-commit-
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version-file: "pyproject.toml"
+
+      - run: uv sync --locked
+
+      - name: Run pre-commit
+        run: uvx prek run check-uv-lock-vulnerabilities --all-files
