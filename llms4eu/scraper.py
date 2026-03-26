@@ -55,7 +55,7 @@ class PageContent:
     url: str
     title: str
     meta_description: str
-    headings: list[Heading]
+    # headings: list[Heading]
     paragraphs: list[str]
     internal_links: list[str]
 
@@ -143,18 +143,18 @@ def extract_page_content(html: str, url: str) -> PageContent:
         if len(p.get_text(strip=True)) >= MIN_PARAGRAPH_LENGTH
     ]
 
-    headings: list[Heading] = []
-    for level in range(1, 4):
-        for h in content_root.find_all(f"h{level}"):
-            text = h.get_text(strip=True)
-            if text:
-                headings.append(Heading(level=level, text=text))
+    # headings: list[Heading] = []
+    # for level in range(1, 4):
+    #     for h in content_root.find_all(f"h{level}"):
+    #         text = h.get_text(strip=True)
+    #         if text:
+    #             headings.append(Heading(level=level, text=text))
 
     return PageContent(
         url=url,
         title=title,
         meta_description=meta_description,
-        headings=headings,
+        # headings=headings,
         paragraphs=paragraphs,
         internal_links=list(
             dict[str, None].fromkeys(raw_links)
@@ -173,26 +173,26 @@ def remove_boilerplate(
 
     # Count how many pages each paragraph / heading text appears on
     paragraph_counts: dict[str, int] = {}
-    heading_counts: dict[str, int] = {}
+    # heading_counts: dict[str, int] = {}
 
     for page in pages:
         for text in set(page.paragraphs):
             paragraph_counts[text] = paragraph_counts.get(text, 0) + 1
-        for h in {h.text for h in page.headings}:
-            heading_counts[h] = heading_counts.get(h, 0) + 1
+        # for h in {h.text for h in page.headings}:
+        #     heading_counts[h] = heading_counts.get(h, 0) + 1
 
     boilerplate_paragraphs = {
         t for t, c in paragraph_counts.items() if c >= min_occurrences
     }
-    boilerplate_headings = {
-        t for t, c in heading_counts.items() if c >= min_occurrences
-    }
+    # boilerplate_headings = {
+    #     t for t, c in heading_counts.items() if c >= min_occurrences
+    # }
 
-    if boilerplate_paragraphs or boilerplate_headings:
-        logger.info(
-            f"Removing boilerplate: {len(boilerplate_paragraphs)} paragraphs, "
-            + f"{len(boilerplate_headings)} headings (threshold={threshold})"
-        )
+    # if boilerplate_paragraphs or boilerplate_headings:
+    #     logger.info(
+    #         f"Removing boilerplate: {len(boilerplate_paragraphs)} paragraphs, "
+    #         + f"{len(boilerplate_headings)} headings (threshold={threshold})"
+    #     )
 
     cleaned: list[PageContent] = []
     for page in pages:
@@ -201,9 +201,9 @@ def remove_boilerplate(
                 url=page.url,
                 title=page.title,
                 meta_description=page.meta_description,
-                headings=[
-                    h for h in page.headings if h.text not in boilerplate_headings
-                ],
+                # headings=[
+                #     h for h in page.headings if h.text not in boilerplate_headings
+                # ],
                 paragraphs=[
                     p for p in page.paragraphs if p not in boilerplate_paragraphs
                 ],
@@ -332,13 +332,13 @@ def save_results_as_pdfs(
                 pdf.ln(2)
 
             # Headings
-            if page.headings:
-                pdf.set_font("Helvetica", "B", 12)
-                _add_wrapped_text(pdf, "Headings")
-                pdf.set_font("Helvetica", "", 10)
-                for h in page.headings:
-                    prefix = "  " * (h.level - 1)
-                    _add_wrapped_text(pdf, f"{prefix}H{h.level}: {h.text}")
+            # if page.headings:
+            #     pdf.set_font("Helvetica", "B", 12)
+            #     _add_wrapped_text(pdf, "Headings")
+            #     pdf.set_font("Helvetica", "", 10)
+            #     for h in page.headings:
+            #         prefix = "  " * (h.level - 1)
+            #         _add_wrapped_text(pdf, f"{prefix}H{h.level}: {h.text}")
 
             # Paragraphs
             if page.paragraphs:
@@ -367,9 +367,9 @@ def print_summary(results: list[SiteResult]) -> None:
             continue
 
         total_paragraphs = sum(len(p.paragraphs) for p in site.pages)
-        total_headings = sum(len(p.headings) for p in site.pages)
+        # total_headings = sum(len(p.headings) for p in site.pages)
         print(f"  Pages crawled: {len(site.pages)}")
-        print(f"  Total headings: {total_headings}")
+        # print(f"  Total headings: {total_headings}")
         print(f"  Total paragraphs: {total_paragraphs}")
 
         for page in site.pages[:3]:
@@ -379,6 +379,6 @@ def print_summary(results: list[SiteResult]) -> None:
 
 
 if __name__ == "__main__":
-    data = scrape_urls(["https://turispain.es/"])
+    data = scrape_urls([])
     save_results_as_pdfs(data)
     print_summary(data)
