@@ -1,16 +1,16 @@
 [project]
 name = "lllms4eu"
 version = "2026.0.0"
-description = ""
+description = "Web scraper with a browser UI — Datacation"
 authors = [{ name = "Datacation", email = "info@datacation.nl" }]
 requires-python = ">=3.14"
 dependencies = [
     "beautifulsoup4>=4.14.3",
-    "fpdf2>=2.8.7",
+    "fastapi>=0.115.0",
     "httpx>=0.28.1",
     "loguru>=0.7.3",
-    "lxml>=6.0.2",
-    "pydantic-settings>=2.13.1",
+    "lxml>=6.1.0",
+    "uvicorn[standard]>=0.34.0",
 ]
 
 [build-system]
@@ -51,9 +51,10 @@ ignore = [
 
 [dependency-groups]
 dev = [
+    "pygments>=2.20.0",
     "ipykernel>=7.2.0",
     "nbformat>=5.10.4",
-    "pypdf>=6.9.2",
-    "pytest>=9.0.2",
+    "pypdf>=6.10.2",
+    "pytest>=9.0.3",
     "pyyaml>=6.0.3",
 ]

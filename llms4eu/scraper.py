@@ -1,18 +1,12 @@
+from collections.abc import Callable
 from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 from urllib.parse import urljoin, urlparse
 
 import httpx
 from bs4 import BeautifulSoup, Tag
-from fpdf import FPDF
 from loguru import logger
-
-URLS = [
-    "https://www.holland.com",
-    "https://www.toeristeninformatienederland.nl",
-    "https://www.visitbrabant.com",
-    "https://www.friesland.nl",
-]
 
 MAX_PAGES_PER_SITE = 50
 MIN_PARAGRAPH_LENGTH = 40
@@ -214,7 +208,10 @@ def remove_boilerplate(
 
 
 def crawl_site(
-    start_url: str, client: httpx.Client, max_pages: int = MAX_PAGES_PER_SITE
+    start_url: str,
+    client: httpx.Client,
+    max_pages: int = MAX_PAGES_PER_SITE,
+    on_progress: Callable[[str, int, int], None] | None = None,
 ) -> list[PageContent]:
     """Crawl an entire website following internal links, up to max_pages."""
     visited: set[str] = set()
@@ -240,8 +237,9 @@ def crawl_site(
             logger.info(
                 f"  [{len(visited)}/{max_pages}] {url} — {len(page.paragraphs)} paragraphs"
             )
+            if on_progress:
+                on_progress(url, len(visited), max_pages)
 
-            # Queue new internal links
             for link in page.internal_links:
                 if link not in visited:
                     to_visit.append(link)
@@ -255,16 +253,26 @@ def crawl_site(
 
 
 def scrape_urls(
-    urls: list[str] | None = None, max_pages: int = MAX_PAGES_PER_SITE
+    urls: list[str],
+    max_pages: int = MAX_PAGES_PER_SITE,
+    on_progress: Callable[[str, str, int, int], None] | None = None,
 ) -> list[SiteResult]:
     """Crawl each website fully (following internal links) and return results grouped by site."""
-    urls = urls or URLS
     results: list[SiteResult] = []
 
     with httpx.Client(headers=HEADERS, follow_redirects=True, timeout=30.0) as client:
         for url in urls:
             logger.info(f"Crawling {url} (up to {max_pages} pages)...")
-            pages = crawl_site(url, client, max_pages=max_pages)
+
+            def _page_progress(
+                page_url: str, visited: int, total: int, _site_url: str = url
+            ) -> None:
+                if on_progress:
+                    on_progress(_site_url, page_url, visited, total)
+
+            pages = crawl_site(
+                url, client, max_pages=max_pages, on_progress=_page_progress
+            )
             if pages:
                 pages = remove_boilerplate(pages)
                 logger.success(f"Finished {url} — {len(pages)} pages scraped")
@@ -285,17 +293,10 @@ def _sanitize_filename(url: str) -> str:
     return name
 
 
-def _add_wrapped_text(pdf: FPDF, text: str) -> None:
-    """Add text to the PDF, handling encoding issues gracefully."""
-    clean = text.encode("latin-1", errors="replace").decode("latin-1")
-    pdf.multi_cell(0, 6, clean)
-    pdf.ln(2)
-
-
-def save_results_as_pdfs(
+def save_results_as_txt(
     results: list[SiteResult], output_dir: str = "data/scraped"
 ) -> list[Path]:
-    """Save one PDF per website, containing all crawled pages."""
+    """Save one .txt file per website, containing all crawled pages."""
     out = Path(output_dir)
     out.mkdir(parents=True, exist_ok=True)
     saved: list[Path] = []
@@ -306,79 +307,27 @@ def save_results_as_pdfs(
             continue
 
         filename = _sanitize_filename(site.site_url)
-        filepath = out / f"{filename}.pdf"
+        filepath = out / f"{filename}.txt"
 
-        pdf = FPDF()
-        pdf.set_auto_page_break(auto=True, margin=20)
+        lines: list[str] = []
+        lines.append(f"SITE: {site.site_url}")
+        lines.append(f"Scraped: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        lines.append(f"Total pages: {len(site.pages)}")
+        lines.append("=" * 60)
 
-        for page in site.pages:
-            pdf.add_page()
-
-            # Page title
-            pdf.set_font("Helvetica", "B", 16)
-            _add_wrapped_text(pdf, page.title or "Untitled")
-
-            # URL
-            pdf.set_font("Helvetica", "", 8)
-            pdf.set_text_color(100, 100, 100)
-            _add_wrapped_text(pdf, page.url)
-            pdf.set_text_color(0, 0, 0)
-            pdf.ln(2)
-
-            # Meta description
+        for i, page in enumerate(site.pages, 1):
+            lines.append(f"\nPAGE {i}: {page.title or 'Untitled'}")
+            lines.append(f"URL: {page.url}")
             if page.meta_description:
-                pdf.set_font("Helvetica", "I", 10)
-                _add_wrapped_text(pdf, page.meta_description)
-                pdf.ln(2)
+                lines.append(f"Description: {page.meta_description}")
+            lines.append("-" * 40)
+            for paragraph in page.paragraphs:
+                lines.append(paragraph)
+                lines.append("")
+            lines.append("=" * 60)
 
-            # Headings
-            # if page.headings:
-            #     pdf.set_font("Helvetica", "B", 12)
-            #     _add_wrapped_text(pdf, "Headings")
-            #     pdf.set_font("Helvetica", "", 10)
-            #     for h in page.headings:
-            #         prefix = "  " * (h.level - 1)
-            #         _add_wrapped_text(pdf, f"{prefix}H{h.level}: {h.text}")
-
-            # Paragraphs
-            if page.paragraphs:
-                pdf.ln(2)
-                pdf.set_font("Helvetica", "B", 12)
-                _add_wrapped_text(pdf, "Content")
-                pdf.set_font("Helvetica", "", 10)
-                for p in page.paragraphs:
-                    _add_wrapped_text(pdf, p)
-
-        pdf.output(str(filepath))
+        filepath.write_text("\n".join(lines), encoding="utf-8")
         saved.append(filepath)
-        logger.success(f"Saved PDF: {filepath} ({len(site.pages)} pages)")
+        logger.success(f"Saved: {filepath} ({len(site.pages)} pages)")
 
     return saved
-
-
-def print_summary(results: list[SiteResult]) -> None:
-    """Print a readable summary of crawled results."""
-    for site in results:
-        print(f"\n{'=' * 60}")
-        print(f"SITE: {site.site_url}")
-
-        if site.error:
-            print(f"  ERROR: {site.error}")
-            continue
-
-        total_paragraphs = sum(len(p.paragraphs) for p in site.pages)
-        # total_headings = sum(len(p.headings) for p in site.pages)
-        print(f"  Pages crawled: {len(site.pages)}")
-        # print(f"  Total headings: {total_headings}")
-        print(f"  Total paragraphs: {total_paragraphs}")
-
-        for page in site.pages[:3]:
-            print(f"    - {page.title} ({page.url})")
-        if len(site.pages) > 3:
-            print(f"    ... and {len(site.pages) - 3} more pages")
-
-
-if __name__ == "__main__":
-    data = scrape_urls([])
-    save_results_as_pdfs(data)
-    print_summary(data)
