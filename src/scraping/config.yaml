@@ -1,0 +1,7 @@
+max_pages: 50
+place_per: page
+summary_model: gemma4:e4b
+raw_output_dir: data/scraped
+save_raw_text: true
+web_host: 127.0.0.1
+web_port: 8080

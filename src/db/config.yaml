@@ -1,0 +1,2 @@
+seed_path: data/places.jsonl
+schema_path: sql/init.sql

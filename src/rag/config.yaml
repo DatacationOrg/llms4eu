@@ -1,0 +1,3 @@
+collection_name: places
+default_limit: 3
+embedding_model: sentence-transformers/all-MiniLM-L6-v2
