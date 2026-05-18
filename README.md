@@ -1,6 +1,6 @@
-# Tourism RAG Minimal
+# LLMs4EU - Tourism - RAG
 
-Tiny local RAG skeleton for tourism places. SQLite is the source of truth,
+Local RAG for tourism places. SQLite is the source of truth,
 Chroma is the vector index. Both run entirely inside the Python environment.
 
 ## Requirements
