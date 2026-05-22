@@ -5,3 +5,25 @@ raw_output_dir: data/scraped
 save_raw_text: true
 web_host: 127.0.0.1
 web_port: 8080
+
+fetch_pages:
+  db_path: .local/raw_pages.db
+  workers: 4
+  domain_delay_seconds: 1.5
+  timeout_seconds: 30.0
+  retry_statuses: [429, 500, 502, 503, 504]
+  browser_timeout_ms: 45000
+  listing_min_items: 5
+  listing_min_context_words: 2
+  max_document_bytes: 20971520
+  max_document_pages: 100
+  document_extensions:
+    - .pdf
+    - .docx
+    - .pptx
+    - .xlsx
+    - .html
+    - .htm
+    - .md
+    - .txt
+    - .csv

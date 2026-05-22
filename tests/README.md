@@ -6,3 +6,5 @@ The tests stay narrow on purpose.
 Pydantic place model. `test_rag_search.py` keeps local retrieval deterministic
 without model downloads or services. `test_scraping_transform.py` keeps the
 scrape-to-place conversion deterministic without live crawling or LLM calls.
+`test_structured_markdown.py` covers only tiny HTML snippets for listing
+classification.

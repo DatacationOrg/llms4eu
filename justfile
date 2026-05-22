@@ -4,6 +4,9 @@ set windows-shell := ["pwsh", "-NoLogo", "-Command"]
 scrape *URLS:
     uv run python -m src.scraping.scrape --urls {{URLS}}
 
+fetch-pages SOURCE="data/brestanica.json" DB=".local/raw_pages.db":
+    uv run python -m src.scraping.fetch_pages {{SOURCE}} --db {{DB}} --workers 4
+
 init:
     uv run python -m src.db.initialize
 
