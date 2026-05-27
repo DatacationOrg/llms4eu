@@ -10,7 +10,9 @@ __all__ = ["load_places", "load_places_by_id"]
 def load_places() -> list[Place]:
     """Load all place rows in stable order for indexing and inspection."""
     with _connect() as conn:
-        rows = conn.execute("select id, place_description, summary from places order by id").fetchall()
+        rows = conn.execute(
+            "select id, place_description, summary from places order by id"
+        ).fetchall()
     return [Place.model_validate(dict(row)) for row in rows]
 
 

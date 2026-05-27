@@ -1,0 +1,12 @@
+raw_pages_db: .local/raw_pages.db
+collection_name: page_chunks
+default_source_language: sl
+embedding_model: sentence-transformers/all-MiniLM-L6-v2
+question_model: gemma4:26b
+model_aliases:
+  gemma4:26b: gemma4:26b-a4b-it-q4_K_M
+reranker_model: Qwen/Qwen3-Reranker-0.6B
+default_candidate_limit: 10
+question_model_num_ctx: 8192
+question_model_num_predict: 4096
+question_model_reasoning: false

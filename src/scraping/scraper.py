@@ -240,7 +240,9 @@ def scrape_urls(
                 results.append(SiteResult(site_url=url, pages=pages))
             else:
                 logger.error(f"No pages scraped from {url}")
-                results.append(SiteResult(site_url=url, error="No pages could be scraped"))
+                results.append(
+                    SiteResult(site_url=url, error="No pages could be scraped")
+                )
 
     return results
 

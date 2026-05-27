@@ -30,7 +30,11 @@ def search_places(query: str, limit: int | None = None) -> list[ScoredPlace]:
     ids = [hit.id for hit in hits]
 
     places = load_places_by_id(ids)
-    return [ScoredPlace(score=hit.score, **places[hit.id].model_dump()) for hit in hits if hit.id in places]
+    return [
+        ScoredPlace(score=hit.score, **places[hit.id].model_dump())
+        for hit in hits
+        if hit.id in places
+    ]
 
 
 def search() -> None:

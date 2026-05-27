@@ -21,3 +21,27 @@ ask *question:
 
 test:
     uv run --extra dev pytest
+
+eval-chunks:
+    uv run python -m src.eval.chunks
+
+eval-index:
+    uv run python -m src.eval.vector_index
+
+eval-generate LIMIT="10":
+    uv run python -m src.eval.generate_dataset --limit {{LIMIT}}
+
+eval-generate-model LIMIT MODEL:
+    uv run python -m src.eval.generate_dataset --limit {{LIMIT}} --model {{MODEL}}
+
+eval METHODS="vector":
+    uv run python -m src.eval.evaluate --methods {{METHODS}}
+
+eval-inspect LIMIT="20":
+    uv run python -m src.eval.inspect_dataset --limit {{LIMIT}}
+
+eval-import PATH:
+    uv run python -m src.eval.import_questions {{PATH}}
+
+eval-reset:
+    uv run python -m src.eval.reset_dataset

@@ -37,6 +37,16 @@ Search defaults to top 3 results. Override per query:
 uv run python -m src.rag.search "lake picnic" --limit 5
 ```
 
+Experimental retrieval eval over scraped Markdown pages:
+
+```bash
+just eval-chunks
+just eval-index
+just eval-generate 10
+just eval vector,bm25,vector_bm25
+just eval bm25,vector_bm25,qwen3_rerank_hybrid
+```
+
 ## Shape
 
 ```text
@@ -46,6 +56,7 @@ src/db/         SQLite initialize and place queries
 src/preprocess/ rebuild Chroma from SQL rows
 src/vector_db/  Chroma collection, upsert, vector search
 src/rag/        search and answer scripts
+src/eval/       chunked raw-page retrieval evaluation
 src/scraping/   crawler, transform, ingest, scraping UI
 src/shared/     schema, embeddings, env, LLM helper
 tests/          data contract, retrieval, scrape transform

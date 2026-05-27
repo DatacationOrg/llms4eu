@@ -14,7 +14,9 @@ ANSWER_CONFIG = load_yaml(Path(__file__).with_name("answer_config.yaml"))
 
 
 class RagAnswer(BaseModel):
-    answer: str = Field(description="A short answer based only on the provided context.")
+    answer: str = Field(
+        description="A short answer based only on the provided context."
+    )
 
 
 def answer() -> None:
@@ -59,7 +61,9 @@ def _answer_question(question: str, places: list[ScoredPlace]) -> RagAnswer:
     print("\nContext:")
     print(prompt)
 
-    return structured_local_model(ANSWER_CONFIG["answer_model"], RagAnswer).invoke(prompt)
+    return structured_local_model(ANSWER_CONFIG["answer_model"], RagAnswer).invoke(
+        prompt
+    )
 
 
 if __name__ == "__main__":
