@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import argparse
+import os
 from dataclasses import dataclass
 from functools import cache
 from pathlib import Path
 
 import chromadb
+import httpx
 
 from src.eval.db import connect, initialize_eval_db
 from src.shared.embed import embed_texts, load_embedder
@@ -21,27 +23,34 @@ class ScoredChunk:
     text: str
 
 
-def rebuild_chunk_vector_index() -> None:
+def rebuild_chunk_vector_index(method: str = "qwen") -> None:
     load_local_env()
     initialize_eval_db()
     chunks = load_chunks()
 
     client = _client()
-    collection_name = CONFIG["collection_name"]
+    collection_name = _collection_name(method)
     try:
         client.delete_collection(collection_name)
     except Exception:
         pass
 
-    model = load_embedder(CONFIG["embedding_model"])
-    _configure_embedder(model)
-    print(f"embedding {len(chunks)} chunks with {CONFIG['embedding_model']}")
-    vectors = embed_texts(
-        model,
-        [_embedding_text(chunk) for chunk in chunks],
-        batch_size=8,
-        show_progress_bar=True,
-    )
+    texts = [_embedding_text(chunk) for chunk in chunks]
+    if method == "azure":
+        print(
+            f"embedding {len(chunks)} chunks with {os.environ['AZURE_EMBEDDING_MODEL']}"
+        )
+        vectors = _azure_embed_texts(texts)
+    else:
+        model = load_embedder(CONFIG["embedding_model"])
+        _configure_embedder(model)
+        print(f"embedding {len(chunks)} chunks with {CONFIG['embedding_model']}")
+        vectors = embed_texts(
+            model,
+            texts,
+            batch_size=8,
+            show_progress_bar=True,
+        )
 
     collection = client.create_collection(
         collection_name, metadata={"hnsw:space": "cosine"}
@@ -139,17 +148,48 @@ def _query_prompt_name() -> str | None:
     return None
 
 
+def _collection_name(method: str = "qwen") -> str:
+    if method == "azure":
+        return f"{CONFIG['collection_name']}_azure"
+    return CONFIG["collection_name"]
+
+
+def _azure_embed_texts(texts: list[str], batch_size: int = 16) -> list[list[float]]:
+    endpoint = os.environ["AZURE_AI_ENDPOINT"].rstrip("/")
+    model = os.environ["AZURE_EMBEDDING_MODEL"]
+    url = f"{endpoint}/embeddings"
+    headers = {
+        "Authorization": f"Bearer {os.environ['AZURE_AI_API_KEY']}",
+        "Content-Type": "application/json",
+    }
+    vectors: list[list[float]] = []
+    with httpx.Client(timeout=120) as client:
+        for start in range(0, len(texts), batch_size):
+            batch = texts[start : start + batch_size]
+            response = client.post(
+                url,
+                headers=headers,
+                json={"model": model, "input": batch},
+            )
+            response.raise_for_status()
+            data = sorted(response.json()["data"], key=lambda item: item["index"])
+            vectors.extend(item["embedding"] for item in data)
+            print(f"embedded {min(start + batch_size, len(texts))}/{len(texts)}")
+    return vectors
+
+
 def _collection():
     return _client().get_or_create_collection(
-        CONFIG["collection_name"],
+        _collection_name(),
         metadata={"hnsw:space": "cosine"},
     )
 
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.parse_args()
-    rebuild_chunk_vector_index()
+    parser.add_argument("--method", choices=("qwen", "azure"), default="qwen")
+    args = parser.parse_args()
+    rebuild_chunk_vector_index(args.method)
 
 
 if __name__ == "__main__":

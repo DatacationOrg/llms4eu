@@ -40,7 +40,7 @@ def test_clean_summary_rejects_empty_or_long_text():
         _clean_summary("   ")
 
     with pytest.raises(ValueError):
-        _clean_summary("word " * 31)
+        _clean_summary("word " * 97)
 
 
 def test_embedding_text_prefers_available_summary_context():

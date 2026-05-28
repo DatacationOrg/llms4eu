@@ -34,8 +34,9 @@ QUESTION_TARGET_CHARS = {
 QUESTION_MAX_CHARS = max(QUESTION_TARGET_CHARS.values()) * 2
 ANSWER_TARGET_CHARS = 64
 ANSWER_MAX_CHARS = ANSWER_TARGET_CHARS + 512
-SUMMARY_MAX_WORDS = 30
+SUMMARY_TARGET_WORDS = 40
 SUMMARY_MAX_TOKENS = 128
+SUMMARY_MAX_WORDS = 96
 EU_LANGUAGES = (
     "bg",
     "hr",
@@ -327,7 +328,7 @@ def _question_id(chunk_id: str, question: QuestionCandidate) -> str:
     return str(uuid.uuid5(uuid.NAMESPACE_URL, key))
 
 
-def generate_missing_with_foundry(limit: int | None, workers: int = 20) -> None:
+def generate_missing_with_foundry(limit: int | None, workers: int = 10) -> None:
     initialize_eval_db()
     load_local_env()
     settings = _foundry_settings()
@@ -477,7 +478,7 @@ def _json_object(text: str) -> str:
     return match.group(0)
 
 
-def generate_missing_summaries(limit: int | None, workers: int = 20) -> None:
+def generate_missing_summaries(limit: int | None, workers: int = 10) -> None:
     initialize_eval_db()
     load_local_env()
     settings = _foundry_settings()
@@ -569,7 +570,7 @@ def _request_foundry_summary(chunk: dict, settings: dict[str, str]) -> str:
 
 
 def _summary_system_prompt() -> str:
-    return f"Summarize this document chunk for search embeddings in the same language. Max {SUMMARY_MAX_WORDS} words. Return only the summary."
+    return f"Summarize this document chunk for search embeddings in the same language. Target about {SUMMARY_TARGET_WORDS} words. Return only the summary."
 
 
 def _summary_user_prompt(chunk: dict) -> str:
@@ -599,7 +600,7 @@ def main() -> None:
     parser.add_argument("--reasoning", action="store_true")
     parser.add_argument("--foundry-missing", action="store_true")
     parser.add_argument("--summarize-missing", action="store_true")
-    parser.add_argument("--workers", type=int, default=20)
+    parser.add_argument("--workers", type=int, default=10)
     args = parser.parse_args()
     if args.summarize_missing:
         generate_missing_summaries(args.limit, args.workers)
