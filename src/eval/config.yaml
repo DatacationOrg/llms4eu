@@ -1,7 +1,8 @@
 raw_pages_db: .local/raw_pages.db
 collection_name: page_chunks
 default_source_language: sl
-embedding_model: sentence-transformers/all-MiniLM-L6-v2
+embedding_model: Qwen/Qwen3-Embedding-0.6B
+embedding_max_seq_length: 512
 question_model: gemma4:26b
 model_aliases:
   gemma4:26b: gemma4:26b-a4b-it-q4_K_M

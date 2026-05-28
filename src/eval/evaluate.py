@@ -8,13 +8,18 @@ from src.eval.metrics import bold_best_table, plain_table, score_rankings
 from src.eval.ranking import available_ranking_methods, get_ranking_method
 
 
-def evaluate(method_names: list[str], show_ranks: bool = False) -> None:
+def evaluate(
+    method_names: list[str],
+    show_ranks: bool = False,
+    limit: int | None = None,
+) -> None:
     initialize_eval_db()
-    questions, relevance = _load_eval_rows()
+    questions, relevance = _load_eval_rows(limit)
     if not questions:
         print("No eval questions found. Run src.eval.generate_dataset first.")
         return
 
+    print(f"Evaluating {len(questions)} questions")
     resolved_methods = _resolve_methods(method_names)
     methods = {name: get_ranking_method(name) for name in resolved_methods}
     method_rankings = {
@@ -46,30 +51,37 @@ def evaluate(method_names: list[str], show_ranks: bool = False) -> None:
         print(_rank_table(questions, relevance, method_rankings, resolved_methods))
 
 
-def _load_eval_rows() -> tuple[list[dict], list[dict]]:
+def _load_eval_rows(limit: int | None = None) -> tuple[list[dict], list[dict]]:
     with connect() as conn:
-        questions = [
-            dict(row)
-            for row in conn.execute(
-                """
+        question_sql = """
                 select id, question, answer, question_type, question_language
                 from eval_questions
                 where approved = 1
                 order by id
                 """
+        if limit is not None:
+            question_sql += "\n                limit :limit"
+        questions = [
+            dict(row)
+            for row in conn.execute(
+                question_sql,
+                {"limit": limit},
             )
         ]
+        question_ids = [row["id"] for row in questions]
+        if not question_ids:
+            return questions, []
+        placeholders = ", ".join("?" for _ in question_ids)
         relevance = [
             dict(row)
             for row in conn.execute(
-                """
+                f"""
                 select question_id, chunk_id
                 from eval_relevant_chunks
-                where question_id in (
-                  select id from eval_questions where approved = 1
-                )
+                where question_id in ({placeholders})
                 order by question_id, chunk_id
-                """
+                """,
+                question_ids,
             )
         ]
     return questions, relevance
@@ -149,12 +161,14 @@ def _resolve_methods(method_names: list[str]) -> list[str]:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--methods", default="vector")
+    parser.add_argument("--methods", default="all")
+    parser.add_argument("--limit", type=int)
     parser.add_argument("--show-ranks", action="store_true")
     args = parser.parse_args()
     evaluate(
         [name.strip() for name in args.methods.split(",") if name.strip()],
         show_ranks=args.show_ranks,
+        limit=args.limit,
     )
 
 

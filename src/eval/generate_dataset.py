@@ -1,14 +1,18 @@
 from __future__ import annotations
 
 import argparse
+import os
 import re
 import uuid
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
-from pydantic import BaseModel, Field
+import httpx
+from langchain_core.runnables import RunnableLambda
+from pydantic import BaseModel, Field, ValidationError
 
 from src.eval.db import connect, initialize_eval_db
-from src.shared.env import load_yaml
+from src.shared.env import load_local_env, load_yaml
 from src.shared.llm import structured_local_model
 
 CONFIG = load_yaml(Path(__file__).with_name("config.yaml"))
@@ -20,6 +24,18 @@ QUESTION_TYPES = (
     "vague_long",
     "crosslingual",
 )
+QUESTION_TARGET_CHARS = {
+    "direct_short": 128,
+    "direct_long": 512,
+    "vague_short": 128,
+    "vague_long": 512,
+    "crosslingual": 128,
+}
+QUESTION_MAX_CHARS = max(QUESTION_TARGET_CHARS.values()) * 2
+ANSWER_TARGET_CHARS = 64
+ANSWER_MAX_CHARS = ANSWER_TARGET_CHARS + 512
+SUMMARY_MAX_WORDS = 30
+SUMMARY_MAX_TOKENS = 128
 EU_LANGUAGES = (
     "bg",
     "hr",
@@ -75,38 +91,43 @@ LANGUAGE_NAMES = {
 
 class QuestionCandidate(BaseModel):
     question: str = Field(
-        max_length=1024,
-        description="A factual question answerable only from the source chunk.",
+        max_length=QUESTION_MAX_CHARS,
+        description="A factual question answerable only from the source chunk. Aim for the question type's target size, not this safety limit.",
     )
     answer: str = Field(
-        max_length=128,
-        description="A brief factual answer, ideally 64 chars or less, in the same language as the question.",
+        max_length=ANSWER_MAX_CHARS,
+        description=f"A concise factual answer in the same language as the question. Aim for about {ANSWER_TARGET_CHARS} characters.",
     )
     question_language: str = Field(
         description="BCP-47/ISO-style language code of the question text."
     )
 
 
+class FoundryQuestionAnswer(BaseModel):
+    question: str | None = Field(default=None, max_length=QUESTION_MAX_CHARS)
+    answer: str | None = Field(default=None, max_length=ANSWER_MAX_CHARS)
+
+
 class EvalQuestionBatch(BaseModel):
     direct_short: QuestionCandidate | None = Field(
         default=None,
-        description="Source-language question under 128 chars with wording close to the chunk.",
+        description=f"Source-language direct question, about {QUESTION_TARGET_CHARS['direct_short']} characters.",
     )
     direct_long: QuestionCandidate | None = Field(
         default=None,
-        description="Source-language question from 128 to 1024 chars with extra context.",
+        description=f"Source-language direct question with context, about {QUESTION_TARGET_CHARS['direct_long']} characters.",
     )
     vague_short: QuestionCandidate | None = Field(
         default=None,
-        description="Source-language question under 128 chars with indirect wording.",
+        description=f"Source-language indirect question, about {QUESTION_TARGET_CHARS['vague_short']} characters.",
     )
     vague_long: QuestionCandidate | None = Field(
         default=None,
-        description="Source-language question from 128 to 1024 chars with indirect wording.",
+        description=f"Source-language indirect question with context, about {QUESTION_TARGET_CHARS['vague_long']} characters.",
     )
     crosslingual: QuestionCandidate | None = Field(
         default=None,
-        description="Question in the requested target language, with answer in that language.",
+        description=f"Target-language direct question, about {QUESTION_TARGET_CHARS['crosslingual']} characters, with answer in that language.",
     )
 
 
@@ -249,13 +270,10 @@ def _valid_question(question_type: str, item: QuestionCandidate) -> bool:
     answer = item.answer.strip()
     if not question or not answer:
         return False
-    if len(answer) >= 64 or len(question) > 1024:
-        return False
-    if question_type.endswith("_short"):
-        return len(question) < 128
-    if question_type.endswith("_long"):
-        return len(question) >= 128
-    return True
+    return (
+        len(answer) <= ANSWER_MAX_CHARS
+        and len(question) <= QUESTION_TARGET_CHARS[question_type] * 2
+    )
 
 
 def _messages(chunk: dict, target_language: str | None) -> list[tuple[str, str]]:
@@ -267,30 +285,24 @@ def _messages(chunk: dict, target_language: str | None) -> list[tuple[str, str]]
 
 def _system_prompt(chunk: dict, target_language: str | None) -> str:
     source_language_name = LANGUAGE_NAMES.get(chunk["language"], chunk["language"])
+    target_language = target_language or "en"
     target_language_name = LANGUAGE_NAMES[target_language]
     return f"""
-Generate factual retrieval-evaluation questions from this source chunk.
+Generate one question and one answer for each supported question type. Use only facts in the chunk.
 
-Rules:
-- Fill each output field if the chunk supports it.
-- Use the source content language ({source_language_name}) for direct_short, direct_long, vague_short, and vague_long.
-- direct_short: under 128 chars, obvious and close to the source.
-- direct_long: at least 128 chars and at most 1024 chars, includes context but asks one factual answer.
-- vague_short: under 128 chars, indirect but answerable from the chunk.
-- vague_long: at least 128 chars and at most 1024 chars, indirect/contextual but answerable.
-- crosslingual: write the question entirely in {target_language_name}. Set question_language to "{target_language}".
-- Do not anchor every question on the main named entity. Prefer a mix:
-  - some obvious "who/where/when/what" questions,
-  - some descriptive questions using roles, dates, places, institutions, or events,
-  - some semantic questions that can be answered without repeating the exact title/name.
-- For vague questions, avoid putting the main person's/place's full name in the question unless needed for clarity.
-- Every answer must be in the same language as its question. Translate non-name answers for crosslingual.
-- Every answer should be shorter than 64 characters. If the factual answer needs more space, leave that field null.
-- Ask only factual questions with answers explicitly present in the chunk.
-- Do not ask opinions, recommendations, or questions needing outside knowledge.
-- Avoid bibliographic/citation facts such as ISBNs, URLs, access dates, or reference lists.
-- If a long question would be shorter than 128 chars, leave that field null.
-- If the chunk has too little factual information, leave every field null.
+Write direct_short, direct_long, vague_short, and vague_long in {source_language_name}.
+Write crosslingual in {target_language_name} and set question_language to "{target_language}".
+Answers must use the same language as their questions.
+
+Question targets:
+- direct_short: direct wording, about {QUESTION_TARGET_CHARS["direct_short"]} characters.
+- direct_long: direct wording with context, about {QUESTION_TARGET_CHARS["direct_long"]} characters.
+- vague_short: indirect wording, about {QUESTION_TARGET_CHARS["vague_short"]} characters.
+- vague_long: indirect wording with context, about {QUESTION_TARGET_CHARS["vague_long"]} characters.
+- crosslingual: direct wording, about {QUESTION_TARGET_CHARS["crosslingual"]} characters.
+
+Answer target: about {ANSWER_TARGET_CHARS} characters.
+If a type is not supported by the chunk, leave it null.
 """
 
 
@@ -315,13 +327,286 @@ def _question_id(chunk_id: str, question: QuestionCandidate) -> str:
     return str(uuid.uuid5(uuid.NAMESPACE_URL, key))
 
 
+def generate_missing_with_foundry(limit: int | None, workers: int = 20) -> None:
+    initialize_eval_db()
+    load_local_env()
+    settings = _foundry_settings()
+    tasks = _missing_question_tasks(limit)
+    print(f"found {len(tasks)} missing question slots", flush=True)
+
+    inserted = 0
+    completed = 0
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        futures = [pool.submit(_foundry_question, task, settings) for task in tasks]
+        for future in as_completed(futures):
+            completed += 1
+            task, item = future.result()
+            if item and _valid_question(task["question_type"], item):
+                with connect() as conn:
+                    inserted += insert_questions(
+                        conn, task["id"], [(task["question_type"], item)]
+                    )
+            if completed % 25 == 0 or completed == len(tasks):
+                print(
+                    f"processed {completed}/{len(tasks)}, inserted {inserted}",
+                    flush=True,
+                )
+    print(f"done, inserted {inserted} questions", flush=True)
+
+
+def _foundry_settings() -> dict[str, str]:
+    endpoint = os.environ["AZURE_AI_ENDPOINT"].rstrip("/")
+    return {
+        "url": f"{endpoint}/chat/completions",
+        "api_key": os.environ["AZURE_AI_API_KEY"],
+        "model": os.environ["AZURE_AI_MODEL"],
+    }
+
+
+def _missing_question_tasks(limit: int | None) -> list[dict]:
+    with connect() as conn:
+        rows = [
+            dict(row)
+            for row in conn.execute(
+                """
+                select c.id, c.text, c.heading_path, m.title, s.language,
+                       group_concat(q.question_type, ',') as question_types
+                from page_chunks c
+                join page_metadata m on m.id = c.page_id
+                join page_sources s on s.source = m.source
+                left join eval_relevant_chunks r on r.chunk_id = c.id
+                left join eval_questions q on q.id = r.question_id and q.approved = 1
+                group by c.id, c.text, c.heading_path, m.title, s.language
+                order by c.id
+                """
+            )
+        ]
+
+    tasks = []
+    for chunk in rows:
+        if not _is_fact_dense(chunk["text"]):
+            continue
+        existing = set((chunk["question_types"] or "").split(",")) - {""}
+        for question_type in QUESTION_TYPES:
+            if question_type not in existing:
+                task = {
+                    k: chunk[k]
+                    for k in ("id", "text", "heading_path", "title", "language")
+                }
+                task["question_type"] = question_type
+                task["target_language"] = _crosslingual_language(chunk["id"])
+                tasks.append(task)
+                if limit and len(tasks) >= limit:
+                    return tasks
+    return tasks
+
+
+def _foundry_question(
+    task: dict, settings: dict[str, str]
+) -> tuple[dict, QuestionCandidate | None]:
+    language = (
+        task["target_language"]
+        if task["question_type"] == "crosslingual"
+        else task["language"]
+    )
+    payload = {
+        "model": settings["model"],
+        "messages": [
+            {
+                "role": "system",
+                "content": _single_question_system_prompt(task, language),
+            },
+            {"role": "user", "content": _human_prompt(task)},
+        ],
+        "temperature": 0,
+        "max_tokens": 512,
+    }
+    try:
+        with httpx.Client(timeout=90) as client:
+            response = client.post(
+                settings["url"],
+                headers={
+                    "Authorization": f"Bearer {settings['api_key']}",
+                    "Content-Type": "application/json",
+                },
+                json=payload,
+            )
+        response.raise_for_status()
+        content = response.json()["choices"][0]["message"]["content"]
+        qa = FoundryQuestionAnswer.model_validate_json(_json_object(content))
+        if not qa.question or not qa.answer:
+            return task, None
+        return task, QuestionCandidate(
+            question=qa.question,
+            answer=qa.answer,
+            question_language=language,
+        )
+    except (httpx.HTTPError, KeyError, ValueError, ValidationError) as exc:
+        print(f"failed {task['id']} {task['question_type']}: {exc}", flush=True)
+        return task, None
+
+
+def _single_question_system_prompt(task: dict, language: str) -> str:
+    question_type = task["question_type"]
+    language_name = LANGUAGE_NAMES.get(language, language)
+    source_language_name = LANGUAGE_NAMES.get(task["language"], task["language"])
+    type_prompts = {
+        "direct_short": f"Write a direct question in {language_name}, about {QUESTION_TARGET_CHARS['direct_short']} characters.",
+        "direct_long": f"Write a direct question with context in {language_name}, about {QUESTION_TARGET_CHARS['direct_long']} characters.",
+        "vague_short": f"Write an indirect question in {language_name}, about {QUESTION_TARGET_CHARS['vague_short']} characters.",
+        "vague_long": f"Write an indirect question with context in {language_name}, about {QUESTION_TARGET_CHARS['vague_long']} characters.",
+        "crosslingual": f"Write a direct question in {language_name}, about {QUESTION_TARGET_CHARS['crosslingual']} characters; translate the answer too.",
+    }
+    return f"""
+Generate one question and one answer from the chunk.
+
+Question type: {question_type}
+Source language: {source_language_name}
+{type_prompts[question_type]}
+Use only facts explicitly present in the chunk.
+Answer in the same language as the question, about {ANSWER_TARGET_CHARS} characters.
+If no good question is possible, return null values.
+Return only JSON: {{"question": string|null, "answer": string|null}}
+"""
+
+
+def _json_object(text: str) -> str:
+    match = re.search(r"\{.*\}", text, re.DOTALL)
+    if not match:
+        raise ValueError("response did not contain a JSON object")
+    return match.group(0)
+
+
+def generate_missing_summaries(limit: int | None, workers: int = 20) -> None:
+    initialize_eval_db()
+    load_local_env()
+    settings = _foundry_settings()
+    chunks = _chunks_missing_summary(limit)
+    print(f"found {len(chunks)} chunks missing summaries", flush=True)
+
+    completed = 0
+    updated = 0
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        futures = [pool.submit(_foundry_summary, chunk, settings) for chunk in chunks]
+        for future in as_completed(futures):
+            completed += 1
+            chunk, summary = future.result()
+            if summary:
+                with connect() as conn:
+                    conn.execute(
+                        "update page_chunks set summary = ? where id = ?",
+                        (summary, chunk["id"]),
+                    )
+                updated += 1
+            if completed % 25 == 0 or completed == len(chunks):
+                print(
+                    f"processed {completed}/{len(chunks)}, updated {updated}",
+                    flush=True,
+                )
+    print(f"done, updated {updated} summaries", flush=True)
+
+
+def _chunks_missing_summary(limit: int | None) -> list[dict]:
+    sql_limit = "limit ?" if limit else ""
+    params = (limit,) if limit else ()
+    with connect() as conn:
+        return [
+            dict(row)
+            for row in conn.execute(
+                f"""
+                select c.id, c.text, c.heading_path, m.title, s.language
+                from page_chunks c
+                join page_metadata m on m.id = c.page_id
+                join page_sources s on s.source = m.source
+                where c.summary is null or trim(c.summary) = ''
+                order by c.id
+                {sql_limit}
+                """,
+                params,
+            )
+        ]
+
+
+def _foundry_summary(chunk: dict, settings: dict[str, str]) -> tuple[dict, str | None]:
+    summarizer = RunnableLambda(
+        lambda item: _clean_summary(_request_foundry_summary(item, settings))
+    )
+    try:
+        summary = summarizer.with_retry(
+            stop_after_attempt=3,
+            wait_exponential_jitter=True,
+        ).invoke(chunk)
+        return chunk, summary
+    except (httpx.HTTPError, KeyError, ValueError) as exc:
+        print(f"failed summary {chunk['id']}: {exc}", flush=True)
+        return chunk, None
+
+
+def _request_foundry_summary(chunk: dict, settings: dict[str, str]) -> str:
+    payload = {
+        "model": settings["model"],
+        "messages": [
+            {"role": "system", "content": _summary_system_prompt()},
+            {"role": "user", "content": _summary_user_prompt(chunk)},
+        ],
+        "temperature": 0,
+        "max_tokens": SUMMARY_MAX_TOKENS,
+    }
+    with httpx.Client(timeout=90) as client:
+        response = client.post(
+            settings["url"],
+            headers={
+                "Authorization": f"Bearer {settings['api_key']}",
+                "Content-Type": "application/json",
+            },
+            json=payload,
+        )
+    response.raise_for_status()
+    choice = response.json()["choices"][0]
+    if choice.get("finish_reason") == "length":
+        raise ValueError(f"summary exceeded {SUMMARY_MAX_TOKENS} output tokens")
+    return choice["message"]["content"]
+
+
+def _summary_system_prompt() -> str:
+    return f"Summarize this document chunk for search embeddings in the same language. Max {SUMMARY_MAX_WORDS} words. Return only the summary."
+
+
+def _summary_user_prompt(chunk: dict) -> str:
+    return f"""
+Title: {chunk["title"] or ""}
+Heading: {chunk["heading_path"] or ""}
+Language: {chunk["language"]}
+
+Chunk:
+{chunk["text"]}
+"""
+
+
+def _clean_summary(text: str) -> str:
+    summary = re.sub(r"\s+", " ", text.strip().strip('"')).strip()
+    if not summary:
+        raise ValueError("empty summary")
+    if len(summary.split()) > SUMMARY_MAX_WORDS:
+        raise ValueError(f"summary exceeded {SUMMARY_MAX_WORDS} words")
+    return summary
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--limit", type=int)
     parser.add_argument("--model")
     parser.add_argument("--reasoning", action="store_true")
+    parser.add_argument("--foundry-missing", action="store_true")
+    parser.add_argument("--summarize-missing", action="store_true")
+    parser.add_argument("--workers", type=int, default=20)
     args = parser.parse_args()
-    generate_dataset(args.limit, args.model, args.reasoning or None)
+    if args.summarize_missing:
+        generate_missing_summaries(args.limit, args.workers)
+    elif args.foundry_missing:
+        generate_missing_with_foundry(args.limit, args.workers)
+    else:
+        generate_dataset(args.limit, args.model, args.reasoning or None)
 
 
 if __name__ == "__main__":

@@ -9,6 +9,7 @@ create table if not exists page_chunks (
   chunk_index integer not null,
   heading_path text,
   text text not null,
+  summary text,
   char_count integer not null,
   unique(page_id, chunk_index)
 );

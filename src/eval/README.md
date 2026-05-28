@@ -7,6 +7,7 @@ gold chunk ids. Evaluation run results are printed in the terminal and not saved
 
 ```bash
 uv run python -m src.eval.chunks
+uv run python -m src.eval.generate_dataset --summarize-missing
 uv run python -m src.eval.vector_index
 uv run python -m src.eval.generate_dataset --limit 10
 uv run python -m src.eval.generate_dataset --limit 10 --model gemma4:26b
@@ -18,6 +19,18 @@ uv run python -m src.eval.evaluate --methods vector
 uv run python -m src.eval.evaluate --methods vector,bm25,vector_bm25
 uv run python -m src.eval.evaluate --methods bm25,vector_bm25,qwen3_rerank_hybrid
 ```
+
+`--summarize-missing` fills nullable `page_chunks.summary` values via the Azure
+Foundry chat endpoint configured by `.env` (`AZURE_AI_ENDPOINT`,
+`AZURE_AI_API_KEY`, `AZURE_AI_MODEL`). Summaries are max 30 words, use the chunk's
+language, and are included in vector-index embedding text when present.
+
+Embedding and reranker inference is local. `SentenceTransformer`/`CrossEncoder`
+loads use `local_files_only=True`, so eval will not contact the Hugging Face Hub
+at runtime. Download/cache model weights explicitly before offline eval, or point
+`embedding_model` / `reranker_model` in `config.yaml` at local model directories.
+Azure-backed question generation and chunk summarization remain separate and may
+call Azure when selected.
 
 The first report compares overall `hit@1`, `hit@5`, `hit@10`, and `mrr@10`.
 The category report shows `hit@5` by question type.

@@ -25,15 +25,24 @@ def rebuild_chunk_vector_index() -> None:
     load_local_env()
     initialize_eval_db()
     chunks = load_chunks()
-    model = load_embedder(CONFIG["embedding_model"])
-    vectors = embed_texts(model, [_embedding_text(chunk) for chunk in chunks])
 
     client = _client()
     collection_name = CONFIG["collection_name"]
-    for collection in client.list_collections():
-        if collection.name == collection_name:
-            client.delete_collection(collection_name)
-            break
+    try:
+        client.delete_collection(collection_name)
+    except Exception:
+        pass
+
+    model = load_embedder(CONFIG["embedding_model"])
+    _configure_embedder(model)
+    print(f"embedding {len(chunks)} chunks with {CONFIG['embedding_model']}")
+    vectors = embed_texts(
+        model,
+        [_embedding_text(chunk) for chunk in chunks],
+        batch_size=8,
+        show_progress_bar=True,
+    )
+
     collection = client.create_collection(
         collection_name, metadata={"hnsw:space": "cosine"}
     )
@@ -47,6 +56,7 @@ def rebuild_chunk_vector_index() -> None:
                 "page_id": chunk["page_id"],
                 "heading_path": chunk["heading_path"] or "",
                 "title": chunk["title"] or "",
+                "summary": chunk["summary"] or "",
             }
             for chunk in chunks
         ],
@@ -60,7 +70,7 @@ def load_chunks() -> list[dict]:
             dict(row)
             for row in conn.execute(
                 """
-                select c.id, c.page_id, c.heading_path, c.text, m.title
+                select c.id, c.page_id, c.heading_path, c.text, c.summary, m.title
                 from page_chunks c
                 join page_metadata m on m.id = c.page_id
                 order by c.id
@@ -71,7 +81,7 @@ def load_chunks() -> list[dict]:
 
 def search_chunk_vectors(query: str, limit: int) -> list[ScoredChunk]:
     load_local_env()
-    vector = embed_texts(_embedder(), [query])[0]
+    vector = embed_texts(_embedder(), [query], prompt_name=_query_prompt_name())[0]
     result = _collection().query(
         query_embeddings=[vector],
         n_results=limit,
@@ -95,7 +105,12 @@ def search_chunk_vectors(query: str, limit: int) -> list[ScoredChunk]:
 
 
 def _embedding_text(chunk: dict) -> str:
-    parts = [chunk.get("title") or "", chunk.get("heading_path") or "", chunk["text"]]
+    parts = [
+        chunk.get("title") or "",
+        chunk.get("heading_path") or "",
+        chunk.get("summary") or "",
+        chunk["text"],
+    ]
     return "\n".join(part for part in parts if part)
 
 
@@ -105,7 +120,23 @@ def _client() -> chromadb.PersistentClient:
 
 @cache
 def _embedder():
-    return load_embedder(CONFIG["embedding_model"])
+    model = load_embedder(CONFIG["embedding_model"])
+    _configure_embedder(model)
+    return model
+
+
+def _configure_embedder(model) -> None:
+    max_seq_length = CONFIG.get("embedding_max_seq_length")
+    if max_seq_length is not None:
+        model.max_seq_length = int(max_seq_length)
+
+
+def _query_prompt_name() -> str | None:
+    """Return 'query' for instruction-aware models (e.g. Qwen3-Embedding), else None."""
+    model = _embedder()
+    if "query" in (model.prompts or {}):
+        return "query"
+    return None
 
 
 def _collection():

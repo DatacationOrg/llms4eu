@@ -1,4 +1,8 @@
+import pytest
+
 from src.eval.chunks import chunk_markdown
+from src.eval.generate_dataset import _clean_summary
+from src.eval.vector_index import _embedding_text
 
 
 def test_chunk_markdown_preserves_heading_path():
@@ -27,3 +31,27 @@ def test_chunk_markdown_splits_long_paragraph():
 
     assert len(chunks) > 1
     assert all(len(chunk.text) <= 500 for chunk in chunks)
+
+
+def test_clean_summary_rejects_empty_or_long_text():
+    assert _clean_summary('  "Short semantic summary."  ') == "Short semantic summary."
+
+    with pytest.raises(ValueError):
+        _clean_summary("   ")
+
+    with pytest.raises(ValueError):
+        _clean_summary("word " * 31)
+
+
+def test_embedding_text_prefers_available_summary_context():
+    text = _embedding_text(
+        {
+            "title": "Castle",
+            "heading_path": "History",
+            "summary": "Medieval castle history and location.",
+            "text": "Full chunk text.",
+        }
+    )
+
+    assert "Medieval castle history and location." in text
+    assert text.index("Medieval castle history") < text.index("Full chunk text.")
