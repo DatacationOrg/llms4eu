@@ -10,30 +10,47 @@ from src.eval.ranking.vector import VectorMethod
 from src.shared.env import load_yaml
 
 CONFIG = load_yaml(Path(__file__).parents[1] / "config.yaml")
+VECTOR_METHODS = ("english", "qwen", "azure")
+CONTENT_MODES = ("chunk", "summary", "chunk_summary")
 
-VECTOR = VectorMethod()
 BM25 = Bm25Method()
-VECTOR_BM25 = ReciprocalRankFusionMethod(
-    name="vector_bm25",
-    methods=(VECTOR, BM25),
-)
+VECTORS = {
+    f"{indexer}_{content_mode}": VectorMethod(
+        name=f"{indexer}_{content_mode}",
+        indexer=indexer,
+        content_mode=content_mode,
+    )
+    for indexer in VECTOR_METHODS
+    for content_mode in CONTENT_MODES
+}
+HYBRIDS = {
+    name: ReciprocalRankFusionMethod(name=f"{name}_bm25", methods=(method, BM25))
+    for name, method in VECTORS.items()
+}
+
+
+def _reranker(name: str, base_method: RankingMethod) -> CrossEncoderRerankMethod:
+    return CrossEncoderRerankMethod(
+        name=name,
+        model_name=CONFIG["reranker_model"],
+        base_method=base_method,
+        candidate_limit=CONFIG["default_candidate_limit"],
+        batch_size=CONFIG.get("reranker_batch_size", 64),
+    )
+
 
 METHODS: dict[str, RankingMethod] = {
-    VECTOR.name: VECTOR,
     BM25.name: BM25,
-    VECTOR_BM25.name: VECTOR_BM25,
-    "qwen3_rerank": CrossEncoderRerankMethod(
-        name="qwen3_rerank",
-        model_name=CONFIG["reranker_model"],
-        base_method=VECTOR,
-        candidate_limit=CONFIG["default_candidate_limit"],
-    ),
-    "qwen3_rerank_hybrid": CrossEncoderRerankMethod(
-        name="qwen3_rerank_hybrid",
-        model_name=CONFIG["reranker_model"],
-        base_method=VECTOR_BM25,
-        candidate_limit=CONFIG["default_candidate_limit"],
-    ),
+    **VECTORS,
+    **{method.name: method for method in HYBRIDS.values()},
+    **{
+        f"{name}_rerank": _reranker(f"{name}_rerank", method)
+        for name, method in VECTORS.items()
+    },
+    **{
+        f"{name}_rerank_hybrid": _reranker(f"{name}_rerank_hybrid", method)
+        for name, method in HYBRIDS.items()
+    },
 }
 
 

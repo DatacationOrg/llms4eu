@@ -41,10 +41,12 @@ Experimental retrieval eval over scraped Markdown pages:
 
 ```bash
 just eval-chunks
-just eval-index
+just eval-index qwen chunk
+just eval-index qwen summary
+just eval-index qwen chunk_summary
 just eval-generate 10
-just eval vector,bm25,vector_bm25
-just eval bm25,vector_bm25,qwen3_rerank_hybrid
+just eval qwen_chunk,qwen_summary,qwen_chunk_summary,bm25
+just eval qwen_chunk_summary_rerank,qwen_chunk_summary_rerank_hybrid
 ```
 
 ## Shape
@@ -53,7 +55,8 @@ just eval bm25,vector_bm25,qwen3_rerank_hybrid
 data/           tracked seed fixture
 sql/            one-table schema, portable to SQLite and Postgres
 src/db/         SQLite initialize and place queries
-src/preprocess/ rebuild Chroma from SQL rows
+src/preprocess/ rebuild derived data from SQL rows
+src/indexing/   provider-shaped vector indexing
 src/vector_db/  Chroma collection, upsert, vector search
 src/rag/        search and answer scripts
 src/eval/       chunked raw-page retrieval evaluation

@@ -23,10 +23,10 @@ test:
     uv run --extra dev pytest
 
 eval-chunks:
-    uv run python -m src.eval.chunks
+    uv run python -m src.preprocess.chunks
 
-eval-index:
-    uv run python -m src.eval.vector_index
+eval-index METHOD="qwen" CONTENT_MODE="chunk_summary":
+    uv run python -m src.indexing.chunks --method {{METHOD}} --content-mode {{CONTENT_MODE}}
 
 eval-generate LIMIT="10":
     uv run python -m src.eval.generate_dataset --limit {{LIMIT}}
@@ -34,7 +34,7 @@ eval-generate LIMIT="10":
 eval-generate-model LIMIT MODEL:
     uv run python -m src.eval.generate_dataset --limit {{LIMIT}} --model {{MODEL}}
 
-eval METHODS="vector":
+eval METHODS="qwen_chunk_summary":
     uv run python -m src.eval.evaluate --methods {{METHODS}}
 
 eval-inspect LIMIT="20":

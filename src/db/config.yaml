@@ -1,2 +1,4 @@
 seed_path: data/places.jsonl
 schema_path: sql/init.sql
+raw_pages_db: .local/raw_pages.db
+default_source_language: sl

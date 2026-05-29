@@ -1,0 +1,9 @@
+collection_name: page_chunks
+english_embedding_model: sentence-transformers/all-MiniLM-L6-v2
+qwen_embedding_model: Qwen/Qwen3-Embedding-0.6B
+embedding_max_seq_length: 512
+qwen_local_files_only: true
+azure_embedding_batch_size: 4
+azure_embedding_retries: 8
+index_upsert_batch_size: 128
+query_batch_size: 128

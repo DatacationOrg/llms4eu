@@ -1,19 +1,18 @@
 from __future__ import annotations
 
 import argparse
-import os
 import re
 import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
-import httpx
-from langchain_core.runnables import RunnableLambda
 from pydantic import BaseModel, Field, ValidationError
 
-from src.eval.db import connect, initialize_eval_db
+from src.db.pages import connect_pages as connect
+from src.db.pages import initialize_page_artifacts_db as initialize_eval_db
+from src.preprocess.summaries import generate_missing_summaries
 from src.shared.env import load_local_env, load_yaml
-from src.shared.llm import structured_local_model
+from src.shared.llm import AzureFoundryStructuredLlm, structured_local_model
 
 CONFIG = load_yaml(Path(__file__).with_name("config.yaml"))
 
@@ -34,9 +33,6 @@ QUESTION_TARGET_CHARS = {
 QUESTION_MAX_CHARS = max(QUESTION_TARGET_CHARS.values()) * 2
 ANSWER_TARGET_CHARS = 64
 ANSWER_MAX_CHARS = ANSWER_TARGET_CHARS + 512
-SUMMARY_TARGET_WORDS = 40
-SUMMARY_MAX_TOKENS = 128
-SUMMARY_MAX_WORDS = 96
 EU_LANGUAGES = (
     "bg",
     "hr",
@@ -331,14 +327,14 @@ def _question_id(chunk_id: str, question: QuestionCandidate) -> str:
 def generate_missing_with_foundry(limit: int | None, workers: int = 10) -> None:
     initialize_eval_db()
     load_local_env()
-    settings = _foundry_settings()
+    client = AzureFoundryStructuredLlm.from_env(max_tokens=512)
     tasks = _missing_question_tasks(limit)
     print(f"found {len(tasks)} missing question slots", flush=True)
 
     inserted = 0
     completed = 0
     with ThreadPoolExecutor(max_workers=workers) as pool:
-        futures = [pool.submit(_foundry_question, task, settings) for task in tasks]
+        futures = [pool.submit(_foundry_question, task, client) for task in tasks]
         for future in as_completed(futures):
             completed += 1
             task, item = future.result()
@@ -353,15 +349,6 @@ def generate_missing_with_foundry(limit: int | None, workers: int = 10) -> None:
                     flush=True,
                 )
     print(f"done, inserted {inserted} questions", flush=True)
-
-
-def _foundry_settings() -> dict[str, str]:
-    endpoint = os.environ["AZURE_AI_ENDPOINT"].rstrip("/")
-    return {
-        "url": f"{endpoint}/chat/completions",
-        "api_key": os.environ["AZURE_AI_API_KEY"],
-        "model": os.environ["AZURE_AI_MODEL"],
-    }
 
 
 def _missing_question_tasks(limit: int | None) -> list[dict]:
@@ -403,38 +390,23 @@ def _missing_question_tasks(limit: int | None) -> list[dict]:
 
 
 def _foundry_question(
-    task: dict, settings: dict[str, str]
+    task: dict,
+    client: AzureFoundryStructuredLlm,
 ) -> tuple[dict, QuestionCandidate | None]:
     language = (
         task["target_language"]
         if task["question_type"] == "crosslingual"
         else task["language"]
     )
-    payload = {
-        "model": settings["model"],
-        "messages": [
-            {
-                "role": "system",
-                "content": _single_question_system_prompt(task, language),
-            },
-            {"role": "user", "content": _human_prompt(task)},
-        ],
-        "temperature": 0,
-        "max_tokens": 512,
-    }
     try:
-        with httpx.Client(timeout=90) as client:
-            response = client.post(
-                settings["url"],
-                headers={
-                    "Authorization": f"Bearer {settings['api_key']}",
-                    "Content-Type": "application/json",
-                },
-                json=payload,
-            )
-        response.raise_for_status()
-        content = response.json()["choices"][0]["message"]["content"]
-        qa = FoundryQuestionAnswer.model_validate_json(_json_object(content))
+        qa = client.structured_output(
+            [
+                ("system", _single_question_system_prompt(task, language)),
+                ("human", _human_prompt(task)),
+            ],
+            FoundryQuestionAnswer,
+            retries=3,
+        )
         if not qa.question or not qa.answer:
             return task, None
         return task, QuestionCandidate(
@@ -442,7 +414,7 @@ def _foundry_question(
             answer=qa.answer,
             question_language=language,
         )
-    except (httpx.HTTPError, KeyError, ValueError, ValidationError) as exc:
+    except (RuntimeError, ValidationError) as exc:
         print(f"failed {task['id']} {task['question_type']}: {exc}", flush=True)
         return task, None
 
@@ -469,128 +441,6 @@ Answer in the same language as the question, about {ANSWER_TARGET_CHARS} charact
 If no good question is possible, return null values.
 Return only JSON: {{"question": string|null, "answer": string|null}}
 """
-
-
-def _json_object(text: str) -> str:
-    match = re.search(r"\{.*\}", text, re.DOTALL)
-    if not match:
-        raise ValueError("response did not contain a JSON object")
-    return match.group(0)
-
-
-def generate_missing_summaries(limit: int | None, workers: int = 10) -> None:
-    initialize_eval_db()
-    load_local_env()
-    settings = _foundry_settings()
-    chunks = _chunks_missing_summary(limit)
-    print(f"found {len(chunks)} chunks missing summaries", flush=True)
-
-    completed = 0
-    updated = 0
-    with ThreadPoolExecutor(max_workers=workers) as pool:
-        futures = [pool.submit(_foundry_summary, chunk, settings) for chunk in chunks]
-        for future in as_completed(futures):
-            completed += 1
-            chunk, summary = future.result()
-            if summary:
-                with connect() as conn:
-                    conn.execute(
-                        "update page_chunks set summary = ? where id = ?",
-                        (summary, chunk["id"]),
-                    )
-                updated += 1
-            if completed % 25 == 0 or completed == len(chunks):
-                print(
-                    f"processed {completed}/{len(chunks)}, updated {updated}",
-                    flush=True,
-                )
-    print(f"done, updated {updated} summaries", flush=True)
-
-
-def _chunks_missing_summary(limit: int | None) -> list[dict]:
-    sql_limit = "limit ?" if limit else ""
-    params = (limit,) if limit else ()
-    with connect() as conn:
-        return [
-            dict(row)
-            for row in conn.execute(
-                f"""
-                select c.id, c.text, c.heading_path, m.title, s.language
-                from page_chunks c
-                join page_metadata m on m.id = c.page_id
-                join page_sources s on s.source = m.source
-                where c.summary is null or trim(c.summary) = ''
-                order by c.id
-                {sql_limit}
-                """,
-                params,
-            )
-        ]
-
-
-def _foundry_summary(chunk: dict, settings: dict[str, str]) -> tuple[dict, str | None]:
-    summarizer = RunnableLambda(
-        lambda item: _clean_summary(_request_foundry_summary(item, settings))
-    )
-    try:
-        summary = summarizer.with_retry(
-            stop_after_attempt=3,
-            wait_exponential_jitter=True,
-        ).invoke(chunk)
-        return chunk, summary
-    except (httpx.HTTPError, KeyError, ValueError) as exc:
-        print(f"failed summary {chunk['id']}: {exc}", flush=True)
-        return chunk, None
-
-
-def _request_foundry_summary(chunk: dict, settings: dict[str, str]) -> str:
-    payload = {
-        "model": settings["model"],
-        "messages": [
-            {"role": "system", "content": _summary_system_prompt()},
-            {"role": "user", "content": _summary_user_prompt(chunk)},
-        ],
-        "temperature": 0,
-        "max_tokens": SUMMARY_MAX_TOKENS,
-    }
-    with httpx.Client(timeout=90) as client:
-        response = client.post(
-            settings["url"],
-            headers={
-                "Authorization": f"Bearer {settings['api_key']}",
-                "Content-Type": "application/json",
-            },
-            json=payload,
-        )
-    response.raise_for_status()
-    choice = response.json()["choices"][0]
-    if choice.get("finish_reason") == "length":
-        raise ValueError(f"summary exceeded {SUMMARY_MAX_TOKENS} output tokens")
-    return choice["message"]["content"]
-
-
-def _summary_system_prompt() -> str:
-    return f"Summarize this document chunk for search embeddings in the same language. Target about {SUMMARY_TARGET_WORDS} words. Return only the summary."
-
-
-def _summary_user_prompt(chunk: dict) -> str:
-    return f"""
-Title: {chunk["title"] or ""}
-Heading: {chunk["heading_path"] or ""}
-Language: {chunk["language"]}
-
-Chunk:
-{chunk["text"]}
-"""
-
-
-def _clean_summary(text: str) -> str:
-    summary = re.sub(r"\s+", " ", text.strip().strip('"')).strip()
-    if not summary:
-        raise ValueError("empty summary")
-    if len(summary.split()) > SUMMARY_MAX_WORDS:
-        raise ValueError(f"summary exceeded {SUMMARY_MAX_WORDS} words")
-    return summary
 
 
 def main() -> None:

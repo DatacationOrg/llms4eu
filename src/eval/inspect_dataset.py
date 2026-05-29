@@ -2,7 +2,12 @@ from __future__ import annotations
 
 import argparse
 
-from src.eval.db import connect, initialize_eval_db
+from src.db.pages import (
+    connect_pages as connect,
+)
+from src.db.pages import (
+    initialize_page_artifacts_db as initialize_eval_db,
+)
 from src.eval.metrics import plain_table
 
 

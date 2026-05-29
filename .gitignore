@@ -5,6 +5,8 @@ __pycache__/
 .env
 .local/*
 !.local/raw_pages.db
+!.local/chroma/
+!.local/chroma/**
 qdrant_storage/
 .cache/
 .pytest_cache/

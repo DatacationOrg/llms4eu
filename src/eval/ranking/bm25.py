@@ -6,7 +6,7 @@ from collections import Counter
 from dataclasses import dataclass
 from functools import cache
 
-from src.eval.db import connect
+from src.db.pages import connect_pages as connect
 from src.eval.ranking.base import RankedChunk
 
 TOKEN_RE = re.compile(r"[^\W_]+", re.UNICODE)

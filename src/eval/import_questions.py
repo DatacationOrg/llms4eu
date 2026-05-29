@@ -4,7 +4,12 @@ import argparse
 import json
 from pathlib import Path
 
-from src.eval.db import connect, initialize_eval_db
+from src.db.pages import (
+    connect_pages as connect,
+)
+from src.db.pages import (
+    initialize_page_artifacts_db as initialize_eval_db,
+)
 from src.eval.generate_dataset import (
     QUESTION_TYPES,
     QuestionCandidate,
@@ -30,8 +35,7 @@ def import_questions(path: Path) -> None:
         chunk_ids = {
             row["id"]
             for row in conn.execute(
-                "select id from page_chunks where id in (%s)"
-                % ",".join("?" for _ in requested_chunk_ids),
+                f"select id from page_chunks where id in ({','.join('?' for _ in requested_chunk_ids)})",
                 tuple(requested_chunk_ids),
             )
         }

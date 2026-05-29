@@ -1,9 +1,15 @@
 from __future__ import annotations
 
 import argparse
+import time
 from collections import defaultdict
 
-from src.eval.db import connect, initialize_eval_db
+from src.db.pages import (
+    connect_pages as connect,
+)
+from src.db.pages import (
+    initialize_page_artifacts_db as initialize_eval_db,
+)
 from src.eval.metrics import bold_best_table, plain_table, score_rankings
 from src.eval.ranking import available_ranking_methods, get_ranking_method
 
@@ -22,15 +28,16 @@ def evaluate(
     print(f"Evaluating {len(questions)} questions")
     resolved_methods = _resolve_methods(method_names)
     methods = {name: get_ranking_method(name) for name in resolved_methods}
-    method_rankings = {
-        name: {
-            row["id"]: [
-                chunk.id for chunk in methods[name].retrieve(row["question"], 10)
-            ]
-            for row in questions
+    method_rankings = {}
+    timings = {}
+    for name in resolved_methods:
+        started = time.perf_counter()
+        method_rankings[name] = _retrieve_rankings(methods[name], questions)
+        elapsed = time.perf_counter() - started
+        timings[name] = {
+            "seconds": elapsed,
+            "ms_per_query": elapsed * 1000 / len(questions),
         }
-        for name in resolved_methods
-    }
 
     overall_rows = []
     for name in resolved_methods:
@@ -42,6 +49,21 @@ def evaluate(
     print("Overall")
     print(
         bold_best_table(["method", "hit@1", "hit@5", "hit@10", "mrr@10"], overall_rows)
+    )
+    print()
+    print("Speed")
+    print(
+        plain_table(
+            ["method", "seconds", "ms/query"],
+            [
+                [
+                    name,
+                    f"{timings[name]['seconds']:.2f}",
+                    f"{timings[name]['ms_per_query']:.1f}",
+                ]
+                for name in resolved_methods
+            ],
+        )
     )
     print()
     print("hit@5 by category")
@@ -85,6 +107,19 @@ def _load_eval_rows(limit: int | None = None) -> tuple[list[dict], list[dict]]:
             )
         ]
     return questions, relevance
+
+
+def _retrieve_rankings(method, questions: list[dict]) -> dict[str, list[str]]:
+    if hasattr(method, "retrieve_many"):
+        batches = method.retrieve_many([row["question"] for row in questions], 10)
+        return {
+            row["id"]: [chunk.id for chunk in batches[index]]
+            for index, row in enumerate(questions)
+        }
+    return {
+        row["id"]: [chunk.id for chunk in method.retrieve(row["question"], 10)]
+        for row in questions
+    }
 
 
 def _category_table(
