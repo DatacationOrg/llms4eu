@@ -1,23 +1,23 @@
 # Preprocess
 
-Builds derived vector data from SQLite.
+Builds derived artifacts from SQLite.
 
 `chunks.py` turns scraped Markdown pages into stable, heading-aware page chunks.
-Chunking belongs here because it is a reusable preprocessing step, not an eval
-concern.
+Chunking is reusable preprocessing for indexing, retrieval, and eval.
 
-`summaries.py` fills missing chunk summaries through the Azure Foundry chat
-endpoint configured in `.env`.
+Chunk summaries were useful retrieval experiments, but are not part of the
+steady-state page chunk path. Historical summary results live in
+`docs/retrieval-results.md`.
 
-Embeds each place text with `sentence-transformers/all-MiniLM-L6-v2` and
-recreates the `places` Chroma collection. MiniLM is small, local and fast enough
-for this retrieval sketch.
+`index.py` embeds each place text with `sentence-transformers/all-MiniLM-L6-v2`
+and recreates the `places` Chroma collection. MiniLM is small, local, and fast
+enough for place search.
 
-Chroma is used as the local vector index because it stays inside the Python
-environment. It stores vectors plus `id`; full place text stays in SQLite.
+Chroma stores vectors plus ids. Full place rows and canonical page chunk text
+stay in SQLite.
 
-The collection is rebuilt from scratch because the dataset is tiny and Chroma is
-derived state.
+Place and chunk vector collections are rebuilt from scratch because datasets are
+small and Chroma is derived state.
 
 Rebuild the Chroma vector index from SQLite:
 
@@ -27,8 +27,8 @@ from src.preprocess.index import rebuild_vector_index
 rebuild_vector_index()
 ```
 
-Inside `rebuild_vector_index()`, Chroma upsert inserts or updates one vector
-point per place. Each point stores the embedding and only this metadata:
+Inside `rebuild_vector_index()`, Chroma upsert inserts one vector point per
+place. Each point stores the embedding and only this metadata:
 
 ```python
 {"id": place.id}

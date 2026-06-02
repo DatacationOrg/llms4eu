@@ -1,29 +1,29 @@
 # Indexing
 
-Builds and queries local vector indexes for document chunks.
+Builds local vector indexes for document chunks.
 
-The indexer boundary is provider-shaped: English MiniLM, Qwen multilingual, and
-Azure embeddings all expose the same `embed_documents` / `embed_query` methods
-from `src.shared.indexers`.
+The indexer boundary is provider-shaped: English MiniLM, Qwen multilingual,
+Qwen 4B, and Azure embeddings all expose the same `embed_documents` /
+`embed_query` methods from `src.shared.indexers`.
 
 Chunk vector collections are derived state in Chroma. SQLite remains the source
-of truth for page metadata, chunk text, summaries, and eval labels.
-Chroma stores only embeddings and minimal ids; retrieval hydrates chunk text
-from SQLite before returning results or reranking candidates.
+of truth for page metadata, chunk text, and eval labels. `src.vector_store.chunks`
+owns Chroma mechanics and query-time vector search; indexing only orchestrates
+rebuilds.
 
-Current chunk collections are named as:
+Current chunk collections are storage names, not public retrieval method names:
 
 ```text
-page_chunks_{english,qwen,azure}_{chunk,summary,chunk_summary}
+page_chunks_{english,qwen,qwen4b,azure}_chunk
 ```
 
-The content modes mean:
-
-- `chunk`: embed title, heading path, and chunk text.
-- `summary`: embed title, heading path, and summary; return the original chunk.
-- `chunk_summary`: embed title, heading path, summary, and chunk text.
+Chunk indexing embeds title, heading path, and chunk text via
+`TitleHeadingChunkText`.
 
 Model and collection settings live in `config.yaml`.
+
+Azure embeddings are batched. Larger batches reduce request-per-minute pressure,
+but total token usage is unchanged.
 
 Rebuild one collection:
 
@@ -31,8 +31,12 @@ Rebuild one collection:
 uv run python -m src.indexing.chunks --method qwen
 ```
 
-Rebuild one content mode:
+Rebuild the default regenerable vector cache:
 
 ```bash
-uv run python -m src.indexing.chunks --method qwen --content-mode summary
+just rebuild-vector-cache
 ```
+
+Durable reference databases belong under `data/db/`. Regenerable Chroma cache
+artifacts belong under `data/cache/chroma/`. Use `.env` overrides when a run
+should write to private scratch paths under `.local/`.

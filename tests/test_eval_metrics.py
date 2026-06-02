@@ -18,6 +18,9 @@ def test_score_rankings_accepts_multiple_relevant_chunks():
     assert scores["hit@5"] == 0.5
     assert scores["mrr@10"] == 0.25
 
+    short_mrr = score_rankings(relevance, rankings, ks=(1,), mrr_k=1)
+    assert short_mrr["mrr@1"] == 0
+
 
 def test_bold_best_table_highlights_column_winners():
     table = bold_best_table(

@@ -10,7 +10,6 @@ from pydantic import BaseModel, Field, ValidationError
 
 from src.db.pages import connect_pages as connect
 from src.db.pages import initialize_page_artifacts_db as initialize_eval_db
-from src.preprocess.summaries import generate_missing_summaries
 from src.shared.env import load_local_env, load_yaml
 from src.shared.llm import AzureFoundryStructuredLlm, structured_local_model
 
@@ -449,12 +448,9 @@ def main() -> None:
     parser.add_argument("--model")
     parser.add_argument("--reasoning", action="store_true")
     parser.add_argument("--foundry-missing", action="store_true")
-    parser.add_argument("--summarize-missing", action="store_true")
     parser.add_argument("--workers", type=int, default=10)
     args = parser.parse_args()
-    if args.summarize_missing:
-        generate_missing_summaries(args.limit, args.workers)
-    elif args.foundry_missing:
+    if args.foundry_missing:
         generate_missing_with_foundry(args.limit, args.workers)
     else:
         generate_dataset(args.limit, args.model, args.reasoning or None)

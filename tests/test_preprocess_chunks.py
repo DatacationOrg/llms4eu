@@ -1,8 +1,5 @@
-import pytest
-
-from src.indexing.chunks import _embedding_text
+from src.indexing.chunk_text import PageChunk, TitleHeadingChunkText
 from src.preprocess.chunks import chunk_markdown
-from src.preprocess.summaries import _clean_summary
 
 
 def test_chunk_markdown_preserves_heading_path():
@@ -33,41 +30,15 @@ def test_chunk_markdown_splits_long_paragraph():
     assert all(len(chunk.text) <= 500 for chunk in chunks)
 
 
-def test_clean_summary_rejects_empty_or_long_text():
-    assert _clean_summary('  "Short semantic summary."  ') == "Short semantic summary."
-
-    with pytest.raises(ValueError):
-        _clean_summary("   ")
-
-    with pytest.raises(ValueError):
-        _clean_summary("word " * 97)
-
-
-def test_embedding_text_prefers_available_summary_context():
-    text = _embedding_text(
-        {
-            "title": "Castle",
-            "heading_path": "History",
-            "summary": "Medieval castle history and location.",
-            "text": "Full chunk text.",
-        },
-        "chunk_summary",
+def test_embedding_text_uses_chunk_context():
+    text = TitleHeadingChunkText().text_for_embedding(
+        PageChunk(
+            id="chunk-1",
+            page_id="page-1",
+            title="Castle",
+            heading_path="History",
+            text="Full chunk text.",
+        )
     )
 
-    assert "Medieval castle history and location." in text
-    assert text.index("Medieval castle history") < text.index("Full chunk text.")
-
-
-def test_embedding_text_supports_summary_only_representation():
-    text = _embedding_text(
-        {
-            "title": "Castle",
-            "heading_path": "History",
-            "summary": "Medieval castle history and location.",
-            "text": "Full chunk text.",
-        },
-        "summary",
-    )
-
-    assert "Medieval castle history and location." in text
-    assert "Full chunk text." not in text
+    assert text == "Castle\nHistory\nFull chunk text."

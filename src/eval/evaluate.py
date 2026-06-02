@@ -3,6 +3,8 @@ from __future__ import annotations
 import argparse
 import time
 from collections import defaultdict
+from dataclasses import dataclass
+from pathlib import Path
 
 from src.db.pages import (
     connect_pages as connect,
@@ -11,83 +13,157 @@ from src.db.pages import (
     initialize_page_artifacts_db as initialize_eval_db,
 )
 from src.eval.metrics import bold_best_table, plain_table, score_rankings
-from src.eval.ranking import available_ranking_methods, get_ranking_method
+from src.retrieval.base import Retriever
+from src.retrieval.methods import (
+    build_retriever,
+    ensure_retriever_ready,
+    list_retrievers,
+)
+from src.shared.env import load_yaml
+
+CONFIG = load_yaml(Path(__file__).with_name("config.yaml"))
+
+
+@dataclass(frozen=True)
+class EvalRun:
+    questions: list[dict]
+    relevance: list[dict]
+    methods: list[str]
+    warmup_count: int
+    rankings: dict[str, dict[str, list[str]]]
+    timings: dict[str, dict[str, float]]
+    score_names: list[str]
+    scores: dict[str, dict[str, float]]
 
 
 def evaluate(
     method_names: list[str],
     show_ranks: bool = False,
     limit: int | None = None,
+    category: str | None = None,
 ) -> None:
-    initialize_eval_db()
-    questions, relevance = _load_eval_rows(limit)
-    if not questions:
+    run = run_eval(method_names, limit=limit, category=category)
+    if not run.questions:
         print("No eval questions found. Run src.eval.generate_dataset first.")
         return
 
-    print(f"Evaluating {len(questions)} questions")
+    print(f"Evaluating {len(run.questions)} questions")
+    print(_overall_table(run))
+    print()
+    print("Speed")
+    print(_timing_table(run))
+    if category is None:
+        print()
+        print(f"hit@{CONFIG['category_hit_k']} by category")
+        print(_category_table(run))
+    if show_ranks:
+        print()
+        print(_rank_table(run))
+
+
+def format_eval_report(
+    run: EvalRun,
+    include_categories: bool = True,
+) -> str:
+    sections = [
+        f"Evaluating {len(run.questions)} questions",
+        _overall_table(run),
+        "Speed",
+        _timing_table(run),
+    ]
+    if include_categories:
+        sections.extend(
+            [
+                f"hit@{CONFIG['category_hit_k']} by category",
+                _category_table(run),
+            ]
+        )
+    return "\n\n".join(sections)
+
+
+def run_eval(
+    method_names: list[str],
+    limit: int | None = None,
+    category: str | None = None,
+    warmup: int = 0,
+) -> EvalRun:
+    initialize_eval_db()
+    questions, relevance = load_eval_rows(limit=limit, category=category)
+    if not questions:
+        return EvalRun([], [], [], 0, {}, {}, [], {})
+
     resolved_methods = _resolve_methods(method_names)
-    methods = {name: get_ranking_method(name) for name in resolved_methods}
+    for name in resolved_methods:
+        ensure_retriever_ready(name)
+    retrievers = {name: build_retriever(name) for name in resolved_methods}
+    warmup = min(warmup, max(len(questions) - 1, 0))
+    warmup_questions = questions[:warmup]
+    timed_questions = questions[warmup:]
+    if warmup_questions:
+        for name in resolved_methods:
+            _retrieve_rankings(retrievers[name], warmup_questions)
+
     method_rankings = {}
     timings = {}
     for name in resolved_methods:
         started = time.perf_counter()
-        method_rankings[name] = _retrieve_rankings(methods[name], questions)
+        method_rankings[name] = _retrieve_rankings(retrievers[name], timed_questions)
         elapsed = time.perf_counter() - started
         timings[name] = {
             "seconds": elapsed,
-            "ms_per_query": elapsed * 1000 / len(questions),
+            "ms_per_query": elapsed * 1000 / len(timed_questions),
         }
 
-    overall_rows = []
-    for name in resolved_methods:
-        scores = score_rankings(relevance, method_rankings[name])
-        overall_rows.append(
-            [name, scores["hit@1"], scores["hit@5"], scores["hit@10"], scores["mrr@10"]]
+    timed_question_ids = {row["id"] for row in timed_questions}
+    timed_relevance = [
+        row for row in relevance if row["question_id"] in timed_question_ids
+    ]
+    score_names = [f"hit@{k}" for k in CONFIG["metric_ks"]]
+    score_names.append(f"mrr@{CONFIG['mrr_k']}")
+    scores = {
+        name: score_rankings(
+            timed_relevance,
+            method_rankings[name],
+            ks=tuple(CONFIG["metric_ks"]),
+            mrr_k=CONFIG["mrr_k"],
         )
-
-    print("Overall")
-    print(
-        bold_best_table(["method", "hit@1", "hit@5", "hit@10", "mrr@10"], overall_rows)
+        for name in resolved_methods
+    }
+    return EvalRun(
+        questions=timed_questions,
+        relevance=timed_relevance,
+        methods=resolved_methods,
+        warmup_count=warmup,
+        rankings=method_rankings,
+        timings=timings,
+        score_names=score_names,
+        scores=scores,
     )
-    print()
-    print("Speed")
-    print(
-        plain_table(
-            ["method", "seconds", "ms/query"],
-            [
-                [
-                    name,
-                    f"{timings[name]['seconds']:.2f}",
-                    f"{timings[name]['ms_per_query']:.1f}",
-                ]
-                for name in resolved_methods
-            ],
-        )
-    )
-    print()
-    print("hit@5 by category")
-    print(_category_table(questions, relevance, method_rankings, resolved_methods))
-    if show_ranks:
-        print()
-        print(_rank_table(questions, relevance, method_rankings, resolved_methods))
 
 
-def _load_eval_rows(limit: int | None = None) -> tuple[list[dict], list[dict]]:
+def load_eval_rows(
+    limit: int | None = None,
+    category: str | None = None,
+) -> tuple[list[dict], list[dict]]:
     with connect() as conn:
         question_sql = """
                 select id, question, answer, question_type, question_language
                 from eval_questions
                 where approved = 1
-                order by id
                 """
+        params = {}
+        if category is not None:
+            question_sql += "\n                and question_type = :category"
+            params["category"] = category
+        question_sql += "\n                order by id"
         if limit is not None:
             question_sql += "\n                limit :limit"
+            params["limit"] = limit
         questions = [
             dict(row)
             for row in conn.execute(
                 question_sql,
-                {"limit": limit},
+                params,
             )
         ]
         question_ids = [row["id"] for row in questions]
@@ -109,73 +185,92 @@ def _load_eval_rows(limit: int | None = None) -> tuple[list[dict], list[dict]]:
     return questions, relevance
 
 
-def _retrieve_rankings(method, questions: list[dict]) -> dict[str, list[str]]:
-    if hasattr(method, "retrieve_many"):
-        batches = method.retrieve_many([row["question"] for row in questions], 10)
-        return {
-            row["id"]: [chunk.id for chunk in batches[index]]
-            for index, row in enumerate(questions)
-        }
+def _retrieve_rankings(
+    retriever: Retriever,
+    questions: list[dict],
+) -> dict[str, list[str]]:
+    batches = retriever.retrieve_batch(
+        [row["question"] for row in questions],
+        CONFIG["result_limit"],
+    )
     return {
-        row["id"]: [chunk.id for chunk in method.retrieve(row["question"], 10)]
-        for row in questions
+        row["id"]: [chunk.id for chunk in batches[index]]
+        for index, row in enumerate(questions)
     }
 
 
-def _category_table(
-    questions: list[dict],
-    relevance: list[dict],
-    method_rankings: dict[str, dict[str, list[str]]],
-    method_names: list[str],
-) -> str:
-    question_type_by_id = {row["id"]: row["question_type"] for row in questions}
+def _overall_table(run: EvalRun) -> str:
+    rows = [
+        [name, *(run.scores[name][score_name] for score_name in run.score_names)]
+        for name in run.methods
+    ]
+    return "\n".join(
+        [
+            "Overall",
+            bold_best_table(["method", *run.score_names], rows),
+        ]
+    )
+
+
+def _timing_table(run: EvalRun) -> str:
+    return plain_table(
+        ["method", "seconds", "ms/query"],
+        [
+            [
+                name,
+                f"{run.timings[name]['seconds']:.2f}",
+                f"{run.timings[name]['ms_per_query']:.1f}",
+            ]
+            for name in run.methods
+        ],
+    )
+
+
+def _category_table(run: EvalRun) -> str:
+    question_type_by_id = {row["id"]: row["question_type"] for row in run.questions}
     types = sorted(set(question_type_by_id.values()))
     relevance_by_type = defaultdict(list)
-    for row in relevance:
+    for row in run.relevance:
         relevance_by_type[question_type_by_id[row["question_id"]]].append(row)
 
     rows = []
-    for method_name in method_names:
+    for method_name in run.methods:
         row = [method_name]
         for question_type in types:
             type_question_ids = {
                 item["question_id"] for item in relevance_by_type[question_type]
             }
             rankings = {
-                question_id: method_rankings[method_name][question_id]
+                question_id: run.rankings[method_name][question_id]
                 for question_id in type_question_ids
             }
             score = score_rankings(
                 relevance_by_type[question_type],
                 rankings,
-                ks=(5,),
-            )["hit@5"]
+                ks=(CONFIG["category_hit_k"],),
+                mrr_k=CONFIG["mrr_k"],
+            )[f"hit@{CONFIG['category_hit_k']}"]
             row.append(score)
         rows.append(row)
     return bold_best_table(["method", *types], rows)
 
 
-def _rank_table(
-    questions: list[dict],
-    relevance: list[dict],
-    method_rankings: dict[str, dict[str, list[str]]],
-    method_names: list[str],
-) -> str:
+def _rank_table(run: EvalRun) -> str:
     relevant_by_question = defaultdict(set)
-    for row in relevance:
+    for row in run.relevance:
         relevant_by_question[row["question_id"]].add(row["chunk_id"])
 
     rows = []
-    for question in questions:
+    for question in run.questions:
         row = [question["question_type"], question["question"][:80]]
-        for method_name in method_names:
+        for method_name in run.methods:
             rank = _first_rank(
-                method_rankings[method_name][question["id"]],
+                run.rankings[method_name][question["id"]],
                 relevant_by_question[question["id"]],
             )
             row.append(rank or "-")
         rows.append(row)
-    return plain_table(["type", "question", *method_names], rows)
+    return plain_table(["type", "question", *run.methods], rows)
 
 
 def _first_rank(ranked: list[str], relevant: set[str]) -> int | None:
@@ -187,8 +282,8 @@ def _first_rank(ranked: list[str], relevant: set[str]) -> int | None:
 
 def _resolve_methods(method_names: list[str]) -> list[str]:
     if method_names == ["all"]:
-        return sorted(available_ranking_methods())
-    unknown = sorted(set(method_names) - available_ranking_methods())
+        return list_retrievers()
+    unknown = sorted(set(method_names) - set(list_retrievers()))
     if unknown:
         raise ValueError(f"Unknown methods: {', '.join(unknown)}")
     return method_names
@@ -198,12 +293,14 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--methods", default="all")
     parser.add_argument("--limit", type=int)
+    parser.add_argument("--category")
     parser.add_argument("--show-ranks", action="store_true")
     args = parser.parse_args()
     evaluate(
         [name.strip() for name in args.methods.split(",") if name.strip()],
         show_ranks=args.show_ranks,
         limit=args.limit,
+        category=args.category,
     )
 
 

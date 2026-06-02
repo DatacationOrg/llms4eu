@@ -4,9 +4,6 @@ __pycache__/
 *.pyo
 .env
 .local/*
-!.local/raw_pages.db
-!.local/chroma/
-!.local/chroma/**
 qdrant_storage/
 .cache/
 .pytest_cache/
@@ -14,3 +11,4 @@ qdrant_storage/
 .mypy_cache/
 *.egg-info/
 data/scraped/
+data/cache/

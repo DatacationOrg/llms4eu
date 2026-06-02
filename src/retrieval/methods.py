@@ -1,0 +1,130 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Callable
+
+from src.retrieval.base import Retriever
+from src.retrieval.retrievers.fusion import WeightedScoreFusionRetriever
+from src.retrieval.retrievers.rerank import CrossEncoderRerankRetriever
+from src.retrieval.retrievers.sparse import SparseRetriever
+from src.retrieval.retrievers.vector_providers import build_provider, provider_names
+from src.shared.env import load_yaml
+
+CONFIG = load_yaml(Path(__file__).with_name("config.yaml"))
+
+
+@dataclass(frozen=True)
+class RetrieverSpec:
+    """Lazy catalog entry for one public retrieval method."""
+
+    name: str
+    build: Callable[[], Retriever]
+    provider: str | None = None
+
+    @property
+    def requires_index(self) -> bool:
+        return self.provider is not None
+
+
+def list_retrievers() -> list[str]:
+    return sorted(_specs())
+
+
+def build_retriever(name: str) -> Retriever:
+    specs = _specs()
+    if name not in specs:
+        raise ValueError(f"Unknown retriever: {name}")
+    return specs[name].build()
+
+
+def ensure_retriever_ready(name: str) -> None:
+    specs = _specs()
+    if name not in specs:
+        raise ValueError(f"Unknown retriever: {name}")
+    provider_name = specs[name].provider
+    if provider_name is None:
+        return
+    build_provider(provider_name).ensure_ready()
+
+
+def _specs() -> dict[str, RetrieverSpec]:
+    specs = {
+        "sparse": RetrieverSpec("sparse", _sparse),
+        "sparse_rerank": RetrieverSpec(
+            "sparse_rerank",
+            _build_sparse_rerank,
+        ),
+    }
+    for provider_name in provider_names():
+        specs.update(_provider_specs(provider_name))
+    return specs
+
+
+def _provider_specs(provider_name: str) -> dict[str, RetrieverSpec]:
+    return {
+        provider_name: RetrieverSpec(
+            provider_name,
+            lambda provider=provider_name: _vector(provider),
+            provider=provider_name,
+        ),
+        f"{provider_name}_hybrid": RetrieverSpec(
+            f"{provider_name}_hybrid",
+            lambda provider=provider_name: _hybrid(provider),
+            provider=provider_name,
+        ),
+        f"{provider_name}_rerank": RetrieverSpec(
+            f"{provider_name}_rerank",
+            lambda provider=provider_name: _vector_rerank(provider),
+            provider=provider_name,
+        ),
+        f"{provider_name}_hybrid_rerank": RetrieverSpec(
+            f"{provider_name}_hybrid_rerank",
+            lambda provider=provider_name: _hybrid_rerank(provider),
+            provider=provider_name,
+        ),
+    }
+
+
+def _sparse() -> SparseRetriever:
+    return SparseRetriever(k1=CONFIG["sparse_k1"], b=CONFIG["sparse_b"])
+
+
+def _build_sparse_rerank() -> CrossEncoderRerankRetriever:
+    return _reranker("sparse_rerank", _sparse())
+
+
+def _vector(provider_name: str) -> Retriever:
+    return build_provider(provider_name).build_retriever(provider_name)
+
+
+def _hybrid(provider_name: str) -> WeightedScoreFusionRetriever:
+    return WeightedScoreFusionRetriever(
+        name=f"{provider_name}_hybrid",
+        retrievers=(_vector(provider_name), _sparse()),
+        candidate_limit=CONFIG["rerank_candidate_limit"],
+        weights=(CONFIG["hybrid_vector_weight"], CONFIG["hybrid_sparse_weight"]),
+    )
+
+
+def _vector_rerank(provider_name: str) -> CrossEncoderRerankRetriever:
+    return _reranker(f"{provider_name}_rerank", _vector(provider_name))
+
+
+def _hybrid_rerank(provider_name: str) -> CrossEncoderRerankRetriever:
+    return _reranker(f"{provider_name}_hybrid_rerank", _hybrid(provider_name))
+
+
+def _reranker(name: str, base_retriever: Retriever) -> CrossEncoderRerankRetriever:
+    return CrossEncoderRerankRetriever(
+        name=name,
+        model_name=CONFIG["reranker_model"],
+        base_retriever=base_retriever,
+        candidate_limit=CONFIG["rerank_candidate_limit"],
+        device=CONFIG["reranker_device"],
+        max_length=CONFIG["reranker_max_length"],
+        local_files_only=CONFIG["reranker_local_files_only"],
+        batch_size=CONFIG["reranker_batch_size"],
+        prompt_name=CONFIG["reranker_prompt_name"],
+        prompt=CONFIG["reranker_prompt"],
+    )

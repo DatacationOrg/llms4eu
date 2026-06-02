@@ -3,7 +3,7 @@ from pathlib import Path
 from src.db.places import load_places
 from src.shared.embed import embed_texts, load_embedder
 from src.shared.env import load_local_env, load_yaml
-from src.vector_db.places import recreate_places_collection, upsert_place_vectors
+from src.vector_store.places import recreate_places_collection, upsert_place_vectors
 
 
 __all__ = ["rebuild_vector_index"]

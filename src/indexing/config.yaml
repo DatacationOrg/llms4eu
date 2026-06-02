@@ -1,9 +1,22 @@
 collection_name: page_chunks
+default_provider: qwen
+providers:
+  - english
+  - qwen
+  - qwen4b
+  - azure
 english_embedding_model: sentence-transformers/all-MiniLM-L6-v2
 qwen_embedding_model: Qwen/Qwen3-Embedding-0.6B
+qwen_batch_size: 8
+qwen4b_embedding_model: Qwen/Qwen3-Embedding-4B
+qwen4b_batch_size: 1
+qwen4b_local_files_only: true
 embedding_max_seq_length: 512
 qwen_local_files_only: true
-azure_embedding_batch_size: 4
+# Azure endpoint rejects more than 96 texts in one embeddings request.
+azure_embedding_batch_size: 96
 azure_embedding_retries: 8
+azure_embedding_timeout_seconds: 120
+azure_embedding_retry_backoff_max_seconds: 60
 index_upsert_batch_size: 128
 query_batch_size: 128

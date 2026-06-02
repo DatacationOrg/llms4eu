@@ -1,9 +1,13 @@
 question_model: gemma4:26b
+result_limit: 10
+metric_ks:
+  - 1
+  - 5
+  - 10
+mrr_k: 10
+category_hit_k: 5
 model_aliases:
   gemma4:26b: gemma4:26b-a4b-it-q4_K_M
-reranker_model: Qwen/Qwen3-Reranker-0.6B
-default_candidate_limit: 50
-reranker_batch_size: 64
 question_model_num_ctx: 8192
 question_model_num_predict: 4096
 question_model_reasoning: false

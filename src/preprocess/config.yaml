@@ -1,2 +1,5 @@
 collection_name: places
 embedding_model: sentence-transformers/all-MiniLM-L6-v2
+chunk_target_chars: 1800
+chunk_max_chars: 2600
+chunk_min_chars: 300

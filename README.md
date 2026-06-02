@@ -1,7 +1,7 @@
 # LLMs4EU - Tourism - RAG
 
-Local RAG for tourism places. SQLite is the source of truth,
-Chroma is the vector index. Both run entirely inside the Python environment.
+Local RAG for tourism places. SQLite stores canonical content, and Chroma stores
+derived vector indexes. Both run entirely inside the Python environment.
 
 ## Requirements
 
@@ -25,13 +25,14 @@ ollama pull gemma4:e4b
 ```bash
 just init        # load seed data into SQLite
 just index       # embed places and rebuild Chroma
+just rebuild-vector-cache  # rebuild the default qwen chunk vector cache
 just ask What place is best for a quiet forest walk near water?  # retrieve + LLM answer
 just scrape https://example.com  # crawl a site, ingest into SQLite, reindex
 just scrape-web  # start the local scraping UI
 just test        # run the non-LLM test suite
 ```
 
-Search defaults to top 3 results. Override per query:
+Search defaults to top 10 final results. Override per query:
 
 ```bash
 uv run python -m src.rag.search "lake picnic" --limit 5
@@ -41,12 +42,10 @@ Experimental retrieval eval over scraped Markdown pages:
 
 ```bash
 just eval-chunks
-just eval-index qwen chunk
-just eval-index qwen summary
-just eval-index qwen chunk_summary
+just eval-index qwen
 just eval-generate 10
-just eval qwen_chunk,qwen_summary,qwen_chunk_summary,bm25
-just eval qwen_chunk_summary_rerank,qwen_chunk_summary_rerank_hybrid
+just eval qwen,sparse
+just eval qwen4b_rerank,qwen4b_hybrid,qwen4b_hybrid_rerank
 ```
 
 ## Shape
@@ -57,13 +56,20 @@ sql/            one-table schema, portable to SQLite and Postgres
 src/db/         SQLite initialize and place queries
 src/preprocess/ rebuild derived data from SQL rows
 src/indexing/   provider-shaped vector indexing
-src/vector_db/  Chroma collection, upsert, vector search
-src/rag/        search and answer scripts
+src/vector_store/  Chroma collection, upsert, vector search
+src/retrieval/  chunk retrieval methods and catalog
+src/rag/        place search and answer scripts
 src/eval/       chunked raw-page retrieval evaluation
 src/scraping/   crawler, transform, ingest, scraping UI
 src/shared/     schema, embeddings, env, LLM helper
 tests/          data contract, retrieval, scrape transform
 ```
+
+Durable reference databases live under `data/db/` with descriptive names such
+as `pages.db`. Regenerable vector cache artifacts live under
+`data/cache/chroma/`. SQLite page chunks are the source of truth for chunk text;
+Chroma collections are derived indexes over those chunks. Use `.env` overrides
+for private scratch paths under `.local/`.
 
 ---
 
@@ -81,3 +87,8 @@ for a larger RAG system.
 The SQL schema and module boundaries are designed to make that swap small.
 Before scaling up, we need to align with other teams on what data collection
 tools and shared infrastructure are available.
+
+## Docs
+
+- `docs/architecture-decisions.md`: durable decisions and why they matter.
+- `docs/retrieval-results.md`: compact historical retrieval result table.

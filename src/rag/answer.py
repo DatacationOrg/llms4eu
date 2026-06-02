@@ -10,7 +10,7 @@ from src.shared.llm import structured_local_model
 
 __all__ = ["ANSWER_CONFIG", "RagAnswer", "answer", "prompt_for"]
 
-ANSWER_CONFIG = load_yaml(Path(__file__).with_name("answer_config.yaml"))
+ANSWER_CONFIG = load_yaml(Path(__file__).with_name("config.yaml"))["answer"]
 
 
 class RagAnswer(BaseModel):
@@ -61,9 +61,7 @@ def _answer_question(question: str, places: list[ScoredPlace]) -> RagAnswer:
     print("\nContext:")
     print(prompt)
 
-    return structured_local_model(ANSWER_CONFIG["answer_model"], RagAnswer).invoke(
-        prompt
-    )
+    return structured_local_model(ANSWER_CONFIG["model"], RagAnswer).invoke(prompt)
 
 
 if __name__ == "__main__":

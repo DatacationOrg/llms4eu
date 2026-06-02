@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import re
 from dataclasses import dataclass
+from pathlib import Path
 
 from src.db.pages import (
     connect_pages as connect,
@@ -10,10 +11,9 @@ from src.db.pages import (
 from src.db.pages import (
     initialize_page_artifacts_db,
 )
+from src.shared.env import load_yaml
 
-TARGET_CHARS = 1800
-MAX_CHARS = 2600
-MIN_CHARS = 300
+CONFIG = load_yaml(Path(__file__).with_name("config.yaml"))
 
 HEADING_RE = re.compile(r"^(#{1,6})\s+(.+)$")
 
@@ -26,10 +26,13 @@ class Chunk:
 
 def chunk_markdown(
     markdown: str,
-    target_chars: int = TARGET_CHARS,
-    max_chars: int = MAX_CHARS,
-    min_chars: int = MIN_CHARS,
+    target_chars: int | None = None,
+    max_chars: int | None = None,
+    min_chars: int | None = None,
 ) -> list[Chunk]:
+    target_chars = target_chars or CONFIG["chunk_target_chars"]
+    max_chars = max_chars or CONFIG["chunk_max_chars"]
+    min_chars = min_chars or CONFIG["chunk_min_chars"]
     sections = _sections(markdown)
     chunks: list[Chunk] = []
     for heading_path, paragraphs in sections:

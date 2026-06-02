@@ -1,3 +1,8 @@
-collection_name: places
-default_limit: 3
-embedding_model: sentence-transformers/all-MiniLM-L6-v2
+search:
+  collection_name: places
+  default_limit: 10
+  embedding_model: sentence-transformers/all-MiniLM-L6-v2
+
+answer:
+  default_limit: 3
+  model: gemma4:e4b

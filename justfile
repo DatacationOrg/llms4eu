@@ -4,7 +4,7 @@ set windows-shell := ["pwsh", "-NoLogo", "-Command"]
 scrape *URLS:
     uv run python -m src.scraping.scrape --urls {{URLS}}
 
-fetch-pages SOURCE="data/brestanica.json" DB=".local/raw_pages.db":
+fetch-pages SOURCE="data/brestanica.json" DB="data/db/pages.db":
     uv run python -m src.scraping.fetch_pages {{SOURCE}} --db {{DB}} --workers 4
 
 init:
@@ -25,8 +25,11 @@ test:
 eval-chunks:
     uv run python -m src.preprocess.chunks
 
-eval-index METHOD="qwen" CONTENT_MODE="chunk_summary":
-    uv run python -m src.indexing.chunks --method {{METHOD}} --content-mode {{CONTENT_MODE}}
+eval-index METHOD="qwen":
+    uv run python -m src.indexing.chunks --method {{METHOD}}
+
+rebuild-vector-cache:
+    uv run python -m src.indexing.chunks --method qwen
 
 eval-generate LIMIT="10":
     uv run python -m src.eval.generate_dataset --limit {{LIMIT}}
@@ -34,8 +37,14 @@ eval-generate LIMIT="10":
 eval-generate-model LIMIT MODEL:
     uv run python -m src.eval.generate_dataset --limit {{LIMIT}} --model {{MODEL}}
 
-eval METHODS="qwen_chunk_summary":
+eval METHODS="qwen":
     uv run python -m src.eval.evaluate --methods {{METHODS}}
+
+exp-indexing-models PROVIDERS="all":
+    uv run python experiments/indexing/evaluate_embedding_models.py --providers {{PROVIDERS}}
+
+exp-qwen-modes:
+    uv run python experiments/indexing/compare_qwen_modes.py
 
 eval-inspect LIMIT="20":
     uv run python -m src.eval.inspect_dataset --limit {{LIMIT}}

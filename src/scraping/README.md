@@ -1,6 +1,6 @@
 # Scraping
 
-Scraping vendors the existing crawler and small web UI, then plugs the results
+Scraping fetches tourism pages, converts them to Markdown, and plugs results
 into the local SQLite and Chroma flow.
 
 `fetch_pages.py` reads JSON/JSONL `{source, url}` rows, fetches each page, turns

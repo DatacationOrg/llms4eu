@@ -9,11 +9,13 @@ from typing import Protocol
 import httpx
 
 from src.shared.embed import embed_texts, load_embedder
+from src.shared.embedding_cache import cached_embeddings
 
 __all__ = [
     "AzureEmbeddingIndexer",
     "EmbeddingIndexer",
     "EnglishMiniLmIndexer",
+    "Qwen4BIndexer",
     "QwenMultilingualIndexer",
     "build_indexer",
 ]
@@ -29,6 +31,10 @@ class EmbeddingIndexer(Protocol):
     def embed_query(self, text: str) -> list[float]: ...
 
 
+class AzureEmbeddingRequestError(RuntimeError):
+    pass
+
+
 @dataclass(frozen=True)
 class SentenceTransformerIndexer:
     name: str
@@ -39,18 +45,32 @@ class SentenceTransformerIndexer:
     show_progress_bar: bool = False
 
     def embed_documents(self, texts: list[str]) -> list[list[float]]:
-        return embed_texts(
-            self._model(),
-            texts,
-            batch_size=self.batch_size,
-            show_progress_bar=self.show_progress_bar,
+        return cached_embeddings(
+            provider=self.name,
+            model=self.model_name,
+            kind="document",
+            texts=texts,
+            embed_missing=lambda missing: embed_texts(
+                self._model(),
+                missing,
+                batch_size=self.batch_size,
+                show_progress_bar=self.show_progress_bar,
+            ),
         )
 
     def embed_query(self, text: str) -> list[float]:
         return self.embed_queries([text])[0]
 
     def embed_queries(self, texts: list[str]) -> list[list[float]]:
-        return embed_texts(self._model(), texts, prompt_name=self._query_prompt())
+        return cached_embeddings(
+            provider=self.name,
+            model=self.model_name,
+            kind="query",
+            texts=texts,
+            embed_missing=lambda missing: embed_texts(
+                self._model(), missing, prompt_name=self._query_prompt()
+            ),
+        )
 
     @cache
     def _model(self):
@@ -80,6 +100,15 @@ class QwenMultilingualIndexer(SentenceTransformerIndexer):
 
 
 @dataclass(frozen=True)
+class Qwen4BIndexer(SentenceTransformerIndexer):
+    name: str = "qwen4b"
+    model_name: str = "Qwen/Qwen3-Embedding-4B"
+    batch_size: int | None = 1
+    max_seq_length: int | None = 512
+    show_progress_bar: bool = True
+
+
+@dataclass(frozen=True)
 class AzureEmbeddingIndexer:
     name: str = "azure"
     endpoint: str | None = None
@@ -88,6 +117,7 @@ class AzureEmbeddingIndexer:
     batch_size: int = 16
     timeout_seconds: int = 120
     retries: int = 6
+    retry_backoff_max_seconds: int = 60
 
     @classmethod
     def from_env(cls, config: dict | None = None) -> AzureEmbeddingIndexer:
@@ -97,10 +127,24 @@ class AzureEmbeddingIndexer:
             api_key=os.environ["AZURE_AI_API_KEY"],
             model=os.environ["AZURE_EMBEDDING_MODEL"],
             batch_size=config.get("azure_embedding_batch_size", 16),
+            timeout_seconds=config.get("azure_embedding_timeout_seconds", 120),
             retries=config.get("azure_embedding_retries", 6),
+            retry_backoff_max_seconds=config.get(
+                "azure_embedding_retry_backoff_max_seconds",
+                60,
+            ),
         )
 
     def embed_documents(self, texts: list[str]) -> list[list[float]]:
+        return cached_embeddings(
+            provider=self.name,
+            model=self._model(),
+            kind="document",
+            texts=texts,
+            embed_missing=self._embed_uncached,
+        )
+
+    def _embed_uncached(self, texts: list[str]) -> list[list[float]]:
         vectors: list[list[float]] = []
         with httpx.Client(timeout=self.timeout_seconds) as client:
             for start in range(0, len(texts), self.batch_size):
@@ -117,7 +161,13 @@ class AzureEmbeddingIndexer:
         return self.embed_queries([text])[0]
 
     def embed_queries(self, texts: list[str]) -> list[list[float]]:
-        return self.embed_documents(texts)
+        return cached_embeddings(
+            provider=self.name,
+            model=self._model(),
+            kind="query",
+            texts=texts,
+            embed_missing=self._embed_uncached,
+        )
 
     def _endpoint(self) -> str:
         return (self.endpoint or os.environ["AZURE_AI_ENDPOINT"]).rstrip("/")
@@ -143,11 +193,14 @@ class AzureEmbeddingIndexer:
                 json={"model": self._model(), "input": batch},
             )
             if response.status_code != 429:
-                response.raise_for_status()
+                _raise_for_azure_error(response, batch_size=len(batch))
                 return response
             if attempt == self.retries:
-                response.raise_for_status()
-            wait_seconds = _retry_after(response) or min(2**attempt, 60)
+                _raise_for_azure_error(response, batch_size=len(batch))
+            wait_seconds = _retry_after(response) or min(
+                2**attempt,
+                self.retry_backoff_max_seconds,
+            )
             print(f"azure embedding rate limited; retrying in {wait_seconds:.1f}s")
             time.sleep(wait_seconds)
         raise RuntimeError("unreachable azure retry state")
@@ -163,6 +216,21 @@ def _retry_after(response: httpx.Response) -> float | None:
         return None
 
 
+def _raise_for_azure_error(response: httpx.Response, batch_size: int) -> None:
+    if response.status_code < 400:
+        return
+    message = _response_message(response)
+    raise AzureEmbeddingRequestError(message)
+
+
+def _response_message(response: httpx.Response) -> str:
+    try:
+        payload = response.json()
+    except ValueError:
+        payload = response.text
+    return f"Azure embeddings failed with HTTP {response.status_code}: {payload}"
+
+
 def build_indexer(name: str, config: dict | None = None) -> EmbeddingIndexer:
     config = config or {}
     if name == "english":
@@ -175,8 +243,16 @@ def build_indexer(name: str, config: dict | None = None) -> EmbeddingIndexer:
     if name == "qwen":
         return QwenMultilingualIndexer(
             model_name=config.get("qwen_embedding_model", "Qwen/Qwen3-Embedding-0.6B"),
+            batch_size=config.get("qwen_batch_size", 8),
             max_seq_length=config.get("embedding_max_seq_length", 512),
             local_files_only=config.get("qwen_local_files_only", True),
+        )
+    if name == "qwen4b":
+        return Qwen4BIndexer(
+            model_name=config.get("qwen4b_embedding_model", "Qwen/Qwen3-Embedding-4B"),
+            batch_size=config.get("qwen4b_batch_size", 1),
+            max_seq_length=config.get("embedding_max_seq_length", 512),
+            local_files_only=config.get("qwen4b_local_files_only", True),
         )
     if name == "azure":
         return AzureEmbeddingIndexer.from_env(config)
