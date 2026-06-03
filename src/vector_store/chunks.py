@@ -12,6 +12,7 @@ from src.db.pages import initialize_page_artifacts_db
 from src.indexing.chunk_text import PageChunk, TitleHeadingChunkText
 from src.shared.env import chroma_path, load_local_env, load_yaml
 from src.shared.indexers import build_indexer
+from src.shared.indexers import provider_names as buildable_provider_names
 
 CONFIG = load_yaml(Path(__file__).parents[1] / "indexing" / "config.yaml")
 INDEXING_PROVIDERS = tuple(CONFIG["providers"])
@@ -36,6 +37,11 @@ def query_chunk_vectors(provider: str, query: str, limit: int) -> list[ScoredChu
     )
     chunk_ids = _chunk_ids_from_result(result, offset=0)
     return _scored_chunks_from_result(result, offset=0, texts=_chunk_texts(chunk_ids))
+
+
+def enabled_provider_names() -> list[str]:
+    """Embedding providers enabled for this project's chunk-vector indexes."""
+    return sorted(INDEXING_PROVIDERS)
 
 
 def query_chunk_vectors_batch(
@@ -220,5 +226,7 @@ def _collection_name(provider: str) -> str:
 
 
 def _validate_provider(provider: str) -> None:
+    if provider not in buildable_provider_names():
+        raise ValueError(f"Unknown embedding provider: {provider}")
     if provider not in INDEXING_PROVIDERS:
         raise ValueError(f"Unknown chunk vector provider: {provider}")

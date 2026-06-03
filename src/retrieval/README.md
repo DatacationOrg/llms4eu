@@ -16,8 +16,8 @@ Reusable chunk retrieval methods.
 - `*_rerank`: Qwen3 cross-encoder reranker over first-stage candidates.
 - `*_hybrid_rerank`: Qwen3 reranker over hybrid candidates.
 
-Config lives in `config.yaml`. Default vector provider is `qwen`; `qwen4b`
-remains available as a heavier local experiment.
+Retrieval tuning lives in `config.yaml`. Enabled vector providers come from
+`src/indexing/config.yaml`; eval defaults come from `src/eval/config.yaml`.
 
 Sparse retrieval uses BM25. `sparse_k1` controls repeated-term saturation, and
 `sparse_b` controls length normalization.

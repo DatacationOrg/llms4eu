@@ -13,7 +13,7 @@ chunks, and eval labels.
 tracked. Rebuild the default qwen vector cache with:
 
 ```bash
-just rebuild-vector-cache
+just eval-index qwen
 ```
 
 Scraped raw text outputs are written under `data/scraped/` and are not tracked.

@@ -16,7 +16,7 @@ from src.eval.metrics import bold_best_table, plain_table, score_rankings
 from src.retrieval.base import Retriever
 from src.retrieval.methods import (
     build_retriever,
-    ensure_retriever_ready,
+    ensure_retrievers_ready,
     list_retrievers,
 )
 from src.shared.env import load_yaml
@@ -93,8 +93,7 @@ def run_eval(
         return EvalRun([], [], [], 0, {}, {}, [], {})
 
     resolved_methods = _resolve_methods(method_names)
-    for name in resolved_methods:
-        ensure_retriever_ready(name)
+    ensure_retrievers_ready(resolved_methods)
     retrievers = {name: build_retriever(name) for name in resolved_methods}
     warmup = min(warmup, max(len(questions) - 1, 0))
     warmup_questions = questions[:warmup]
@@ -281,6 +280,8 @@ def _first_rank(ranked: list[str], relevant: set[str]) -> int | None:
 
 
 def _resolve_methods(method_names: list[str]) -> list[str]:
+    if not method_names:
+        return CONFIG["default_methods"]
     if method_names == ["all"]:
         return list_retrievers()
     unknown = sorted(set(method_names) - set(list_retrievers()))
@@ -291,7 +292,7 @@ def _resolve_methods(method_names: list[str]) -> list[str]:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--methods", default="all")
+    parser.add_argument("--methods", default=",".join(CONFIG["default_methods"]))
     parser.add_argument("--limit", type=int)
     parser.add_argument("--category")
     parser.add_argument("--show-ranks", action="store_true")

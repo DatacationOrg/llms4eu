@@ -7,7 +7,8 @@ derived vector indexes. Both run entirely inside the Python environment.
 
 - [uv](https://docs.astral.sh/uv/)
 - [just](https://just.systems/)
-- [Ollama](https://ollama.com/) — only needed for `just ask` and `just scrape`
+- [Ollama](https://ollama.com/) — only needed for `just ask`, `just scrape`,
+  and `just eval-generate`
 
 ## Setup
 
@@ -18,6 +19,8 @@ cp .env.example .env  # set local paths (defaults work out of the box)
 
 ```bash
 ollama pull gemma4:e4b
+# Optional for eval question generation:
+ollama pull gemma4:26b-a4b-it-q4_K_M
 ```
 
 ## Usage
@@ -25,10 +28,10 @@ ollama pull gemma4:e4b
 ```bash
 just init        # load seed data into SQLite
 just index       # embed places and rebuild Chroma
-just rebuild-vector-cache  # rebuild the default qwen chunk vector cache
 just ask What place is best for a quiet forest walk near water?  # retrieve + LLM answer
 just scrape https://example.com  # crawl a site, ingest into SQLite, reindex
 just scrape-web  # start the local scraping UI
+just eval-index qwen  # rebuild the default qwen chunk vector index
 just test        # run the non-LLM test suite
 ```
 

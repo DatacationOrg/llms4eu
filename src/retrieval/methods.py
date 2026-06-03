@@ -8,8 +8,9 @@ from src.retrieval.base import Retriever
 from src.retrieval.retrievers.fusion import WeightedScoreFusionRetriever
 from src.retrieval.retrievers.rerank import CrossEncoderRerankRetriever
 from src.retrieval.retrievers.sparse import SparseRetriever
-from src.retrieval.retrievers.vector_providers import build_provider, provider_names
+from src.retrieval.retrievers.vector_chunks import VectorChunkRetriever
 from src.shared.env import load_yaml
+from src.vector_store.chunks import collection_ready, enabled_provider_names
 
 CONFIG = load_yaml(Path(__file__).with_name("config.yaml"))
 
@@ -27,6 +28,21 @@ class RetrieverSpec:
         return self.provider is not None
 
 
+class MissingRetrieverIndexes(RuntimeError):
+    def __init__(self, missing: dict[str, str]) -> None:
+        self.missing = missing
+        providers = sorted(set(missing.values()))
+        commands = "\n".join(
+            f"  uv run python -m src.indexing.chunks --method {provider}"
+            for provider in providers
+        )
+        methods = ", ".join(sorted(missing))
+        super().__init__(
+            "Missing vector indexes for retrieval methods: "
+            f"{methods}\nBuild them first:\n{commands}"
+        )
+
+
 def list_retrievers() -> list[str]:
     return sorted(_specs())
 
@@ -39,13 +55,27 @@ def build_retriever(name: str) -> Retriever:
 
 
 def ensure_retriever_ready(name: str) -> None:
+    ensure_retrievers_ready([name])
+
+
+def ensure_retrievers_ready(names: list[str]) -> None:
+    missing = missing_retriever_indexes(names)
+    if missing:
+        raise MissingRetrieverIndexes(missing)
+
+
+def missing_retriever_indexes(names: list[str]) -> dict[str, str]:
     specs = _specs()
-    if name not in specs:
-        raise ValueError(f"Unknown retriever: {name}")
-    provider_name = specs[name].provider
-    if provider_name is None:
-        return
-    build_provider(provider_name).ensure_ready()
+    unknown = sorted(set(names) - set(specs))
+    if unknown:
+        raise ValueError(f"Unknown retriever: {', '.join(unknown)}")
+
+    missing = {}
+    for name in names:
+        provider_name = specs[name].provider
+        if provider_name is not None and not collection_ready(provider_name):
+            missing[name] = provider_name
+    return missing
 
 
 def _specs() -> dict[str, RetrieverSpec]:
@@ -56,7 +86,7 @@ def _specs() -> dict[str, RetrieverSpec]:
             _build_sparse_rerank,
         ),
     }
-    for provider_name in provider_names():
+    for provider_name in enabled_provider_names():
         specs.update(_provider_specs(provider_name))
     return specs
 
@@ -95,7 +125,7 @@ def _build_sparse_rerank() -> CrossEncoderRerankRetriever:
 
 
 def _vector(provider_name: str) -> Retriever:
-    return build_provider(provider_name).build_retriever(provider_name)
+    return VectorChunkRetriever(name=provider_name, provider=provider_name)
 
 
 def _hybrid(provider_name: str) -> WeightedScoreFusionRetriever:

@@ -3,6 +3,7 @@ import sqlite3
 import src.vector_store.chunks as chunk_vectors
 from src.vector_store.chunks import (
     collection_ready,
+    enabled_provider_names,
     query_chunk_vectors,
     query_chunk_vectors_batch,
     rebuild_chunk_collection,
@@ -61,6 +62,12 @@ def test_chunk_collection_rebuild_readiness_and_query(monkeypatch, tmp_path):
     )
     assert [hit.id for hit in small_batch_hits[0]] == ["chunk-castle"]
     assert [hit.id for hit in small_batch_hits[1]] == ["chunk-forest"]
+
+
+def test_enabled_provider_names_comes_from_indexing_config(monkeypatch):
+    monkeypatch.setattr(chunk_vectors, "INDEXING_PROVIDERS", ("qwen", "english"))
+
+    assert enabled_provider_names() == ["english", "qwen"]
 
 
 def _write_chunk_fixture(path):

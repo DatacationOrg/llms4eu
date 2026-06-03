@@ -3,7 +3,8 @@
 Tiny helpers used by more than one script.
 
 `schema.py` is the Python data contract, `embed.py` wraps SentenceTransformer
-embedding calls, `indexers.py` exposes provider-shaped embedding backends,
+embedding calls, `indexers.py` exposes buildable provider-shaped embedding
+backends,
 `env.py` loads local settings, `cli.py` keeps shared command-line prompts small,
 and `llm.py` exposes structured-output clients.
 

@@ -1,6 +1,5 @@
 final_result_limit: 10
 rerank_candidate_limit: 30
-default_vector_provider: qwen
 sparse_k1: 1.5
 sparse_b: 0.75
 hybrid_vector_weight: 0.7

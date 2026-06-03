@@ -31,10 +31,13 @@ Rebuild one collection:
 uv run python -m src.indexing.chunks --method qwen
 ```
 
+Azure indexing prompts for typed confirmation before sending embedding requests.
+Use `--yes` only for deliberate non-interactive runs.
+
 Rebuild the default regenerable vector cache:
 
 ```bash
-just rebuild-vector-cache
+just eval-index qwen
 ```
 
 Durable reference databases belong under `data/db/`. Regenerable Chroma cache

@@ -1,4 +1,5 @@
 from src.eval.metrics import bold_best_table, score_rankings
+from src.eval.evaluate import _resolve_methods
 
 
 def test_score_rankings_accepts_multiple_relevant_chunks():
@@ -22,6 +23,12 @@ def test_score_rankings_accepts_multiple_relevant_chunks():
     assert short_mrr["mrr@1"] == 0
 
 
+def test_score_rankings_handles_missing_relevance():
+    scores = score_rankings([], {"q1": ["chunk"]}, ks=(1, 5))
+
+    assert scores == {"hit@1": 0.0, "hit@5": 0.0, "mrr@10": 0.0}
+
+
 def test_bold_best_table_highlights_column_winners():
     table = bold_best_table(
         ["method", "hit@5"],
@@ -30,3 +37,7 @@ def test_bold_best_table_highlights_column_winners():
 
     assert "| vector | 0.500 |" in table
     assert "| rerank | **0.750** |" in table
+
+
+def test_eval_default_methods_are_narrow():
+    assert _resolve_methods([]) == ["qwen"]

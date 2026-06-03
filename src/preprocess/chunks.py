@@ -63,10 +63,14 @@ def rebuild_page_chunks() -> None:
             from page_metadata m
             join page_markdown_content c on c.page_id = m.id
             where m.page_kind != 'empty'
+              and not exists (
+                select 1
+                from page_chunks chunks
+                where chunks.page_id = m.id
+              )
             order by m.id
             """
         ).fetchall()
-        conn.execute("delete from page_chunks")
 
         rows = []
         for page in pages:
@@ -92,7 +96,7 @@ def rebuild_page_chunks() -> None:
             rows,
         )
 
-    print(f"chunked {len(pages)} pages into {len(rows)} chunks")
+    print(f"chunked {len(pages)} new pages into {len(rows)} chunks")
 
 
 def _sections(markdown: str) -> list[tuple[str, list[str]]]:

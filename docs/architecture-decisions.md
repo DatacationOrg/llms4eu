@@ -73,8 +73,9 @@ title, heading path, and chunk text.
 and query-time vector search.
 
 Provider-shaped embedding implementations live in `src.shared.indexers`.
-Retrieval provider files bind those indexers into `Retriever` instances without
-instantiating providers at import time.
+`src.indexing/config.yaml` owns which embedding providers are enabled for this
+project. Retrieval builds `VectorChunkRetriever` instances from the enabled
+provider list and checks Chroma readiness without owning provider definitions.
 
 ## Config Boundary
 
@@ -98,5 +99,4 @@ Tracked durable artifacts use descriptive paths:
 
 `.local/` is private scratch and can be overridden through `.env`.
 
-`just rebuild-vector-cache` rebuilds only the default production provider,
-currently `qwen`.
+`just eval-index qwen` rebuilds the default production chunk-vector provider.

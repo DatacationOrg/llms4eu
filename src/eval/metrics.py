@@ -28,6 +28,8 @@ def score_rankings(
             scores[f"mrr@{mrr_k}"] += 1 / first_rank
 
     total = len(question_ids)
+    if total == 0:
+        return scores
     return {name: value / total for name, value in scores.items()}
 
 

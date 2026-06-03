@@ -1,4 +1,6 @@
 question_model: gemma4:26b
+default_methods:
+  - qwen
 result_limit: 10
 metric_ks:
   - 1
