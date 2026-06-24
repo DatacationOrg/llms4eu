@@ -8,13 +8,16 @@ def score_rankings(
     rankings: dict[str, list[str]],
     ks: tuple[int, ...] = (1, 5, 10),
     mrr_k: int = 10,
+    recall_k: int | None = None,
 ) -> dict[str, float]:
     relevant_by_question: dict[str, set[str]] = defaultdict(set)
     for row in rows:
         relevant_by_question[row["question_id"]].add(row["chunk_id"])
 
     question_ids = list(relevant_by_question)
+    recall_k = recall_k or max(ks, default=mrr_k)
     scores = {f"hit@{k}": 0.0 for k in ks}
+    scores[f"recall@{recall_k}"] = 0.0
     scores[f"mrr@{mrr_k}"] = 0.0
 
     for question_id in question_ids:
@@ -23,6 +26,9 @@ def score_rankings(
         for k in ks:
             if relevant.intersection(ranked[:k]):
                 scores[f"hit@{k}"] += 1
+        scores[f"recall@{recall_k}"] += len(
+            relevant.intersection(ranked[:recall_k])
+        ) / len(relevant)
         first_rank = _first_relevant_rank(ranked[:mrr_k], relevant)
         if first_rank:
             scores[f"mrr@{mrr_k}"] += 1 / first_rank

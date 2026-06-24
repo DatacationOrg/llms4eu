@@ -8,7 +8,7 @@ from src.shared.schema import Place
 from src.vector_store.places import search_place_vectors
 
 
-__all__ = ["ScoredPlace", "search_places", "search"]
+__all__ = ["ScoredPlace", "search_places", "search_places_with_model", "search"]
 
 CONFIG = load_yaml(Path(__file__).with_name("config.yaml"))
 SEARCH_CONFIG = CONFIG["search"]
@@ -19,12 +19,26 @@ class ScoredPlace(Place):
 
 
 def search_places(query: str, limit: int | None = None) -> list[ScoredPlace]:
+    return search_places_with_model(
+        query=query,
+        embedding_model=SEARCH_CONFIG["embedding_model"],
+        limit=limit,
+        collection_name=SEARCH_CONFIG["collection_name"],
+    )
+
+
+def search_places_with_model(
+    query: str,
+    embedding_model: str,
+    limit: int | None = None,
+    collection_name: str | None = None,
+) -> list[ScoredPlace]:
     load_local_env()
-    model = load_embedder(SEARCH_CONFIG["embedding_model"])
+    model = load_embedder(embedding_model)
     vector = embed_texts(model, [query])[0]
 
     hits = search_place_vectors(
-        SEARCH_CONFIG["collection_name"],
+        collection_name or SEARCH_CONFIG["collection_name"],
         vector,
         limit or SEARCH_CONFIG["default_limit"],
     )

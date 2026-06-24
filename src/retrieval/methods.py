@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Callable
 
 from src.retrieval.base import Retriever
+from src.retrieval.retrievers.agentic import AgenticRetriever
 from src.retrieval.retrievers.fusion import WeightedScoreFusionRetriever
 from src.retrieval.retrievers.rerank import CrossEncoderRerankRetriever
 from src.retrieval.retrievers.sparse import SparseRetriever
@@ -92,7 +93,7 @@ def _specs() -> dict[str, RetrieverSpec]:
 
 
 def _provider_specs(provider_name: str) -> dict[str, RetrieverSpec]:
-    return {
+    specs = {
         provider_name: RetrieverSpec(
             provider_name,
             lambda provider=provider_name: _vector(provider),
@@ -114,6 +115,18 @@ def _provider_specs(provider_name: str) -> dict[str, RetrieverSpec]:
             provider=provider_name,
         ),
     }
+    if provider_name == "qwen":
+        specs["qwen_agentic"] = RetrieverSpec(
+            "qwen_agentic",
+            _qwen_agentic,
+            provider="qwen",
+        )
+        specs["qwen_hybrid_agentic"] = RetrieverSpec(
+            "qwen_hybrid_agentic",
+            _qwen_hybrid_agentic,
+            provider="qwen",
+        )
+    return specs
 
 
 def _sparse() -> SparseRetriever:
@@ -143,6 +156,32 @@ def _vector_rerank(provider_name: str) -> CrossEncoderRerankRetriever:
 
 def _hybrid_rerank(provider_name: str) -> CrossEncoderRerankRetriever:
     return _reranker(f"{provider_name}_hybrid_rerank", _hybrid(provider_name))
+
+
+def _qwen_agentic() -> AgenticRetriever:
+    return AgenticRetriever(
+        name="qwen_agentic",
+        base_retriever=_vector("qwen"),
+        judge_retries=CONFIG["agentic_judge_retries"],
+        max_attempts=CONFIG["agentic_max_attempts"],
+        min_sufficient_chunks=CONFIG["agentic_min_sufficient_chunks"],
+        initial_limit=CONFIG["agentic_initial_limit"],
+        limit_step=CONFIG["agentic_limit_step"],
+        max_limit=CONFIG["agentic_max_limit"],
+    )
+
+
+def _qwen_hybrid_agentic() -> AgenticRetriever:
+    return AgenticRetriever(
+        name="qwen_hybrid_agentic",
+        base_retriever=_hybrid("qwen"),
+        judge_retries=CONFIG["agentic_judge_retries"],
+        max_attempts=CONFIG["agentic_max_attempts"],
+        min_sufficient_chunks=CONFIG["agentic_min_sufficient_chunks"],
+        initial_limit=CONFIG["agentic_initial_limit"],
+        limit_step=CONFIG["agentic_limit_step"],
+        max_limit=CONFIG["agentic_max_limit"],
+    )
 
 
 def _reranker(name: str, base_retriever: Retriever) -> CrossEncoderRerankRetriever:

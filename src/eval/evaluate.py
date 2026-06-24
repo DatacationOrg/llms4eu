@@ -4,6 +4,7 @@ import argparse
 import time
 from collections import defaultdict
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 
 from src.db.pages import (
@@ -19,9 +20,11 @@ from src.retrieval.methods import (
     ensure_retrievers_ready,
     list_retrievers,
 )
-from src.shared.env import load_yaml
+from src.shared.env import ROOT, load_local_env, load_yaml
 
 CONFIG = load_yaml(Path(__file__).with_name("config.yaml"))
+AGENTIC_METHODS = ["qwen_agentic", "qwen_hybrid_agentic"]
+REPORTS_DIR = ROOT / ".local" / "reports"
 
 
 @dataclass(frozen=True)
@@ -47,18 +50,17 @@ def evaluate(
         print("No eval questions found. Run src.eval.generate_dataset first.")
         return
 
-    print(f"Evaluating {len(run.questions)} questions")
-    print(_overall_table(run))
+    report = _build_eval_report(
+        run,
+        show_ranks=show_ranks,
+        category=category,
+        limit=limit,
+    )
+    print(report)
+    latest_path, snapshot_path = _write_eval_report(report)
     print()
-    print("Speed")
-    print(_timing_table(run))
-    if category is None:
-        print()
-        print(f"hit@{CONFIG['category_hit_k']} by category")
-        print(_category_table(run))
-    if show_ranks:
-        print()
-        print(_rank_table(run))
+    print(f"Saved report: {latest_path}")
+    print(f"Saved snapshot: {snapshot_path}")
 
 
 def format_eval_report(
@@ -79,6 +81,36 @@ def format_eval_report(
             ]
         )
     return "\n\n".join(sections)
+
+
+def _build_eval_report(
+    run: EvalRun,
+    show_ranks: bool,
+    category: str | None,
+    limit: int | None,
+) -> str:
+    lines = [
+        f"Methods: {', '.join(run.methods)}",
+        f"Questions: {len(run.questions)}",
+        f"Limit: {limit if limit is not None else 'all'}",
+        f"Category: {category or 'all'}",
+        "",
+        format_eval_report(run, include_categories=category is None),
+    ]
+    if show_ranks:
+        lines.extend(["", _rank_table(run)])
+    return "\n".join(lines)
+
+
+def _write_eval_report(report: str) -> tuple[Path, Path]:
+    REPORTS_DIR.mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
+    latest_path = REPORTS_DIR / "eval_latest.txt"
+    snapshot_path = REPORTS_DIR / f"eval_{timestamp}.txt"
+    content = report + "\n"
+    latest_path.write_text(content, encoding="utf-8")
+    snapshot_path.write_text(content, encoding="utf-8")
+    return latest_path, snapshot_path
 
 
 def run_eval(
@@ -106,11 +138,15 @@ def run_eval(
     timings = {}
     for name in resolved_methods:
         started = time.perf_counter()
-        method_rankings[name] = _retrieve_rankings(retrievers[name], timed_questions)
+        method_rankings[name], effort = _retrieve_rankings(
+            retrievers[name], timed_questions
+        )
         elapsed = time.perf_counter() - started
         timings[name] = {
             "seconds": elapsed,
             "ms_per_query": elapsed * 1000 / len(timed_questions),
+            "queries_per_query": effort["queries_per_query"],
+            "total_queries": effort["total_queries"],
         }
 
     timed_question_ids = {row["id"] for row in timed_questions}
@@ -118,6 +154,7 @@ def run_eval(
         row for row in relevance if row["question_id"] in timed_question_ids
     ]
     score_names = [f"hit@{k}" for k in CONFIG["metric_ks"]]
+    score_names.append(f"recall@{max(CONFIG['metric_ks'])}")
     score_names.append(f"mrr@{CONFIG['mrr_k']}")
     scores = {
         name: score_rankings(
@@ -125,6 +162,7 @@ def run_eval(
             method_rankings[name],
             ks=tuple(CONFIG["metric_ks"]),
             mrr_k=CONFIG["mrr_k"],
+            recall_k=max(CONFIG["metric_ks"]),
         )
         for name in resolved_methods
     }
@@ -187,15 +225,16 @@ def load_eval_rows(
 def _retrieve_rankings(
     retriever: Retriever,
     questions: list[dict],
-) -> dict[str, list[str]]:
+) -> tuple[dict[str, list[str]], dict[str, float]]:
     batches = retriever.retrieve_batch(
         [row["question"] for row in questions],
         CONFIG["result_limit"],
     )
-    return {
+    rankings = {
         row["id"]: [chunk.id for chunk in batches[index]]
         for index, row in enumerate(questions)
     }
+    return rankings, _query_effort(retriever, question_count=len(questions))
 
 
 def _overall_table(run: EvalRun) -> str:
@@ -213,16 +252,36 @@ def _overall_table(run: EvalRun) -> str:
 
 def _timing_table(run: EvalRun) -> str:
     return plain_table(
-        ["method", "seconds", "ms/query"],
+        ["method", "seconds", "ms/query", "queries/query", "queries"],
         [
             [
                 name,
                 f"{run.timings[name]['seconds']:.2f}",
                 f"{run.timings[name]['ms_per_query']:.1f}",
+                f"{run.timings[name]['queries_per_query']:.2f}",
+                int(run.timings[name]["total_queries"]),
             ]
             for name in run.methods
         ],
     )
+
+
+def _query_effort(retriever: Retriever, question_count: int) -> dict[str, float]:
+    if question_count == 0:
+        return {"queries_per_query": 0.0, "total_queries": 0.0}
+
+    if hasattr(retriever, "average_queries_per_question") and hasattr(
+        retriever, "total_queries"
+    ):
+        return {
+            "queries_per_query": float(retriever.average_queries_per_question()),
+            "total_queries": float(retriever.total_queries()),
+        }
+
+    return {
+        "queries_per_query": 1.0,
+        "total_queries": float(question_count),
+    }
 
 
 def _category_table(run: EvalRun) -> str:
@@ -293,12 +352,25 @@ def _resolve_methods(method_names: list[str]) -> list[str]:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--methods", default=",".join(CONFIG["default_methods"]))
+    parser.add_argument(
+        "--agentic-only",
+        action="store_true",
+        help="Run only agentic retrieval methods (qwen_agentic,qwen_hybrid_agentic).",
+    )
     parser.add_argument("--limit", type=int)
     parser.add_argument("--category")
     parser.add_argument("--show-ranks", action="store_true")
     args = parser.parse_args()
+
+    load_local_env()
+    methods = (
+        AGENTIC_METHODS
+        if args.agentic_only
+        else [name.strip() for name in args.methods.split(",") if name.strip()]
+    )
+
     evaluate(
-        [name.strip() for name in args.methods.split(",") if name.strip()],
+        methods,
         show_ranks=args.show_ranks,
         limit=args.limit,
         category=args.category,

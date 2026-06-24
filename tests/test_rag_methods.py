@@ -8,6 +8,8 @@ def test_retriever_catalog_generates_public_names():
     names = methods.list_retrievers()
 
     assert "sparse" in names
+    assert "qwen_agentic" in names
+    assert "qwen_hybrid_agentic" in names
     assert "qwen4b" in names
     assert "qwen4b_hybrid" in names
     assert "qwen4b_rerank" in names

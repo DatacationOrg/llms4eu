@@ -34,5 +34,14 @@ eval-generate LIMIT="10":
 eval METHODS="qwen":
     uv run python -m src.eval.evaluate --methods {{METHODS}}
 
+eval-agentic:
+    uv run python -m src.eval.evaluate --agentic-only
+
+eval-agentic-limit LIMIT="100":
+    uv run python -m src.eval.evaluate --agentic-only --limit {{LIMIT}}
+
+eval-agentic-report OUTPUT="docs/retrieval-results.md":
+    uv run python experiments/indexing/compare_qwen_modes.py --output {{OUTPUT}}
+
 eval-inspect LIMIT="20":
     uv run python -m src.eval.inspect_dataset --limit {{LIMIT}}

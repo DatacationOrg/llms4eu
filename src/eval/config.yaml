@@ -1,6 +1,7 @@
 question_model: gemma4:26b
 default_methods:
-  - qwen
+  - qwen_agentic
+  - qwen_hybrid_agentic
 result_limit: 10
 metric_ks:
   - 1

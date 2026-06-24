@@ -17,16 +17,23 @@ def test_score_rankings_accepts_multiple_relevant_chunks():
 
     assert scores["hit@1"] == 0
     assert scores["hit@5"] == 0.5
+    assert scores["recall@5"] == 0.25
     assert scores["mrr@10"] == 0.25
 
     short_mrr = score_rankings(relevance, rankings, ks=(1,), mrr_k=1)
+    assert short_mrr["recall@1"] == 0
     assert short_mrr["mrr@1"] == 0
 
 
 def test_score_rankings_handles_missing_relevance():
     scores = score_rankings([], {"q1": ["chunk"]}, ks=(1, 5))
 
-    assert scores == {"hit@1": 0.0, "hit@5": 0.0, "mrr@10": 0.0}
+    assert scores == {
+        "hit@1": 0.0,
+        "hit@5": 0.0,
+        "recall@5": 0.0,
+        "mrr@10": 0.0,
+    }
 
 
 def test_bold_best_table_highlights_column_winners():
@@ -40,4 +47,4 @@ def test_bold_best_table_highlights_column_winners():
 
 
 def test_eval_default_methods_are_narrow():
-    assert _resolve_methods([]) == ["qwen"]
+    assert _resolve_methods([]) == ["qwen_agentic", "qwen_hybrid_agentic"]
