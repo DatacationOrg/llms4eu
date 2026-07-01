@@ -228,12 +228,9 @@ def _run_eval_with_checkpoint(
         save_every=save_every,
     )
 
+    # Question ids are UUID strings; keep them as-is so scoring keys line up.
     method_rankings = {
-        name: {
-            int(question_id): ranked
-            for question_id, ranked in state["methods"][name]["rankings"].items()
-        }
-        for name in method_names
+        name: dict(state["methods"][name]["rankings"]) for name in method_names
     }
 
     timings: dict[str, dict[str, float]] = {}
