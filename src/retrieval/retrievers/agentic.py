@@ -22,12 +22,34 @@ class ChunkSufficiency(BaseModel):
 @dataclass
 class AgenticBatchStats:
     query_attempt_counts: list[int] = field(default_factory=list)
+    action_log: list[dict] = field(default_factory=list)
 
     def reset(self) -> None:
         self.query_attempt_counts.clear()
+        self.action_log.clear()
 
     def record(self, attempt_count: int) -> None:
         self.query_attempt_counts.append(attempt_count)
+
+    def record_action(
+        self,
+        original_query: str,
+        attempt: int,
+        judge_query: str,
+        chunks: list[RankedChunk],
+        verdict: ChunkSufficiency,
+    ) -> None:
+        self.action_log.append(
+            {
+                "original_query": original_query,
+                "attempt": attempt,
+                "judge_query": judge_query,
+                "chunks": [
+                    {"id": c.id, "score": c.score, "text": c.text} for c in chunks
+                ],
+                "verdict": verdict.model_dump(),
+            }
+        )
 
     def total_queries(self) -> int:
         return sum(self.query_attempt_counts)
@@ -70,6 +92,13 @@ class AgenticRetriever:
                 best_chunks = chunks
 
             verdict = self._evaluate_sufficiency(current_query, chunks)
+            self.batch_stats.record_action(
+                original_query=query,
+                attempt=attempt_count,
+                judge_query=current_query,
+                chunks=chunks,
+                verdict=verdict,
+            )
             if verdict.sufficient:
                 self.batch_stats.record(attempt_count)
                 return chunks[:limit]

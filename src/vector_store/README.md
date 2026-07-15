@@ -16,3 +16,10 @@ Main functions:
 from src.vector_store.places import recreate_places_collection, search_place_vectors
 from src.vector_store.chunks import query_chunk_vectors, rebuild_chunk_collection
 ```
+
+Chroma build time, collection size, readiness coverage, query latency, and
+throughput are RAG-side benchmark observations. OKF has no vector collection;
+its comparable offline artifact is the validated concept bundle and its online
+operation is hierarchical navigation. Compare quality-efficiency frontiers
+rather than vector QPS alone. See
+[`experiments/indexing/README.md`](../../experiments/indexing/README.md).

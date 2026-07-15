@@ -43,3 +43,17 @@ just eval-index qwen
 Durable reference databases belong under `data/db/`. Regenerable Chroma cache
 artifacts belong under `data/cache/chroma/`. Use `.env` overrides when a run
 should write to private scratch paths under `.local/`.
+
+## Benchmarking against OKF generation
+
+A Chroma build and an OKF bundle build have different products. Compare them
+from the same frozen full-page corpus using clean-build wall time, pages and
+source MiB per second, coverage, retries, model calls/tokens/cost, peak memory,
+artifact size, and storage amplification. Keep chunking, embedding, persistence,
+OKF discovery, canonicalization, enrichment, index generation, and validation
+as separately timed stages. Also run incremental updates and attach retrieval
+and answer quality to every efficiency result.
+
+See [`experiments/indexing/README.md`](../../experiments/indexing/README.md) for the full
+protocol derived from BEIR, ANN benchmark, RAG evaluation, and production search
+benchmark practices.

@@ -45,3 +45,21 @@ eval-agentic-report OUTPUT="docs/retrieval-results.md":
 
 eval-inspect LIMIT="20":
     uv run python -m src.eval.inspect_dataset --limit {{LIMIT}}
+
+okf-pilot SOURCE="castle_rajhenburg" LIMIT="2":
+    uv run python -m src.okf.generate --source {{SOURCE}} --limit {{LIMIT}}
+
+okf-generate:
+    uv run python -m src.okf.generate
+
+okf-refresh-retrieval:
+    uv run python -m src.okf.generate --refresh-retrieval
+
+okf-validate:
+    uv run python -m src.okf.validate
+
+okf-ask *question:
+    uv run python -m src.okf.answer "{{question}}"
+
+okf-benchmark LIMIT="19":
+    uv run python experiments/indexing/compare_okf_rag.py --limit {{LIMIT}}

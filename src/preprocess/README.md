@@ -9,7 +9,7 @@ so existing eval labels keep pointing at valid chunk ids.
 
 Chunk summaries were useful retrieval experiments, but are not part of the
 steady-state page chunk path. Historical summary results live in
-`docs/retrieval-results.md`.
+[`docs/retrieval-results-agentic.md`](../../docs/retrieval-results-agentic.md).
 
 `index.py` embeds each place text with `sentence-transformers/all-MiniLM-L6-v2`
 and recreates the `places` Chroma collection. MiniLM is small, local, and fast
@@ -35,3 +35,9 @@ place. Each point stores the embedding and only this metadata:
 ```python
 {"id": place.id}
 ```
+
+Page chunking is a measured RAG build stage when benchmarking against OKF. OKF
+starts from the same complete Markdown rows but does not run `chunks.py` or
+consume `page_chunks`. Shared scraping and Markdown extraction are measured once
+outside both representation builds. See
+[`experiments/indexing/README.md`](../../experiments/indexing/README.md).

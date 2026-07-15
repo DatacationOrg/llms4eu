@@ -1,0 +1,16 @@
+bundle_path: data/okf/tourism
+source_db: data/db/pages.db
+checkpoint_path: .local/okf/generation.json
+retrieval_checkpoint_path: .local/okf/retrieval-refresh.json
+inventory_path: .local/okf/inventory.json
+catalog_path: .local/okf/catalog.json
+max_page_chars: 60000
+page_part_chars: 45000
+request_timeout_seconds: 180
+max_output_tokens: 8192
+retries: 3
+resolution_batch_size: 25
+navigation:
+  max_steps: 12
+  max_documents: 8
+  max_context_chars: 60000

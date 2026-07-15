@@ -12,3 +12,4 @@ qdrant_storage/
 *.egg-info/
 data/scraped/
 data/cache/
+knowledge-catalog/
