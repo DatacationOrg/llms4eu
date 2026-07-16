@@ -164,12 +164,17 @@ exact matching and $B$ is the resolution batch size. Multipart pages require
 one discovery and enrichment request per part plus consolidation.
 
 The answer command starts at the root index and asks Azure for one structured
-navigation action at a time. It may open only advertised paths (plus an explicit
-metadata shortlist in `okf_search`), reads selected concepts in full, and
-enforces step/document/context budgets. A separate structured evidence check
-must confirm direct support before an answer is accepted; rejected answers
-trigger backtracking. Every action and evidence decision is retained as a
-diagnostic trace.
+navigation action at a time. Concept documents and indexes are treated as
+**routing metadata only**: the navigator sees a concept's title, description,
+tags, aliases, search terms, and its list of source pages, but never its
+generated summary or extracted facts. To gather evidence it must `open_source`
+a specific source page, which loads **verbatim windowed slices of the raw
+article** from `data/db/pages.db`. Answers may cite only opened source pages,
+and a separate structured evidence check verifies the raw windows directly
+support the answer before it is accepted; rejected answers trigger backtracking.
+Step, document, source, and context budgets are enforced, and every action and
+evidence decision is retained as a diagnostic trace. This deliberately prevents
+answering from summarized versions of the underlying articles.
 
 `okf` remains the pure hierarchy baseline. `okf_search` ranks title,
 description, aliases, tags, generated search terms, and language with local

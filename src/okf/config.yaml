@@ -14,3 +14,7 @@ navigation:
   max_steps: 12
   max_documents: 8
   max_context_chars: 60000
+  max_sources: 6
+  window_chars: 1200
+  max_windows_per_source: 3
+  max_source_context_chars: 24000

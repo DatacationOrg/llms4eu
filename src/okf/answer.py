@@ -3,29 +3,38 @@ from __future__ import annotations
 import argparse
 import os
 import re
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Iterable, Literal
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from src.okf.paths import concept_id_for
+from src.okf.document import OKFDocument, OKFDocumentError
+from src.okf.source import load_source_markdown
+from src.okf.window import extract_windows
 from src.shared.env import ROOT, load_local_env, load_yaml
 from src.shared.llm import AzureFoundryStructuredLlm
 
 CONFIG = load_yaml(Path(__file__).with_name("config.yaml"))
 LINK_RE = re.compile(r"\[[^]]+\]\(([^)]+\.md)(?:#[^)]+)?\)")
 
+SourceReader = Callable[[str], str | None]
+
 
 class NavigationAction(BaseModel):
-    action: Literal["open", "answer", "abstain"]
+    action: Literal["open", "open_source", "answer", "abstain"]
     path: str | None = Field(
         default=None, description="Advertised relative Markdown path to open"
+    )
+    page_id: str | None = Field(
+        default=None,
+        description="Source page id to open as raw article windows",
     )
     answer: str | None = None
     citations: list[str] = Field(
         default_factory=list,
-        description="Bundle-relative concept ids without .md",
+        description="Source page ids of the raw windows that support the answer",
     )
     reason: str = ""
 
@@ -36,6 +45,14 @@ class EvidenceAssessment(BaseModel):
 
 
 @dataclass(frozen=True)
+class SourceRef:
+    page_id: str
+    title: str
+    url: str
+    concept: str
+
+
+@dataclass(frozen=True)
 class OKFAnswer:
     answer: str
     citations: list[str]
@@ -43,6 +60,7 @@ class OKFAnswer:
     query_count: int
     sufficient: bool
     reason: str
+    sources: list[str] = field(default_factory=list)
     trace: list[dict[str, object]] = field(default_factory=list)
 
 
@@ -52,10 +70,12 @@ def answer_question(
     bundle_root: Path | None = None,
     client: AzureFoundryStructuredLlm | None = None,
     candidate_paths: Iterable[str] = (),
+    source_reader: SourceReader | None = None,
 ) -> OKFAnswer:
     load_local_env()
     root = (bundle_root or ROOT / CONFIG["bundle_path"]).resolve()
     model = client or _azure_client()
+    read_source = source_reader or _default_source_reader()
     navigation = CONFIG["navigation"]
     current = (root / "index.md").resolve()
     if not current.exists():
@@ -66,14 +86,24 @@ def answer_question(
     allowed: set[Path] = {current}
     candidates = _valid_candidate_paths(root, candidate_paths)
     allowed.update(candidates)
+    openable: dict[str, SourceRef] = {}
+    windows: dict[str, list[str]] = {}
+    opened_order: list[str] = []
+    source_chars = 0
     query_count = 0
     trace: list[dict[str, object]] = []
     rejected_answers: list[str] = []
     for _ in range(navigation["max_steps"]):
         if current not in visited:
-            text = current.read_text(encoding="utf-8")
+            raw_text = current.read_text(encoding="utf-8")
+            if current.name == "index.md":
+                context_text = raw_text
+            else:
+                context_text, refs = _routing_view(root, current, raw_text)
+                for ref in refs:
+                    openable.setdefault(ref.page_id, ref)
             if (
-                sum(len(value) for value in documents.values()) + len(text)
+                sum(len(value) for value in documents.values()) + len(context_text)
                 > navigation["max_context_chars"]
             ):
                 return _abstain(
@@ -81,11 +111,12 @@ def answer_question(
                     root,
                     "Context budget exhausted before opening the selected document.",
                     query_count,
+                    opened_order,
                     trace,
                 )
             visited.append(current)
-            documents[current] = text
-            allowed.update(_advertised_paths(root, current, text))
+            documents[current] = context_text
+            allowed.update(_advertised_paths(root, current, raw_text))
 
         action = model.structured_output(
             _navigation_prompt(
@@ -93,6 +124,12 @@ def answer_question(
                 root,
                 documents,
                 allowed - set(visited),
+                {
+                    page_id: ref
+                    for page_id, ref in openable.items()
+                    if page_id not in windows
+                },
+                windows,
                 candidates,
                 rejected_answers,
             ),
@@ -105,25 +142,21 @@ def answer_question(
                 "kind": "navigation",
                 "action": action.action,
                 "path": action.path,
+                "page_id": action.page_id,
                 "citations": action.citations,
                 "reason": action.reason,
             }
         )
         if action.action == "answer":
-            valid_citations = _valid_citations(action.citations, visited, root)
+            valid_citations = _valid_citations(action.citations, windows)
             if not action.answer or not valid_citations:
                 rejected_answers.append(
-                    "The proposed answer lacked an answer or valid concept citations."
+                    "The answer lacked text or cited a source page that was not "
+                    "opened as raw windows."
                 )
                 continue
             assessment = model.structured_output(
-                _evidence_prompt(
-                    question,
-                    action.answer,
-                    valid_citations,
-                    root,
-                    documents,
-                ),
+                _evidence_prompt(question, action.answer, valid_citations, windows),
                 EvidenceAssessment,
                 retries=CONFIG["retries"],
             )
@@ -143,17 +176,10 @@ def answer_question(
                     query_count=query_count,
                     sufficient=True,
                     reason=assessment.reason or action.reason,
+                    sources=opened_order,
                     trace=trace,
                 )
             rejected_answers.append(assessment.reason)
-            if not allowed - set(visited):
-                return _abstain(
-                    visited,
-                    root,
-                    assessment.reason,
-                    query_count,
-                    trace,
-                )
             continue
         if action.action == "abstain":
             return _abstain(
@@ -161,8 +187,48 @@ def answer_question(
                 root,
                 action.reason or "The bundle does not contain enough evidence.",
                 query_count,
+                opened_order,
                 trace,
             )
+        if action.action == "open_source":
+            page_id = action.page_id
+            if page_id not in openable or page_id in windows:
+                rejected_answers.append(
+                    "The navigator selected a source page that was not advertised "
+                    "or was already opened."
+                )
+                continue
+            if len(opened_order) >= navigation["max_sources"]:
+                return _abstain(
+                    visited,
+                    root,
+                    "Source page budget exhausted.",
+                    query_count,
+                    opened_order,
+                    trace,
+                )
+            markdown = read_source(page_id) or ""
+            extracted = extract_windows(
+                markdown,
+                question,
+                window_chars=navigation["window_chars"],
+                max_windows=navigation["max_windows_per_source"],
+            )
+            extracted, source_chars = _fit_source_budget(
+                extracted,
+                source_chars,
+                navigation["max_source_context_chars"],
+            )
+            windows[page_id] = extracted
+            opened_order.append(page_id)
+            trace.append(
+                {
+                    "kind": "open_source",
+                    "page_id": page_id,
+                    "windows": len(extracted),
+                }
+            )
+            continue
         target = _resolve_action_path(root, action.path)
         if target not in allowed or target in visited:
             return _abstain(
@@ -170,6 +236,7 @@ def answer_question(
                 root,
                 "The navigator selected a path that was not advertised or was already visited.",
                 query_count,
+                opened_order,
                 trace,
             )
         concept_documents = [
@@ -184,6 +251,7 @@ def answer_question(
                 root,
                 "Document navigation budget exhausted.",
                 query_count,
+                opened_order,
                 trace,
             )
         current = target
@@ -193,6 +261,7 @@ def answer_question(
         root,
         "Navigation step budget exhausted.",
         query_count,
+        opened_order,
         trace,
     )
 
@@ -225,6 +294,70 @@ def _azure_client() -> AzureFoundryStructuredLlm:
     )
 
 
+def _default_source_reader() -> SourceReader:
+    db_path = ROOT / CONFIG["source_db"]
+
+    def read(page_id: str) -> str | None:
+        return load_source_markdown(db_path, [page_id]).get(page_id)
+
+    return read
+
+
+def _routing_view(
+    root: Path, current: Path, raw_text: str
+) -> tuple[str, list[SourceRef]]:
+    concept = current.relative_to(root).with_suffix("").as_posix()
+    try:
+        document = OKFDocument.parse(raw_text)
+    except OKFDocumentError:
+        return f"CONCEPT: {concept}\n(unparseable metadata)", []
+    frontmatter = document.frontmatter
+    page_ids = [str(page_id) for page_id in frontmatter.get("source_page_ids", [])]
+    evidence = frontmatter.get("source_evidence", {}) or {}
+    refs: list[SourceRef] = []
+    listing: list[str] = []
+    for page_id in page_ids:
+        details = evidence.get(page_id, {}) or {}
+        title = str(details.get("title") or "")
+        url = str(details.get("url") or "")
+        refs.append(SourceRef(page_id=page_id, title=title, url=url, concept=concept))
+        label = " — ".join(part for part in (title, url) if part) or "(source page)"
+        listing.append(f"- [{page_id}] {label}")
+    lines = [
+        f"CONCEPT: {concept}",
+        f"type: {frontmatter.get('type', 'Concept')}",
+        f"title: {frontmatter.get('title', concept)}",
+        f"description: {frontmatter.get('description', '')}",
+        f"tags: {_join(frontmatter.get('tags'))}",
+        f"aliases: {_join(frontmatter.get('aliases'))}",
+        f"search_terms: {_join(frontmatter.get('search_terms'), limit=30)}",
+        "source_pages (open with open_source to read verbatim article text):",
+        *(listing or ["(none)"]),
+    ]
+    return "\n".join(lines), refs
+
+
+def _join(values: object, *, limit: int | None = None) -> str:
+    if not isinstance(values, list):
+        return ""
+    items = [str(value) for value in values]
+    if limit is not None:
+        items = items[:limit]
+    return ", ".join(items)
+
+
+def _fit_source_budget(
+    extracted: list[str], used: int, budget: int
+) -> tuple[list[str], int]:
+    kept: list[str] = []
+    for window in extracted:
+        if used + len(window) > budget:
+            break
+        kept.append(window)
+        used += len(window)
+    return kept, used
+
+
 def _advertised_paths(root: Path, current: Path, text: str) -> set[Path]:
     paths = set()
     for target in LINK_RE.findall(text):
@@ -249,15 +382,12 @@ def _resolve_action_path(root: Path, value: str | None) -> Path:
 
 
 def _valid_citations(
-    citations: list[str], visited: list[Path], root: Path
+    citations: list[str], windows: dict[str, list[str]]
 ) -> list[str]:
-    visited_ids = {
-        concept_id_for(root, path)
-        for path in visited
-        if path.name not in {"index.md", "log.md"}
-    }
     return list(
-        dict.fromkeys(citation for citation in citations if citation in visited_ids)
+        dict.fromkeys(
+            citation for citation in citations if windows.get(citation)
+        )
     )
 
 
@@ -266,16 +396,37 @@ def _navigation_prompt(
     root: Path,
     documents: dict[Path, str],
     allowed: set[Path],
+    openable: dict[str, SourceRef],
+    windows: dict[str, list[str]],
     candidates: set[Path],
     rejected_answers: list[str],
 ) -> str:
-    context = "\n\n".join(
+    routing = "\n\n".join(
         f"FILE: {path.relative_to(root).as_posix()}\n{text}"
         for path, text in documents.items()
     )
     choices = (
         "\n".join(f"- {path.relative_to(root).as_posix()}" for path in sorted(allowed))
         or "(none)"
+    )
+    source_choices = (
+        "\n".join(
+            f"- {page_id} — "
+            + (
+                " — ".join(part for part in (ref.title, ref.url) if part)
+                or "(source page)"
+            )
+            for page_id, ref in sorted(openable.items())
+        )
+        or "(none)"
+    )
+    raw_windows = (
+        "\n\n".join(
+            f"SOURCE PAGE: {page_id}\n" + "\n---\n".join(chunks)
+            for page_id, chunks in windows.items()
+            if chunks
+        )
+        or "(none opened yet)"
     )
     candidate_text = (
         "\n".join(
@@ -285,13 +436,16 @@ def _navigation_prompt(
     )
     rejected = "\n".join(f"- {reason}" for reason in rejected_answers) or "(none)"
     return f"""You navigate an Open Knowledge Format bundle using progressive disclosure.
-Answer only from complete concept documents already shown. Index files advertise documents but are not factual evidence.
+Concept metadata and indexes are ROUTING ONLY and are never valid evidence.
+Answer strictly from RAW SOURCE WINDOWS, which are verbatim slices of the underlying articles.
+Never answer from concept descriptions, summaries, or extracted facts.
 Choose exactly one action:
-- open: select one path exactly from AVAILABLE PATHS that is likely to contain evidence;
-- answer: answer when complete concept documents contain enough evidence, citing their bundle-relative concept ids without `.md`;
-- abstain: stop when no advertised path is useful or evidence is insufficient.
-Never cite an index file. Keep the answer concise and in the question's language.
-If an answer was rejected, backtrack to the best unvisited alternative instead of repeating it.
+- open: select one path exactly from AVAILABLE PATHS to route toward relevant concepts;
+- open_source: select one page id from AVAILABLE SOURCE PAGES to read its verbatim article windows;
+- answer: answer only when RAW SOURCE WINDOWS contain explicit support, citing the supporting source page ids;
+- abstain: stop when no path or source page can supply explicit raw evidence.
+Keep the answer concise and in the question's language.
+If an answer was rejected, open a different source page or route elsewhere instead of repeating it.
 
 QUESTION:
 {question}
@@ -299,14 +453,20 @@ QUESTION:
 AVAILABLE PATHS:
 {choices}
 
+AVAILABLE SOURCE PAGES:
+{source_choices}
+
 METADATA SEARCH CANDIDATES:
 {candidate_text}
 
 REJECTED ANSWERS:
 {rejected}
 
-FILES READ:
-{context}
+ROUTING METADATA READ:
+{routing}
+
+RAW SOURCE WINDOWS:
+{raw_windows}
 """
 
 
@@ -314,18 +474,15 @@ def _evidence_prompt(
     question: str,
     answer: str,
     citations: list[str],
-    root: Path,
-    documents: dict[Path, str],
+    windows: dict[str, list[str]],
 ) -> str:
-    cited = set(citations)
     evidence = "\n\n".join(
-        f"CONCEPT: {concept_id_for(root, path)}\n{text}"
-        for path, text in documents.items()
-        if path.name not in {"index.md", "log.md"}
-        and concept_id_for(root, path) in cited
+        f"SOURCE PAGE: {page_id}\n" + "\n---\n".join(windows[page_id])
+        for page_id in citations
     )
-    return f"""Independently verify whether the cited complete OKF concepts directly support the proposed answer.
-Return sufficient=false for thematic similarity, inference without explicit support, contradictions, or missing answer details.
+    return f"""Independently verify whether the cited verbatim source windows directly support the proposed answer.
+These windows are raw article text, not summaries. Return sufficient=false for thematic similarity,
+inference without explicit support, contradictions, or missing answer details.
 
 QUESTION:
 {question}
@@ -333,7 +490,7 @@ QUESTION:
 PROPOSED ANSWER:
 {answer}
 
-CITED CONCEPT EVIDENCE:
+CITED SOURCE WINDOWS:
 {evidence}
 """
 
@@ -343,6 +500,7 @@ def _abstain(
     root: Path,
     reason: str,
     query_count: int,
+    opened_order: list[str],
     trace: list[dict[str, object]],
 ) -> OKFAnswer:
     return OKFAnswer(
@@ -352,6 +510,7 @@ def _abstain(
         query_count=query_count,
         sufficient=False,
         reason=reason,
+        sources=opened_order,
         trace=trace,
     )
 
@@ -365,6 +524,9 @@ def main() -> None:
     print("Visited:")
     for path in result.visited:
         print(f"- {path}")
+    print("\nSources opened:")
+    for page_id in result.sources:
+        print(f"- {page_id}")
     print("\nCitations:")
     for citation in result.citations:
         print(f"- {citation}")

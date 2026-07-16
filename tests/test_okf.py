@@ -520,28 +520,47 @@ class _StubNavigator:
 
 def test_navigation_opens_only_advertised_whole_document(tmp_path):
     root = tmp_path / "bundle"
-    write_concept(root, "destinations/rajhenburg", _document())
+    document = OKFDocument(
+        frontmatter={
+            **_document().frontmatter,
+            "source_page_ids": ["p1"],
+            "source_evidence": {
+                "p1": {"title": "Rajhenburg", "url": "https://example.test/castle"}
+            },
+        },
+        body=_document().body,
+    )
+    write_concept(root, "destinations/rajhenburg", document)
     regenerate_indexes(root)
     client = _StubNavigator(
         [
-            NavigationAction(
-                action="open",
-                path="destinations/index.md",
-            ),
+            NavigationAction(action="open", path="destinations/index.md"),
             NavigationAction(action="open", path="destinations/rajhenburg.md"),
+            NavigationAction(action="open_source", page_id="p1"),
             NavigationAction(
                 action="answer",
                 answer="Rajhenburg is a cultural heritage destination.",
-                citations=["destinations/rajhenburg"],
+                citations=["p1"],
             ),
         ]
     )
 
-    result = answer_question("What is Rajhenburg?", bundle_root=root, client=client)
+    result = answer_question(
+        "What is Rajhenburg?",
+        bundle_root=root,
+        client=client,
+        source_reader=lambda page_id: (
+            "# Grad Rajhenburg\n\nRajhenburg is a cultural heritage destination "
+            "above Brestanica."
+            if page_id == "p1"
+            else None
+        ),
+    )
 
     assert result.sufficient
-    assert result.citations == ["destinations/rajhenburg"]
-    assert result.query_count == 4
+    assert result.citations == ["p1"]
+    assert result.sources == ["p1"]
+    assert result.query_count == 5
     assert result.visited == [
         "index.md",
         "destinations/index.md",
@@ -555,7 +574,12 @@ def test_navigation_rejects_unadvertised_path(tmp_path):
     regenerate_indexes(root)
     client = _StubNavigator([NavigationAction(action="open", path="../outside.md")])
 
-    result = answer_question("Question", bundle_root=root, client=client)
+    result = answer_question(
+        "Question",
+        bundle_root=root,
+        client=client,
+        source_reader=lambda _page_id: None,
+    )
 
     assert not result.sufficient
     assert result.query_count == 1
@@ -564,8 +588,22 @@ def test_navigation_rejects_unadvertised_path(tmp_path):
 
 def test_rejected_evidence_backtracks_to_unvisited_concept(tmp_path):
     root = tmp_path / "bundle"
-    write_concept(root, "destinations/first", _document("First"))
-    write_concept(root, "destinations/second", _document("Second"))
+    write_concept(
+        root,
+        "destinations/first",
+        OKFDocument(
+            frontmatter={**_document("First").frontmatter, "source_page_ids": ["pf"]},
+            body=_document("First").body,
+        ),
+    )
+    write_concept(
+        root,
+        "destinations/second",
+        OKFDocument(
+            frontmatter={**_document("Second").frontmatter, "source_page_ids": ["ps"]},
+            body=_document("Second").body,
+        ),
+    )
     regenerate_indexes(root)
 
     class _BacktrackingNavigator:
@@ -574,16 +612,18 @@ def test_rejected_evidence_backtracks_to_unvisited_concept(tmp_path):
                 [
                     NavigationAction(action="open", path="destinations/index.md"),
                     NavigationAction(action="open", path="destinations/first.md"),
+                    NavigationAction(action="open_source", page_id="pf"),
                     NavigationAction(
                         action="answer",
                         answer="Unsupported",
-                        citations=["destinations/first"],
+                        citations=["pf"],
                     ),
                     NavigationAction(action="open", path="destinations/second.md"),
+                    NavigationAction(action="open_source", page_id="ps"),
                     NavigationAction(
                         action="answer",
                         answer="Supported",
-                        citations=["destinations/second"],
+                        citations=["ps"],
                     ),
                 ]
             )
@@ -600,13 +640,17 @@ def test_rejected_evidence_backtracks_to_unvisited_concept(tmp_path):
             return next(self.actions)
 
     result = answer_question(
-        "Question", bundle_root=root, client=_BacktrackingNavigator()
+        "Question",
+        bundle_root=root,
+        client=_BacktrackingNavigator(),
+        source_reader=lambda page_id: f"# Article {page_id}\n\nRaw article body text.",
     )
 
     assert result.sufficient
     assert result.answer == "Supported"
-    assert result.citations == ["destinations/second"]
-    assert result.query_count == 7
+    assert result.citations == ["ps"]
+    assert result.sources == ["pf", "ps"]
+    assert result.query_count == 9
     assert [
         entry["sufficient"]
         for entry in result.trace
