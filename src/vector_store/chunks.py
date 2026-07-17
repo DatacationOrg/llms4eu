@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from contextlib import suppress
 from dataclasses import dataclass
+from functools import cache
 from pathlib import Path
 
 import chromadb
@@ -208,7 +209,10 @@ def _scored_chunks_from_result(
     ]
 
 
+@cache
 def _client() -> chromadb.PersistentClient:
+    # Cache the client: a fresh PersistentClient per query leaks connections to the
+    # store and eventually fails readiness checks mid-run.
     return chromadb.PersistentClient(path=str(chroma_path()))
 
 
