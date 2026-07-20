@@ -100,3 +100,47 @@ Tracked durable artifacts use descriptive paths:
 `.local/` is private scratch and can be overridden through `.env`.
 
 `just eval-index qwen` rebuilds the default production chunk-vector provider.
+
+## Open Knowledge Format
+
+The OKF experiment is a second knowledge representation over the same canonical
+raw pages, not another chunk retriever.
+
+- `page_metadata` and `page_markdown_content` are its read-only source.
+- Azure Foundry discovers conservative page proposals, resolves them against a
+  global canonical catalog, and enriches the resulting fixed concepts.
+- Existing durable concepts seed canonicalization; exact normalized aliases are
+  resolved before model-assisted batched resolution.
+- Generated concepts retain page-level provenance and source URL citations.
+- Discovery inventory, canonical catalog, and enrichment checkpoints stay under
+  `.local/okf/`; the validated bundle lives in `data/okf/tourism/`.
+- OKF answer evaluation is answer-level. Concept ids are not compared with the
+  chunk ids used by hit, recall, and MRR metrics.
+
+Reason: evaluating whole linked knowledge documents as if they were ranked page
+chunks would conflate representation granularity with answer quality.
+
+## OKF Versus RAG Benchmarking
+
+Benchmarking is split into clean build, incremental update, online
+retrieval/navigation, shared page-evidence retrieval, and end-to-end answer
+quality. There is no composite OKF-versus-RAG score.
+
+- Both representations use one frozen and hashed raw-page snapshot.
+- Shared scraping and Markdown extraction are excluded from representation
+  build time.
+- RAG chunk qrels remain valid for RAG-only retrieval studies.
+- Shared retrieval uses human-reviewed source-page qrels by mapping chunks and
+  OKF `source_page_ids` to the same page identities.
+- Build results include wall time, throughput, coverage, retries, model usage,
+  cost, memory, artifact size, and storage amplification.
+- Query results include p50/p95/p99 latency, throughput, failures, context use,
+  calls, and steps.
+- Answer results include factual correctness, faithfulness, citation validity
+  and entailment, abstention, and blinded paired judgments.
+- Raw per-item observations are retained and paired bootstrap confidence
+  intervals accompany material quality claims.
+
+Reason: industry IR and search benchmarks report effectiveness together with
+latency, throughput, build cost, and storage. The complete protocol and sources
+are in [`experiments/indexing/README.md`](../experiments/indexing/README.md).

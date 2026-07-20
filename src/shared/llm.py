@@ -91,7 +91,14 @@ class AzureFoundryStructuredLlm:
                 return output_schema.model_validate_json(_json_object(content))
             except (httpx.HTTPError, KeyError, ValueError) as exc:
                 last_error = exc
-        raise RuntimeError("structured Azure Foundry call failed") from last_error
+        detail = (
+            f"{type(last_error).__name__}: {last_error}"
+            if last_error is not None
+            else "unknown error"
+        )
+        raise RuntimeError(
+            f"structured Azure Foundry call failed after {retries} attempts: {detail}"
+        ) from last_error
 
     def _request(self, prompt: StructuredPrompt, output_schema: type[BaseModel]) -> str:
         payload = {

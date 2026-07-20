@@ -11,6 +11,12 @@ Markdown.
 `eval.sql` stores generated eval questions and gold relevant chunk ids. Eval
 labels belong beside page chunks because relevance points to `page_chunks.id`.
 
+OKF reads complete rows from the raw-page tables and stores page-level
+provenance in concept frontmatter; it does not add OKF tables or reuse chunk IDs.
+For a shared retrieval comparison, create reviewed page-level qrels and map both
+ranked chunks and visited concepts back to source page IDs. The protocol is in
+[`experiments/indexing/README.md`](../experiments/indexing/README.md).
+
 SQLite owns full place data for now. The SQL stays portable so moving to
 Postgres later should stay small. The vector index stores only the place `id`,
 so changing place fields starts here and in `src.shared.schema.Place`.

@@ -30,3 +30,10 @@ Fetch, fallback, document, and listing thresholds live in `config.yaml` under
 `scrape.py` orchestrates scrape -> transform -> upsert -> reindex.
 
 `web/` contains the local FastAPI interface for running scrape jobs.
+
+Scraping and Markdown extraction are common upstream preparation for both chunk
+RAG and OKF. Comparative representation benchmarks freeze their output and do
+not charge this shared work to either build. Record the source database hash,
+eligible page IDs, page count, languages, and source bytes as the benchmark
+corpus manifest. See
+[`experiments/indexing/README.md`](../../experiments/indexing/README.md).

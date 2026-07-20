@@ -13,3 +13,4 @@ qdrant_storage/
 data/scraped/
 data/cache/
 *.checkpoint.json
+knowledge-catalog/

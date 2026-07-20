@@ -19,3 +19,9 @@ from src.shared.embed import embed_texts
 from src.shared.indexers import build_indexer
 from src.shared.cli import confirm
 ```
+
+The OKF generator reuses the Azure structured-output client from `llm.py`; it
+does not introduce a second credential path. Future benchmark instrumentation
+shared by RAG and OKF should record timings, usage, and failures without logging
+API keys or full credential-bearing requests. The benchmark contract is in
+[`experiments/indexing/README.md`](../../experiments/indexing/README.md).
