@@ -193,13 +193,17 @@ async def start_scrape(
     with _jobs_lock:
         jobs[job_id] = {
             "status": "pending",
-            "sites": {url: {"status": "pending", "message": "Queued"} for url in data.urls},
+            "sites": {
+                url: {"status": "pending", "message": "Queued"} for url in data.urls
+            },
             "files": [],
             "error": None,
             "place_count": 0,
         }
 
-    background_tasks.add_task(_run_scrape, job_id, data.urls, data.max_pages, data.place_per)
+    background_tasks.add_task(
+        _run_scrape, job_id, data.urls, data.max_pages, data.place_per
+    )
     return {"job_id": job_id}
 
 
@@ -244,7 +248,8 @@ def _run_scrape(job_id: str, urls: list[str], max_pages: int, place_per: str) ->
             with _jobs_lock:
                 jobs[job_id]["sites"][site_result.site_url] = {
                     "status": "error" if site_result.error else "done",
-                    "message": site_result.error or f"{len(site_result.pages)} pages scraped",
+                    "message": site_result.error
+                    or f"{len(site_result.pages)} pages scraped",
                 }
 
         with _jobs_lock:

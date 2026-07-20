@@ -27,6 +27,6 @@ def sqlite_path() -> Path:
 
 
 def chroma_path() -> Path:
-    path = ROOT / os.getenv("CHROMA_PATH", ".local/chroma")
+    path = ROOT / os.getenv("CHROMA_PATH", "data/cache/chroma")
     path.mkdir(parents=True, exist_ok=True)
     return path

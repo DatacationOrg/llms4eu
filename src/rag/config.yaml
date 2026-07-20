@@ -1,3 +1,18 @@
-collection_name: places
-default_limit: 3
-embedding_model: sentence-transformers/all-MiniLM-L6-v2
+search:
+  collection_name: places
+  default_limit: 10
+  embedding_model: sentence-transformers/all-MiniLM-L6-v2
+
+answer:
+  default_limit: 3
+  model: gemma4:e4b
+
+judge:
+  model: qwen3:4b
+  min_sufficient_places: 2
+
+agent_search:
+  max_attempts: 3
+  initial_limit: 3
+  max_limit: 20
+  fallback_embedding_models: []

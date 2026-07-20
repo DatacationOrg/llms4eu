@@ -4,20 +4,37 @@ Service-shaped folders with one root `pyproject.toml`.
 
 `db` owns SQLite initialization and place row queries.
 
-`preprocess` reads SQL rows and rebuilds derived artifacts. Today that is only
-Chroma.
+`preprocess` reads SQL rows and rebuilds derived artifacts such as Markdown page
+chunks.
 
-`vector_db` owns Chroma operations for place vectors.
+`indexing` orchestrates chunk vector index rebuilds.
+
+`vector_store` owns Chroma mechanics for place and chunk vectors.
+
+`retrieval` owns reusable chunk retrievers and the public retrieval catalog.
 
 `scraping` owns website crawling, scrape-to-place transformation, incremental
 SQLite ingest, and the small local scrape UI.
 
-`rag` queries Chroma, fetches rows from SQLite, and asks the local model to
-answer from that context.
+`rag` owns place search and answer generation.
+
+`eval` owns labels, metrics, timing, and reports. It asks `retrieval` for named
+retrievers to compare.
+
+`okf` owns complete-page concept discovery, global canonicalization, concept
+enrichment, bundle validation, and hierarchical whole-document navigation. It
+reads raw pages from `db` but does not depend on chunk preprocessing, indexing,
+vector storage, or chunk retrieval.
 
 `shared` is not a service. It holds code used by more than one script.
 
-Orchestration folders (`preprocess`, `rag`) can import infrastructure folders
-(`db`, `vector_db`) and shared helpers. They should not import each other.
+Orchestration folders can import infrastructure folders (`db`, `vector_store`)
+and shared helpers. Avoid cross-imports between orchestration folders except
+when a later pipeline stage consumes an earlier artifact.
 
 No `__init__.py` files are needed; namespace packages are enough here.
+
+Cross-representation evaluation belongs in `eval` or a dedicated benchmark
+orchestrator, not inside either implementation. The required clean-build,
+incremental, page-evidence, and answer-quality protocol is documented in
+[`experiments/indexing/README.md`](../experiments/indexing/README.md).

@@ -1,0 +1,19 @@
+final_result_limit: 10
+rerank_candidate_limit: 30
+sparse_k1: 1.5
+sparse_b: 0.75
+hybrid_vector_weight: 0.7
+hybrid_sparse_weight: 0.3
+reranker_model: Qwen/Qwen3-Reranker-0.6B
+reranker_batch_size: 8
+reranker_device: cuda
+reranker_max_length: 2048
+reranker_local_files_only: true
+reranker_prompt_name:
+reranker_prompt:
+agentic_judge_retries: 3
+agentic_max_attempts: 3
+agentic_min_sufficient_chunks: 2
+agentic_initial_limit: 5
+agentic_limit_step: 5
+agentic_max_limit: 20

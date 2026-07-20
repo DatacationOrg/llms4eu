@@ -44,7 +44,10 @@ def run_scrape(
     saved_files: list[str] = []
     if save_raw and CONFIG["save_raw_text"]:
         output_dir = raw_output_dir or (ROOT / CONFIG["raw_output_dir"])
-        saved_files = [str(path) for path in save_results_as_txt(results, output_dir=str(output_dir))]
+        saved_files = [
+            str(path)
+            for path in save_results_as_txt(results, output_dir=str(output_dir))
+        ]
 
     places = transform_results(results, place_per=place_per)
     inserted = upsert_places(places)

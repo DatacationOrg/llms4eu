@@ -1,50 +1,33 @@
 # RAG
 
-Retrieves places and answers questions.
+Place search and answer generation.
 
-Search embeds the query, asks Chroma for the top configured matches, then fetches
-full rows from SQLite by `id`.
+Place search embeds the query, asks Chroma for ids, then fetches full rows from
+SQLite. Answer generation retrieves places, prints inspected context, then calls
+a local structured-output LLM.
 
-`answer.py` prints retrieved rows, prompt context, and the local Gemma response.
-Retrieval config lives in `config.yaml`; answer config lives in
-`answer_config.yaml`.
-
-`limit=3` means: return the top 3 Chroma vector matches by cosine similarity.
-Chroma returns scores and ids; SQLite returns the full text rows.
-
-Ollama keeps model serving local. LangChain structured output plus Pydantic keeps
-the response shaped as data.
+Config lives in `config.yaml`.
 
 Retrieve from Chroma, then fetch rows from SQLite:
 
 ```python
 from src.rag.search import search_places
 
-places = search_places("quiet forest walk near water", limit=3)
+places = search_places("quiet forest walk near water", limit=10)
 print(places[0].score, places[0].summary)
 ```
 
-Current search flow:
+Place search flow:
 
 ```text
 query text -> MiniLM embedding -> Chroma top-k search -> ids -> SQLite rows
 ```
 
-Vector calls live in `src/vector_db/places.py`.
+Reusable chunk retrievers live in `src.retrieval`.
 
-Make a structured local LangChain call:
-
-```python
-from pydantic import BaseModel
-
-from src.shared.llm import structured_local_model
-
-
-class Answer(BaseModel):
-    answer: str
-
-
-model = structured_local_model("gemma4:e4b", Answer)
-result = model.invoke("Answer briefly: what is a calm lake good for?")
-print(result.answer)
-```
+The Open Knowledge Format experiment in `src/okf` is a separate answer path over
+the same complete source pages. It navigates generated indexes and reads whole
+concept documents instead of querying Chroma. Fair comparisons must hold the
+question set, answer model, context budget, and load constant, then report
+latency, context use, evidence coverage, factual correctness, faithfulness, and
+cost. See [`experiments/indexing/README.md`](../../experiments/indexing/README.md).

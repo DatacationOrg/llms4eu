@@ -1,0 +1,10 @@
+---
+okf_version: "0.1"
+---
+
+# concept
+
+* [Bazilika](basilica.md) - Bazilika je častni naziv za cerkev posebnega liturgičnega in pastoralnega pomena, ki ga podeljuje Sveti sedež in prinaša določene pravice ter dolžnosti. Keywords: basilica, basilica minor, basilica maior, manjša bazilika, večja bazilika, papeška bazilika, pontifikalna bazilika, architecture, catholic-church, ecclesiastical-title, liturgy, Kaj je bazilika?, Kakšna je razlika med večjo in manjšo baziliko?, Katere so štiri večje bazilike v Rimu?, Kdo je leta 1300 vpeljal naziv večje bazilike?.
+* [Poletni čas](daylight-saving-time.md) - Poletni čas je krajevni čas, ki ga država privzame za določeno obdobje leta, običajno za eno uro naprej od standardnega časa, z namenom boljšega izkoriščanja dnevne svetlobe. Keywords: daylight saving time, DST, summer time, time, daylight saving, standard time, energy saving, poletni čas, Kaj je poletni čas?, Kdaj se v Sloveniji premakne ura na poletni čas?, Kdo je prvi resno predlagal uvedbo poletnega časa?, Kako se poletnemu času reče v angleščini?.
+* [Časovni pas](time-zone.md) - Časovni pas je območje na Zemlji s standardiziranim časom, ki teoretično obsega 15 stopinj zemljepisne dolžine, v praksi pa se meje prilagajajo administrativnim enotam. Keywords: Time zone, Zeitzone, Huso horario, Fuso orario, Časovni pasovi, Standardni čas, Standard time, time, geography, standards, utc, Kaj je časovni pas?, Kako so določene meje časovnih pasov?, Kdo je predlagal sistem 24-ih časovnih pasov?, Kdaj je Velika Britanija uradno uvedla GMT?.
+* [Župnijska cerkev](parish-church.md) - A parish church is the main church of a parish that serves as the seat of the parish and is typically used for daily worship and major religious celebrations. Keywords: parish church, Pfarrkirche, chiesa parrocchiale, église paroissiale, farna cerkev, župna crkva, church, parish, christianity, religious_building, Kaj je župnijska cerkev?, Kakšna je razlika med župnijsko in podružnično cerkvijo?, Kateri zakramenti se podeljujejo v župnijski cerkvi?, Kje se običajno poročita ženin in nevesta?.
