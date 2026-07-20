@@ -101,6 +101,10 @@ class AgenticRetriever:
             )
             if verdict.sufficient:
                 self.batch_stats.record(attempt_count)
+                # Never return fewer than `limit` just because an early attempt
+                # retrieved a smaller pool; top up so ranking metrics aren't capped.
+                if current_limit < limit:
+                    chunks = self.base_retriever.retrieve(current_query, limit)
                 return chunks[:limit]
 
             reformulated = (verdict.reformulated_query or "").strip()

@@ -12,4 +12,5 @@ qdrant_storage/
 *.egg-info/
 data/scraped/
 data/cache/
+*.checkpoint.json
 knowledge-catalog/

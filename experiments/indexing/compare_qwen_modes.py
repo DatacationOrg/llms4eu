@@ -338,6 +338,7 @@ def _run_eval_with_checkpoint(
         covered_page_ids=covered_page_ids,
     )
 
+    # Question ids are UUID strings; keep them as-is so scoring keys line up.
     method_rankings = {
         name: {
             question_id: ranked

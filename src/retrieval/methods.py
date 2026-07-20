@@ -161,7 +161,7 @@ def _hybrid_rerank(provider_name: str) -> CrossEncoderRerankRetriever:
 def _qwen_agentic() -> AgenticRetriever:
     return AgenticRetriever(
         name="qwen_agentic",
-        base_retriever=_vector("qwen"),
+        base_retriever=_vector_rerank("qwen"),
         judge_retries=CONFIG["agentic_judge_retries"],
         max_attempts=CONFIG["agentic_max_attempts"],
         min_sufficient_chunks=CONFIG["agentic_min_sufficient_chunks"],
@@ -174,7 +174,7 @@ def _qwen_agentic() -> AgenticRetriever:
 def _qwen_hybrid_agentic() -> AgenticRetriever:
     return AgenticRetriever(
         name="qwen_hybrid_agentic",
-        base_retriever=_hybrid("qwen"),
+        base_retriever=_hybrid_rerank("qwen"),
         judge_retries=CONFIG["agentic_judge_retries"],
         max_attempts=CONFIG["agentic_max_attempts"],
         min_sufficient_chunks=CONFIG["agentic_min_sufficient_chunks"],
