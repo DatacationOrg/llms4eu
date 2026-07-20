@@ -23,7 +23,6 @@ from src.retrieval.retrievers.agentic import AgenticRetriever
 from src.shared.env import ROOT, load_local_env, load_yaml
 
 DEFAULT_OUTPUT = Path("docs/retrieval-results-agentic.md")
-DEFAULT_LIMIT = 3
 OKF_METHOD = "okf"
 OKF_SEARCH_METHOD = "okf_search"
 OKF_METHODS = {OKF_METHOD, OKF_SEARCH_METHOD}
@@ -34,7 +33,7 @@ def main() -> None:
     load_local_env()
     args = _parse_args()
     method_names = _resolve_methods(args.methods)
-    limit = args.limit if args.limit is not None else DEFAULT_LIMIT
+    limit = args.limit
     output_path = Path(args.output) if args.output else DEFAULT_OUTPUT
     checkpoint_path = (
         Path(args.checkpoint)
