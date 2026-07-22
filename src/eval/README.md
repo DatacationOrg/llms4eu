@@ -44,12 +44,13 @@ Retriever method names and tuning live in `src/retrieval`.
 ## OKF comparison boundary
 
 These chunk qrels remain the correct benchmark for ranked RAG retrieval, but
-they cannot score OKF concept IDs. A representation-neutral comparison maps RAG
-chunks and OKF concept provenance to reviewed source-page qrels, then evaluates
-both with page-level `nDCG@10` and `Recall@10`. End-to-end comparison uses the
-same questions, answer model, context budget, blinded judging, and paired
-statistics for factual correctness, faithfulness, citation support, latency,
-and cost.
+they cannot directly score OKF concept IDs. The shared comparison derives a
+golden concept from each gold chunk's page using OKF `source_page_ids`. RAG
+rankings are projected through chunk → page → concept, while OKF rankings are
+already concept IDs. This gives full concept recall to language variants and
+sibling pages assigned to the same concept. Native chunk metrics remain
+separate, as do end-to-end factual correctness, faithfulness, citation support,
+latency, and cost.
 
 The complete protocol is in
 [`experiments/indexing/README.md`](../../experiments/indexing/README.md). Keep current

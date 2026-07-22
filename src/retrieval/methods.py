@@ -121,10 +121,12 @@ def _provider_specs(provider_name: str) -> dict[str, RetrieverSpec]:
             _qwen_agentic,
             provider="qwen",
         )
-        specs["qwen_hybrid_agentic"] = RetrieverSpec(
-            "qwen_hybrid_agentic",
-            _qwen_hybrid_agentic,
-            provider="qwen",
+    if provider_name in {"qwen", "nemotron", "azure"}:
+        name = f"{provider_name}_hybrid_agentic"
+        specs[name] = RetrieverSpec(
+            name,
+            lambda provider=provider_name: _hybrid_agentic(provider),
+            provider=provider_name,
         )
     return specs
 
@@ -171,10 +173,10 @@ def _qwen_agentic() -> AgenticRetriever:
     )
 
 
-def _qwen_hybrid_agentic() -> AgenticRetriever:
+def _hybrid_agentic(provider_name: str) -> AgenticRetriever:
     return AgenticRetriever(
-        name="qwen_hybrid_agentic",
-        base_retriever=_hybrid_rerank("qwen"),
+        name=f"{provider_name}_hybrid_agentic",
+        base_retriever=_hybrid_rerank(provider_name),
         judge_retries=CONFIG["agentic_judge_retries"],
         max_attempts=CONFIG["agentic_max_attempts"],
         min_sufficient_chunks=CONFIG["agentic_min_sufficient_chunks"],

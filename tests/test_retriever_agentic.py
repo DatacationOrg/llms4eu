@@ -146,11 +146,15 @@ def test_agentic_retriever_uses_azure_judge_provider(monkeypatch):
 
 
 def test_agentic_retriever_uses_5_10_15_limit_schedule(monkeypatch):
+    expanded_chunks = [
+        RankedChunk(id=f"c{index}", score=float(index), text="expanded")
+        for index in range(15)
+    ]
     base = StubRetriever(
         [
             [RankedChunk(id="c1", score=0.3, text="weak")],
             [RankedChunk(id="c2", score=0.4, text="still weak")],
-            [RankedChunk(id="c3", score=0.5, text="best")],
+            expanded_chunks,
         ]
     )
     retriever = AgenticRetriever(
@@ -174,9 +178,10 @@ def test_agentic_retriever_uses_5_10_15_limit_schedule(monkeypatch):
         ),
     )
 
-    retriever.retrieve("query", 10)
+    chunks = retriever.retrieve("query", 10)
 
     assert base.calls == [("query", 5), ("query", 10), ("query", 15)]
+    assert chunks == expanded_chunks
 
 
 def test_agentic_retriever_tracks_queries_per_question(monkeypatch):

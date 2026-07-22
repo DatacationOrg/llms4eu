@@ -1,329 +1,66 @@
 ---
 type: destinations
 title: Sevnica
-description: Sevnica is a medium-sized town in Slovenia and the administrative center
-  of the Municipality of Sevnica, located on the left bank of the Sava River.
-tags:
-- town
-- slovenia
-- posavje
-- sava-river
-- municipality
-aliases:
-- Lichtenwald
-- Liechtenwald
-- Lyechtenwalde
-- Lihtenwalde
-- Lietenueld
-- Sielnizza
-timestamp: '2026-07-15T12:19:44+00:00'
-okf_version: '0.1'
+description: Sevnica is a medium-sized town and the administrative center of the Municipality
+  of Sevnica in Slovenia, located on the left bank of the Sava River and historically
+  known as Lichtenwald.
+timestamp: '2026-07-21T11:02:49+00:00'
 source_page_ids:
 - d79f5333-4499-5355-8288-cdbe2d3b9b76
-source_urls:
-- https://sl.wikipedia.org/wiki/Sevnica
-source_names:
-- wikipedia
-languages:
-- sl
-search_terms:
-- Lichtenwald
-- Liechtenwald
-- Lyechtenwalde
-- Lihtenwalde
-- Lietenueld
-- Sielnizza
-- town
-- slovenia
-- posavje
-- sava-river
-- municipality
-- Sevnica
-- Občina Sevnica
-- Sava
-- Posavje
-- Štajerska
-- Glavni trg
-- Spodnji sevniški grad
-- cerkev sv. Nikolaja
-- cerkev sv. Florjana
-- Oswald Bierti
-- Melania Trump
-- Urška Klakočar Zupančič
-- Tanja Pečar
-- Blaž Janc
-- Eva Lisec
-- Andrej Flajs
-- Danimir Kerin
-- Marie Stallner
-- Ilija Gregorić
-- kmečki upor 1573
-- salzburška nadškofija
-- Ulrik III. Spanheimski
-- Filip Spanheimski
-- trške pravice
-- železniška proga 1862
-- čitalnica 1865
-- Zedinjena Slovenija
-- Boštanj
-- Sevnična
-retrieval_queries:
-- Kje leži Sevnica?
-- Kaj je Sevnica?
-- Katere so zgodovinske nemške poimenovanja za Sevnico?
-- Kdaj je bila Sevnica prvič omenjena kot trg?
-- Kdo je poslikal cerkev sv. Nikolaja v Sevnici?
-- Katere znane osebnosti izvirajo iz Sevnice?
-- Kdaj je Sevnico prizadel kmečki upor?
-- Kdaj je bila v Sevnici ustanovljena prva čitalnica v Posavju?
-- Kakšno podnebje ima Sevnica?
-- Kateri grad stoji na Glavnem trgu v Sevnici?
-- What is the population of Sevnica?
-- Which famous people were born in Sevnica, Slovenia?
-source_evidence:
-  d79f5333-4499-5355-8288-cdbe2d3b9b76:
-    title: Sevnica - Wikipedija, prosta enciklopedija
-    source: wikipedia
-    url: https://sl.wikipedia.org/wiki/Sevnica
-    language: sl
-    summary: A comprehensive Slovenian Wikipedia article detailing the history, geography,
-      landmarks, and notable residents of Sevnica, a town in the Posavje region of
-      Slovenia, historically known as Lichtenwald.
-    facts:
-    - Sevnica je srednje veliko mesto v Sloveniji.
-    - Sevnica je središče Občine Sevnica.
-    - Sevnica leži na levem bregu reke Save.
-    - Sevnica ima okoli 4.600 prebivalcev.
-    - Sevnica se povezuje z naseljem Boštanj na desnem bregu Save.
-    - Sevnica obsega predele Šmarje, Ribniki, Lizabon, Grad, Na Pečju, Marof, Gline
-      jame, Piramida, Hrasti in Grič.
-    - Osrednji del starega mestnega jedra je Glavni trg.
-    - Na Glavnem trgu stoji Spodnji sevniški grad z letnico 1613.
-    - V Spodnjem sevniškem gradu je sedež občinske uprave.
-    - Na Glavnem trgu stoji obnovljeno znamenje s kipom sv. Martina iz 17. stoletja.
-    - Cerkev sv. Florjana se omenja že leta 1443.
-    - Cerkev sv. Florjana ima križnorebrasti svodeni prezbiterij s kvadratno talno
-      ploskvijo.
-    - V vzhodni stranici prezbiterija cerkve sv. Florjana je šilastoločno gotsko okno
-      s trilistom.
-    - Na južni zunanjščini ladje cerkve sv. Florjana je gotska freska svetega Krištofa.
-    - V prezbiteriju cerkve sv. Florjana so vidne gotske freske.
-    - V okenskem ostenju za oltarjem cerkve sv. Florjana je naslikan apostol Andrej
-      s knjigo v roki.
-    - Stil fresk v cerkvi sv. Florjana kaže na furlansko smer.
-    - Cerkvena oprema v cerkvi sv. Florjana je deloma baročna.
-    - Župna cerkev sv. Nikolaja je neoromanska stavba iz leta 1862.
-    - Cerkev sv. Nikolaja je poslikal furlanski mojster Oswald Bierti.
-    - Pod pevskim korom v cerkvi sv. Nikolaja je vzidana nagrobna plošča z letnico
-      1525 in grbom, ki predstavlja lilijo.
-    - V krstni kapeli cerkve sv. Nikolaja je epitaf grajskega oskrbnika Göriacherja,
-      ki je upodobljen z ženo, ko kleči pod križem.
-    - Prva šolska učilnica je bila v hiši na Glavnem trgu južno od cerkve sv. Nikolaja
-      od leta 1801 do 1871.
-    - Leta 1967 je bilo zgrajeno osnovnošolsko poslopje Sava Kladnika na Trgu svobode.
-    - Mesto ima zmerno celinsko podnebje.
-    - Sevnica ima zaradi zaveterne lege na južni strani Bohorja zelo milo podnebje.
-    - Najstarejše zapisano ime za Sevnico je Lyechtenwalde iz leta 1256.
-    - Ime Lyechtenwalde sega do 4. aprila 1256 in govori o delitvi dediščine med Ulrikom
-      III. Spanheimskim in njegovim bratom Filipom Spanheimskim.
-    - Leta 1309 je Sevnica prvič zapisana kot trg v urbarju salzburške nadškofije.
-    - Leta 1309 se prvič izrecno omenja grad (castellum Liehtenwalde).
-    - Leta 1323 je potrjena prva omemba cerkve (chirchen ze Liechtenwald) in vikarja
-      Johanna.
-    - Salzburški nadškof Sigismund je leta 1455 Sevnici podelil pravico do prirejanja
-      sejmov na god sv. Miklavža.
-    - Pravico do letnih živinskih sejmov je Sevnica dobila leta 1783.
-    - Leta 1420 je oglejski patriarh Ludovik dovolil postavitev cerkve sv. Florijana.
-    - Leta 1441 je v Sevnici izpričan trški sodnik.
-    - Sredi 15. stoletja je zabeležen brod čez Savo med Sevnico in Radno.
-    - V letih 1479–1490 je Sevnica postala del ogrskega kraljestva Matije Korvina.
-    - 5. februarja 1573 je Sevnico brez odpora zavzel oddelek približno 600 upornikov
-      pod vodstvom Ilije Gregorića.
-    - V avstro-ogrskem času je bilo uradno ime kraja Lichtenwald.
-    - Januarja 1864 so v Sevnici ustanovili nemško čitalnico.
-    - 26. novembra 1865 je bila v Sevnici ustanovljena prva narodna čitalnica v današnjem
-      Posavju.
-    - Leta 1862 je bila skozi Sevnico speljana železniška proga.
-    - Med drugo svetovno vojno je bilo veliko ljudi iz Sevnice na silo odvedenih z
-      domov.
-    - Melania Trump, rojena v Sevnici, je bila prva dama Združenih držav Amerike v
-      letih 2017–2021 in od 2025.
-    - Urška Klakočar Zupančič iz Sevnice je predsednica državnega zbora.
-    - Tanja Pečar iz Sevnice je nekdanja prva dama Republike Slovenije.
-    - Marie Stallner iz Sevnice je babica filozofa Ludwiga Wittgensteina.
-    - Blaž Janc iz Sevnice je rokometaš.
-    - Eva Lisec iz Sevnice je košarkarica.
-    - Andrej Flajs iz Sevnice je odbojkar.
-    - Danimir Kerin iz Sevnice je kemik in profesor na Univerzi v Mariboru.
-    search_terms:
-    - Sevnica
-    - Lichtenwald
-    - Občina Sevnica
-    - Sava
-    - Posavje
-    - Štajerska
-    - Glavni trg
-    - Spodnji sevniški grad
-    - cerkev sv. Nikolaja
-    - cerkev sv. Florjana
-    - Oswald Bierti
-    - Melania Trump
-    - Urška Klakočar Zupančič
-    - Tanja Pečar
-    - Blaž Janc
-    - Eva Lisec
-    - Andrej Flajs
-    - Danimir Kerin
-    - Marie Stallner
-    - Ilija Gregorić
-    - kmečki upor 1573
-    - salzburška nadškofija
-    - Ulrik III. Spanheimski
-    - Filip Spanheimski
-    - trške pravice
-    - železniška proga 1862
-    - čitalnica 1865
-    - Zedinjena Slovenija
-    - Boštanj
-    - Sevnična
-    retrieval_queries:
-    - Kje leži Sevnica?
-    - Kaj je Sevnica?
-    - Katere so zgodovinske nemške poimenovanja za Sevnico?
-    - Kdaj je bila Sevnica prvič omenjena kot trg?
-    - Kdo je poslikal cerkev sv. Nikolaja v Sevnici?
-    - Katere znane osebnosti izvirajo iz Sevnice?
-    - Kdaj je Sevnico prizadel kmečki upor?
-    - Kdaj je bila v Sevnici ustanovljena prva čitalnica v Posavju?
-    - Kakšno podnebje ima Sevnica?
-    - Kateri grad stoji na Glavnem trgu v Sevnici?
-    - What is the population of Sevnica?
-    - Which famous people were born in Sevnica, Slovenia?
 ---
 
-**Sevnica** je srednje veliko [mesto](https://sl.wikipedia.org/wiki/Mesto), ki se nahaja v [Sloveniji](https://sl.wikipedia.org/wiki/Slovenija) in je središče [Občine Sevnica](https://sl.wikipedia.org/wiki/Občina_Sevnica), na levem bregu reke [Save](https://sl.wikipedia.org/wiki/Sava). Z okoli 4.600 prebivalci je Sevnica pomembno lokalno središče, ki zlasti v tovarnah tekstilne in lesne industrije zaposluje številne ljudi iz bližnje in daljne okolice. Mesto se čedalje bolj povezuje z [Boštanjem](https://sl.wikipedia.org/wiki/Boštanj), naseljem na nasprotnem, desnem bregu Save. Obsega predele Šmarje, Ribniki, Lizabon, Grad, Na Pečju, Marof, Gline jame, Piramida, Hrasti, Grič.
+**Sevnica** (historical German name: *Lichtenwald*) is a medium-sized town in Slovenia and the administrative center of the Municipality of Sevnica. It is situated on the left bank of the Sava River. With approximately 4,600 inhabitants, Sevnica is an important local center, employing many people from the surrounding areas, particularly in textile and wood industry factories. The town is increasingly connected with Boštanj, a settlement on the opposite, right bank of the Sava. Sevnica encompasses the districts of Šmarje, Ribniki, Lizabon, Grad, Na Pečju, Marof, Gline jame, Piramida, Hrasti, and Grič.
 
-## Zgodovinska imena
+## Historical Names
 
-Starejši zapisi imena mesta Sevnica so (po letih):
+Older records of the town's name include: 1256 *Lyechtenwalde*, 1275 *Reyn vel in Liehtenwalde*, 1309 *officium in Lihtenwalde*, 1344 *Lietenueld*, 1347 *Liechtenwald*, and 1581 *Sielnizza*. The original name likely derives from a water name, as the stream now called Sevnična was mentioned as *Zellnitz* in 1488. The name, derived via an adjective from the word *selo* ("settlement, village"), probably originally meant "village water" or "water that flows into the Sava near a settlement." Another possibility is derivation from the common noun **sedlьnica*, meaning "settlement, farm." The Middle High German name *Liehtenwald* ("bright forest") refers to the deciduous forests in the area and is not closely related to the Slovene name. Before the dissolution of Austria-Hungary, the official name was *Lichtenwald*.
 
-- 1256: *Lyechtenwalde*
-- 1275: *Reyn vel in Liehtenwalde*
-- 1309: *officium in Lihtenwalde*
-- 1344: *Lietenueld*
-- 1347: *Liechtenwald*
-- 1581: *Sielnizza*
+## History
 
-Prvotno gre verjetno za vodno ime, saj se potok, ki se danes imenuje [Sevnična](https://sl.wikipedia.org/wiki/Sevnična), leta 1488 omenja kot *Zellnitz*. Ime, ki je preko pridevnika izpeljano iz besede selo »naselbina, vas«, je torej prvotno najverjetneje pomenilo »selska, vaška voda«, v danem primeru »voda, ki se pri selu, pri naselbini izliva v [Savo](https://sl.wikipedia.org/wiki/Sava)«. Druga imenotvorna možnost je izvajanje neposredno iz občnega imena **sedlьnica*, katerega pomen je bil »naselbina, kmetija«. Srednjevisokonemško ime *Liehtenwald* s slovenskim nima tesnejše zveze, saj njegov občnoimenski pomen »svetli gozd« kaže na [listnate gozdove](https://sl.wikipedia.org/wiki/Listavec) v okolici. Pred razpadom [Avstro-Ogrske](https://sl.wikipedia.org/wiki/Avstro-Ogrska) je ime nosilo ime *Lichtenwald*.
+### Early History
 
-## Zgodovina
+During a land exchange between Countess Ema of Krško and Salzburg Archbishop Balduin (1041–1060), the Salzburg Archdiocese acquired extensive estates along the Sava River (Rajhenburg ob Savi). The oldest recorded name for the place is *Lyechtenwalde*, dating back to April 4, 1256, in a document concerning the division of inheritance between the Carinthian duke and lord of Carniola, Ulrich III of Spanheim, and his brother, Salzburg Archbishop Philip. In 1309, Sevnica was first recorded as a market town (*Wetzko civis in Lihtenwalde*) in the urbarium of the Salzburg Archdiocese, and the castle (*castellum Liehtenwalde*) was explicitly mentioned for the first time.
 
-Med izmenjavo zemljišč med grofico Emo Krško in salzburškim nadškofom Balduinom (1041–1060) je [salzburška nadškofija](https://sl.wikipedia.org/wiki/Salzburška_nadškofija) pridobila obsežna posestva ob reki Savi (Rajhenburg ob Savi).
+In 1323, the first mention of a church (*chirchen ze Liechtenwald*) and a vicar named Johann was confirmed, indicating the early formation of a church community. Salzburg Archbishops Pilgrim (1381) and Sigismund (1408) granted Sevnica and its castle market privileges. The right to hold fairs on St. Nicholas's Day was granted in 1455, and the right to annual livestock fairs in 1783. By 1420, the settlement obtained permission from the Patriarch of Aquileia, Ludovico, to build the Church of St. Florian, and a market judge is attested in 1441.
 
-Najstarejše ime za kraj je *Lyechtenwalde.* Sega nazaj do 4. aprila 1256, in govori o delitvi dediščine med koroškim vojvodom in gospodom Kranjske, [Ulrikom III. Spanheimskim](https://sl.wikipedia.org/wiki/Ulrik_III._Spanheimski), in njegovim bratom, salzburškim nadškofom [Filipom](https://sl.wikipedia.org/wiki/Filip_Spanheimski). Leta 1309 je v urbarju salzburške nadškofije Sevnica prvič zapisana kot trg (*Wetzko civis in Lihtenwalde*), istočasno pa se prvič izrecno omenja grad (*castellum Liehtenwalde*).
+In the mid-15th century, a ferry across the Sava between Sevnica and Radna was recorded, along with late Gothic churches in and above Šmarje (1448, 1545). From 1479 to 1490, Sevnica was part of the Hungarian kingdom under Matthias Corvinus for a decade, after which King Maximilian I returned it to the Salzburg Archdiocese. In 1573, the town was affected by a peasant revolt when a detachment of approximately six hundred rebels under Ilija Gregorić captured it without resistance on February 5.
 
-Leta 1323 je potrjena tudi prva omemba cerkve (*chirchen ze Liechtenwald*) in nekega vikarja Johanna, kar nakazuje zgodnje oblikovanje cerkvene skupnosti. Salzburška nadškofa Pilgrim (1381) in Sigismund (1408) podelita Sevnici in [gradu](https://sl.wikipedia.org/wiki/Grad_Sevnica) trške privilegije, kar kaže na začetke gospodarskega razvoja. Ta se je stopnjeval; pravico do prirejanja [sejmov](https://sl.wikipedia.org/wiki/Sejem) na god sv. Miklavža je naselje (od nadškof Sigismunda) dobilo leta 1455, do letnih živinskih sejmov pa 1783. leta. Do leta 1420 kraj pridobi še dovoljenje oglejskega patriarha Ludovika za postavitev cerkve sv. Florijana, leta 1441 pa je že izpričan trški sodnik.
+Throughout its history, Sevnica suffered numerous disasters, including fires, plague, rebellious peasants, and Turkish incursions, but it persisted and developed.
 
-Sredi 15. stoletja je v virih zabeleženi brod čez Savo med Sevnico in Radno ter poznogotski cerkvi v Šmarju in nad Šmarjem (1448, 1545).
+### 19th and 20th Centuries
 
-V letih 1479–1490 Sevnica za desetletje postane del ogrskega kraljestva Matije Korvina, nato pa jo kralj Maksimilijan I. vrne salzburški nadškofiji. Leta 1573 kraj doseže kmečki upor, ko ga 5. februarja brez odpora zavzame oddelek približno šeststo upornikov pod vodstvom Ilije Gregorića.
+During the Austro-Hungarian period, the official name used was *Lichtenwald*. A German reading society was founded in January 1864. On November 26, 1865, the first national reading society in present-day Posavje was established. The reading society acquired its own premises the following year. Four years later, a political camp supporting the program of United Slovenia was held. In 1862, the railway line was built through the area. A newer part of the town began to grow around the station, which was located outside the old settlement due to space constraints, even before World War I. During World War II, many people were forcibly removed from their homes, as elsewhere in Posavje, and many did not survive exile and concentration camps.
 
-Sevnico so skozi zgodovino prizadele številne nesreče – požari, [kuga](https://sl.wikipedia.org/wiki/Kuga), uporni kmetje in [turški vpadi](https://sl.wikipedia.org/wiki/Turški_vpadi), a se je vseskozi ohranjal in tudi razvijal.
+## Climate
 
-V [avstro-ogrskem](https://sl.wikipedia.org/wiki/Avstro-Ogrska) času se je za uradno ime kraja uporabljalo različica *Lichtenwald*. Januarja 1864 so tu ustanovili nemško čitalnico. 26. novembra 1865 pa je bila tu ustanovljena prva (narodna) [čitalnica](https://sl.wikipedia.org/wiki/Čitalnica) v današnjem [Posavju](https://sl.wikipedia.org/wiki/Posavje). Čitalnica je v naslednjem letu dobila tudi svoje prostore. Štiri leta kasneje pa je bil tu tudi tabor, ki je podpiral zamisli programa [Zedinjene Slovenije](https://sl.wikipedia.org/wiki/Zedinjena_Slovenija). Leta 1862 je bila tod speljana železniška proga. Okrog postaje, ki je zaradi pomanjkanja prostora dobila svoje mesto izven starega dela naselja, je začel že pred prvo svetovno vojno rasti novejši del mesta. Med [drugo svetovno vojno](https://sl.wikipedia.org/wiki/Druga_svetovna_vojna) je bilo tako kot drugod v Posavju veliko ljudi na silo odvedenih z domov. Mnogi življenja v [izgnanstvu](https://sl.wikipedia.org/wiki/Izgnanstvo?action=edit&redlink=1) in [koncentracijskih taboriščih](https://sl.wikipedia.org/wiki/Koncentracijsko_taborišče) niso preživeli.
+The town has a moderate continental climate. Due to its sheltered location on the southern side of Bohor, the climate is very mild, with abundant sunshine. Snow melts very early. Summers are pleasant due to refreshing winds from the hills and forests.
 
-## Znamenitosti
+## Landmarks and Architecture
 
-V starem mestnem jedru, katerega osrednji del je Glavni trg, je ohranjenih več starih stavb, ki pričajo o preteklosti naselja. Na Glavnem trgu stoji manjši Spodnji sevniški grad, ki nosi letnico 1613. V njem je danes sedež občinske uprave. Tu stojijo tudi obnovljeno znamenje s kipom [sv. Martina](https://sl.wikipedia.org/wiki/Sveti_Martin) iz [17. stoletja](https://sl.wikipedia.org/wiki/17._stoletje), [neoromanska](https://sl.wikipedia.org/wiki/Neoromanika?action=edit&redlink=1) [cerkev sv. Nikolaja](https://sl.wikipedia.org/wiki/Cerkev_sv._Nikolaja,_Sevnica?action=edit&redlink=1) in [cerkev sv. Florjana](https://sl.wikipedia.org/wiki/Cerkev_svetega_Florijana,_Sevnica?action=edit&redlink=1) iz leta 1443.
+In the old town center, whose core is Glavni trg (Main Square), several old buildings are preserved that testify to the settlement's past. On Glavni trg stands the smaller Lower Sevnica Castle, bearing the year 1613, which now houses the municipal administration. Also located there are a restored shrine with a statue of St. Martin from the 17th century, the Neo-Romanesque Church of St. Nicholas, and the Church of St. Florian from 1443.
 
-### Cerkev sv. Nikolaja
+### Church of St. Nicholas
 
-Na Glavnem trgu stoji župna cerkev sv. Nikolaja. To je tradicionalno neromanska stavba iz 1862, ki jo je poslikal furlanski mojster Oswald Bierti. Pod pevskim korom je vzidana nagrobna plošča z letnico 1525 in grbom, ki predstavlja lilijo. V krstni kapeli epitaf grajskega oskrbnika Göriacherja, ki je upodobljen z ženo, ko kleči pod križem.
+The parish church of St. Nicholas stands on Glavni trg. It is a Neo-Romanesque building from 1862, painted by the Friulian master Oswald Bierti. Under the choir loft, a tombstone with the year 1525 and a coat of arms depicting a lily is embedded. In the baptismal chapel, there is an epitaph of the castle steward Göriacher, depicted kneeling under the cross with his wife.
 
-### Cerkev sv. Florjana
+### Church of St. Florian
 
-Cerkev sv. Florjana ob Florjanskem grabnu se omenja že 1443, vendar utegne biti starejša. Njen križnorebrasti svodeni prezbiterij s kvadratno talno ploskvijo namreč še kaže na romansko izročilo. V vzhodni stranici prezbiterija je šilastoločno gotsko okno s trilistom. Na južni zunanjščini ladje pa se pod beležem vidi gotska freska svetega Krištofa. Gotske freske so vidne tudi pod beležem v prezbiteriju. V okenskem ostenju za oltarjem je naslikan apostol Andrej s knjigo v roki. Stil teh fresk kaže na furlansko smer. Cerkvena oprema je še deloma baročna.
+The Church of St. Florian, located by Florjanski graben, is mentioned as early as 1443 but may be older. Its cross-ribbed vaulted presbytery with a square floor plan still shows Romanesque tradition. In the eastern side of the presbytery, there is a pointed Gothic window with a trefoil. On the southern exterior of the nave, a Gothic fresco of St. Christopher is visible under the whitewash. Gothic frescoes are also visible under the whitewash in the presbytery. In the window reveal behind the altar, the Apostle Andrew is painted holding a book. The style of these frescoes indicates a Friulian influence. The church furnishings are still partly Baroque.
 
-## Izobraževanje
+### Education
 
-Na Glavnem trgu južno od cerkve sv. Nikolaja je hiša, kjer je bila prva šolska učilnica od 1801 do 1871. Leta 1967 je bilo zgrajeno moderno osnovnošolsko poslopje Sava Kladnika na Trgu svobode.
+On Glavni trg, south of the Church of St. Nicholas, there is a house where the first school classroom was located from 1801 to 1871. In 1967, the modern Sava Kladnik primary school building was constructed on Trg svobode.
 
-## Podnebje
+## Notable People
 
-Mesto ima zmerno celinsko podnebje. Zaradi zaveterne lege na južni strani Bohorja zelo milo podnebje. Obilje sonca. Sneg zelo zgodaj skopni. Prijetna poletja zaradi osvežujočega vetra s hribov in gozdov.
-
-## Znane osebnosti
-
-- [Andrej Flajs](https://sl.wikipedia.org/wiki/Andrej_Flajs?action=edit&redlink=1) - odbojkar
-- [Melania Trump](https://sl.wikipedia.org/wiki/Melania_Trump) - fotomodel, prva dama [Združenih držav Amerike](https://sl.wikipedia.org/wiki/ZDA) 2017–2021 in 2025–danes
-- [Blaž Janc](https://sl.wikipedia.org/wiki/Blaž_Janc) - rokometaš
-- [Danimir Kerin](https://sl.wikipedia.org/wiki/Danimir_Kerin) - kemik in profesor na [Univerzi v Mariboru](https://sl.wikipedia.org/wiki/Univerza_v_Mariboru)
-- [Tanja Pečar](https://sl.wikipedia.org/wiki/Tanja_Pečar) - nekdanja prva dama Republike Slovenije
-- Marie Stallner - babica filozofa [Ludwiga Wittgensteina](https://sl.wikipedia.org/wiki/Ludwig_Wittgenstein)
-- [Urška Klakočar Zupančič](https://sl.wikipedia.org/wiki/Urška_Klakočar_Zupančič) - pravnica in političarka, predsednica državnega zbora
-- Eva Lisec - košarkarica
-
-## Demografija
-
-Po podatkih Statističnega urada Republike Slovenije ima naselje okoli 4.600 prebivalcev.
-
-# Source evidence by page
-
-## Sevnica - Wikipedija, prosta enciklopedija
-
-A comprehensive Slovenian Wikipedia article detailing the history, geography, landmarks, and notable residents of Sevnica, a town in the Posavje region of Slovenia, historically known as Lichtenwald.
-
-- Sevnica je srednje veliko mesto v Sloveniji.
-- Sevnica je središče Občine Sevnica.
-- Sevnica leži na levem bregu reke Save.
-- Sevnica ima okoli 4.600 prebivalcev.
-- Sevnica se povezuje z naseljem Boštanj na desnem bregu Save.
-- Sevnica obsega predele Šmarje, Ribniki, Lizabon, Grad, Na Pečju, Marof, Gline jame, Piramida, Hrasti in Grič.
-- Osrednji del starega mestnega jedra je Glavni trg.
-- Na Glavnem trgu stoji Spodnji sevniški grad z letnico 1613.
-- V Spodnjem sevniškem gradu je sedež občinske uprave.
-- Na Glavnem trgu stoji obnovljeno znamenje s kipom sv. Martina iz 17. stoletja.
-- Cerkev sv. Florjana se omenja že leta 1443.
-- Cerkev sv. Florjana ima križnorebrasti svodeni prezbiterij s kvadratno talno ploskvijo.
-- V vzhodni stranici prezbiterija cerkve sv. Florjana je šilastoločno gotsko okno s trilistom.
-- Na južni zunanjščini ladje cerkve sv. Florjana je gotska freska svetega Krištofa.
-- V prezbiteriju cerkve sv. Florjana so vidne gotske freske.
-- V okenskem ostenju za oltarjem cerkve sv. Florjana je naslikan apostol Andrej s knjigo v roki.
-- Stil fresk v cerkvi sv. Florjana kaže na furlansko smer.
-- Cerkvena oprema v cerkvi sv. Florjana je deloma baročna.
-- Župna cerkev sv. Nikolaja je neoromanska stavba iz leta 1862.
-- Cerkev sv. Nikolaja je poslikal furlanski mojster Oswald Bierti.
-- Pod pevskim korom v cerkvi sv. Nikolaja je vzidana nagrobna plošča z letnico 1525 in grbom, ki predstavlja lilijo.
-- V krstni kapeli cerkve sv. Nikolaja je epitaf grajskega oskrbnika Göriacherja, ki je upodobljen z ženo, ko kleči pod križem.
-- Prva šolska učilnica je bila v hiši na Glavnem trgu južno od cerkve sv. Nikolaja od leta 1801 do 1871.
-- Leta 1967 je bilo zgrajeno osnovnošolsko poslopje Sava Kladnika na Trgu svobode.
-- Mesto ima zmerno celinsko podnebje.
-- Sevnica ima zaradi zaveterne lege na južni strani Bohorja zelo milo podnebje.
-- Najstarejše zapisano ime za Sevnico je Lyechtenwalde iz leta 1256.
-- Ime Lyechtenwalde sega do 4. aprila 1256 in govori o delitvi dediščine med Ulrikom III. Spanheimskim in njegovim bratom Filipom Spanheimskim.
-- Leta 1309 je Sevnica prvič zapisana kot trg v urbarju salzburške nadškofije.
-- Leta 1309 se prvič izrecno omenja grad (castellum Liehtenwalde).
-- Leta 1323 je potrjena prva omemba cerkve (chirchen ze Liechtenwald) in vikarja Johanna.
-- Salzburški nadškof Sigismund je leta 1455 Sevnici podelil pravico do prirejanja sejmov na god sv. Miklavža.
-- Pravico do letnih živinskih sejmov je Sevnica dobila leta 1783.
-- Leta 1420 je oglejski patriarh Ludovik dovolil postavitev cerkve sv. Florijana.
-- Leta 1441 je v Sevnici izpričan trški sodnik.
-- Sredi 15. stoletja je zabeležen brod čez Savo med Sevnico in Radno.
-- V letih 1479–1490 je Sevnica postala del ogrskega kraljestva Matije Korvina.
-- 5. februarja 1573 je Sevnico brez odpora zavzel oddelek približno 600 upornikov pod vodstvom Ilije Gregorića.
-- V avstro-ogrskem času je bilo uradno ime kraja Lichtenwald.
-- Januarja 1864 so v Sevnici ustanovili nemško čitalnico.
-- 26. novembra 1865 je bila v Sevnici ustanovljena prva narodna čitalnica v današnjem Posavju.
-- Leta 1862 je bila skozi Sevnico speljana železniška proga.
-- Med drugo svetovno vojno je bilo veliko ljudi iz Sevnice na silo odvedenih z domov.
-- Melania Trump, rojena v Sevnici, je bila prva dama Združenih držav Amerike v letih 2017–2021 in od 2025.
-- Urška Klakočar Zupančič iz Sevnice je predsednica državnega zbora.
-- Tanja Pečar iz Sevnice je nekdanja prva dama Republike Slovenije.
-- Marie Stallner iz Sevnice je babica filozofa Ludwiga Wittgensteina.
-- Blaž Janc iz Sevnice je rokometaš.
-- Eva Lisec iz Sevnice je košarkarica.
-- Andrej Flajs iz Sevnice je odbojkar.
-- Danimir Kerin iz Sevnice je kemik in profesor na Univerzi v Mariboru.
+- Andrej Flajs, volleyball player
+- Melania Trump, fashion model, First Lady of the United States (2017–2021 and 2025–present)
+- Blaž Janc, handball player
+- Danimir Kerin, chemist and professor at the University of Maribor
+- Tanja Pečar, former First Lady of the Republic of Slovenia
+- Marie Stallner, grandmother of philosopher Ludwig Wittgenstein
+- Urška Klakočar Zupančič, lawyer and politician, President of the National Assembly
+- Eva Lisec, basketball player
 
 # Citations
 

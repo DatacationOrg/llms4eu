@@ -10,7 +10,11 @@ from pathlib import Path
 from src.db.pages import connect_pages
 from src.eval.metrics import plain_table
 from src.okf.answer import answer_question
-from src.okf.document import OKFDocument
+from src.okf.evidence import (
+    invert_page_map,
+    load_bundle_page_map,
+    project_pages_to_concepts,
+)
 from src.retrieval.methods import build_retriever, ensure_retrievers_ready
 from src.shared.env import ROOT, load_local_env
 
@@ -26,19 +30,6 @@ class EvidenceRun:
     query_count: int
     rankings: dict[str, list[str]]
     failures: int = 0
-
-
-def load_bundle_page_map(bundle_root: Path) -> dict[str, list[str]]:
-    page_map = {}
-    for path in sorted(bundle_root.rglob("*.md")):
-        if path.name in {"index.md", "log.md"}:
-            continue
-        document = OKFDocument.parse(path.read_text(encoding="utf-8"))
-        relative_path = path.relative_to(bundle_root).as_posix()
-        page_map[relative_path] = [
-            str(page_id) for page_id in document.frontmatter.get("source_page_ids", [])
-        ]
-    return page_map
 
 
 def load_covered_questions(
@@ -89,7 +80,10 @@ def load_covered_questions(
 
 
 def run_rag(
-    name: str, questions: list[dict], chunk_pages: dict[str, str]
+    name: str,
+    questions: list[dict],
+    chunk_pages: dict[str, str],
+    page_concepts: dict[str, list[str]],
 ) -> EvidenceRun:
     retriever = build_retriever(name)
     started = time.perf_counter()
@@ -99,8 +93,13 @@ def run_rag(
     )
     seconds = time.perf_counter() - started
     rankings = {
-        row["id"]: _unique(
-            chunk_pages[chunk.id] for chunk in batches[index] if chunk.id in chunk_pages
+        row["id"]: project_pages_to_concepts(
+            [
+                chunk_pages[chunk.id]
+                for chunk in batches[index]
+                if chunk.id in chunk_pages
+            ],
+            page_concepts,
         )
         for index, row in enumerate(questions)
     }
@@ -113,7 +112,7 @@ def run_rag(
 
 
 def run_okf(
-    questions: list[dict], bundle_root: Path, page_map: dict[str, list[str]]
+    questions: list[dict], bundle_root: Path, concepts: set[str]
 ) -> tuple[EvidenceRun, list[dict]]:
     started = time.perf_counter()
     rankings = {}
@@ -126,10 +125,11 @@ def run_okf(
             result = answer_question(row["question"], bundle_root=bundle_root)
             elapsed = time.perf_counter() - question_started
             query_count += result.query_count
-            evidence_pages = _unique(
-                page_id for path in result.visited for page_id in page_map.get(path, [])
+            ranked_concepts = _unique(
+                [path for path in result.citations if path in concepts]
+                + [path for path in result.visited if path in concepts]
             )
-            rankings[row["id"]] = evidence_pages
+            rankings[row["id"]] = ranked_concepts
             observations.append(
                 {
                     "question_id": row["id"],
@@ -196,8 +196,8 @@ def build_report(
             rank = next(
                 (
                     index
-                    for index, page_id in enumerate(ranked, start=1)
-                    if page_id in relevant
+                    for index, concept in enumerate(ranked, start=1)
+                    if concept in relevant
                 ),
                 None,
             )
@@ -227,8 +227,11 @@ def build_report(
                 ["method", "seconds", "ms/query", "queries/query", "queries"],
                 speed_rows,
             ),
-            "## Page-level evidence",
-            plain_table(["method", "page hit", "page MRR", "failures"], quality_rows),
+            "## Concept-level evidence",
+            plain_table(
+                ["method", "concept hit", "concept MRR", "failures"],
+                quality_rows,
+            ),
         ]
     )
 
@@ -246,6 +249,8 @@ def main() -> None:
     load_local_env()
     bundle_root = args.bundle.resolve()
     page_map = load_bundle_page_map(bundle_root)
+    concepts = set(page_map)
+    page_concepts = invert_page_map(page_map)
     bundle_page_ids = {
         page_id for page_ids in page_map.values() for page_id in page_ids
     }
@@ -256,10 +261,14 @@ def main() -> None:
         raise RuntimeError("No approved eval questions are covered by the OKF bundle")
     methods = [value.strip() for value in args.methods.split(",") if value.strip()]
     ensure_retrievers_ready(methods)
-    runs = [run_rag(name, questions, chunk_pages) for name in methods]
-    okf_run, observations = run_okf(questions, bundle_root, page_map)
+    concept_relevance = {
+        question_id: set(project_pages_to_concepts(list(page_ids), page_concepts))
+        for question_id, page_ids in relevance.items()
+    }
+    runs = [run_rag(name, questions, chunk_pages, page_concepts) for name in methods]
+    okf_run, observations = run_okf(questions, bundle_root, concepts)
     runs.append(okf_run)
-    report = build_report(runs, questions, relevance, bundle_root)
+    report = build_report(runs, questions, concept_relevance, bundle_root)
     print(report)
 
     REPORTS_DIR.mkdir(parents=True, exist_ok=True)

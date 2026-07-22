@@ -153,19 +153,11 @@ def run_eval(
     timed_relevance = [
         row for row in relevance if row["question_id"] in timed_question_ids
     ]
-    score_names = [f"hit@{k}" for k in CONFIG["metric_ks"]]
-    score_names.append(f"recall@{max(CONFIG['metric_ks'])}")
-    score_names.append(f"mrr@{CONFIG['mrr_k']}")
-    scores = {
-        name: score_rankings(
-            timed_relevance,
-            method_rankings[name],
-            ks=tuple(CONFIG["metric_ks"]),
-            mrr_k=CONFIG["mrr_k"],
-            recall_k=max(CONFIG["metric_ks"]),
-        )
-        for name in resolved_methods
-    }
+    score_names, scores = score_eval_rankings(
+        timed_relevance,
+        method_rankings,
+        resolved_methods,
+    )
     return EvalRun(
         questions=timed_questions,
         relevance=timed_relevance,
@@ -239,7 +231,10 @@ def _retrieve_rankings(
 
 def _overall_table(run: EvalRun) -> str:
     rows = [
-        [name, *(run.scores[name][score_name] for score_name in run.score_names)]
+        [
+            name,
+            *(run.scores[name].get(score_name, "-") for score_name in run.score_names),
+        ]
         for name in run.methods
     ]
     return "\n".join(
@@ -250,19 +245,124 @@ def _overall_table(run: EvalRun) -> str:
     )
 
 
+def score_eval_rankings(
+    relevance: list[dict],
+    rankings: dict[str, dict[str, list[str]]],
+    method_names: list[str],
+) -> tuple[list[str], dict[str, dict[str, float]]]:
+    metric_ks = tuple(CONFIG["metric_ks"])
+    standard_k = max(metric_ks)
+    score_names = [f"hit@{k}" for k in metric_ks]
+    score_names.extend([f"recall@{standard_k}", f"mrr@{CONFIG['mrr_k']}"])
+    scores = {
+        name: score_rankings(
+            relevance,
+            rankings[name],
+            ks=metric_ks,
+            mrr_k=CONFIG["mrr_k"],
+            recall_k=standard_k,
+        )
+        for name in method_names
+    }
+
+    expanded_k = max(
+        (
+            len(ranked)
+            for name in method_names
+            if "agentic" in name
+            for ranked in rankings[name].values()
+        ),
+        default=standard_k,
+    )
+    if expanded_k <= standard_k:
+        return score_names, scores
+
+    expanded_names = [
+        f"hit@{expanded_k}",
+        f"recall@{expanded_k}",
+        f"mrr@{expanded_k}",
+    ]
+    score_names.extend(expanded_names)
+    for name in method_names:
+        if "agentic" not in name:
+            continue
+        expanded_scores = score_rankings(
+            relevance,
+            rankings[name],
+            ks=(expanded_k,),
+            mrr_k=expanded_k,
+            recall_k=expanded_k,
+        )
+        scores[name].update(expanded_scores)
+    return score_names, scores
+
+
+def add_judge_adjusted_scores(
+    run: EvalRun,
+    summaries: dict[str, dict[str, int]],
+    cutoff: int,
+) -> EvalRun:
+    score_name = f"judge_hit@{cutoff}"
+    scores = {name: dict(values) for name, values in run.scores.items()}
+    for method_name in run.methods:
+        summary = summaries[method_name]
+        assessed = summary["questions"]
+        scores[method_name][score_name] = (
+            (summary["strict_hits"] + summary["equivalent_misses"]) / assessed
+            if assessed
+            else 0.0
+        )
+    return EvalRun(
+        questions=run.questions,
+        relevance=run.relevance,
+        methods=run.methods,
+        warmup_count=run.warmup_count,
+        rankings=run.rankings,
+        timings=run.timings,
+        score_names=[*run.score_names, score_name],
+        scores=scores,
+    )
+
+
+def count_chunk_expansions(action_log: list[dict]) -> int:
+    expansions = 0
+    previous_count: int | None = None
+    for entry in action_log:
+        attempt = int(entry.get("attempt", 1))
+        chunk_count = len(entry.get("chunks", []))
+        if attempt <= 1:
+            previous_count = chunk_count
+            continue
+        if previous_count is not None and chunk_count > previous_count:
+            expansions += 1
+        previous_count = chunk_count
+    return expansions
+
+
 def _timing_table(run: EvalRun) -> str:
+    show_chunk_expansions = any(
+        "chunk_expansions" in run.timings[name] for name in run.methods
+    )
+    headers = ["method", "seconds", "ms/query", "queries/query", "queries"]
+    if show_chunk_expansions:
+        headers.append("chunk expansions")
+
+    rows = []
+    for name in run.methods:
+        row = [
+            name,
+            f"{run.timings[name]['seconds']:.2f}",
+            f"{run.timings[name]['ms_per_query']:.1f}",
+            f"{run.timings[name]['queries_per_query']:.2f}",
+            int(run.timings[name]["total_queries"]),
+        ]
+        if show_chunk_expansions:
+            row.append(int(run.timings[name].get("chunk_expansions", 0)))
+        rows.append(row)
+
     return plain_table(
-        ["method", "seconds", "ms/query", "queries/query", "queries"],
-        [
-            [
-                name,
-                f"{run.timings[name]['seconds']:.2f}",
-                f"{run.timings[name]['ms_per_query']:.1f}",
-                f"{run.timings[name]['queries_per_query']:.2f}",
-                int(run.timings[name]["total_queries"]),
-            ]
-            for name in run.methods
-        ],
+        headers,
+        rows,
     )
 
 

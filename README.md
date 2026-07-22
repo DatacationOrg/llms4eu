@@ -41,7 +41,7 @@ Azure Foundry credentials:
 ```bash
 just okf-pilot     # small resumable source pilot
 just okf-generate  # resume across all eligible pages
-just okf-refresh-retrieval  # re-enrich existing assignments with retrieval metadata
+just okf-rebuild   # delete the old bundle/state and regenerate from scratch
 just okf-validate  # check document conformance and links
 ```
 
@@ -51,6 +51,11 @@ and only then are fixed concepts enriched and indexed. Private phase state lives
 under `.local/okf/`; the validated, portable bundle lives under
 `data/okf/tourism/`.
 
+Use `just okf-rebuild` after changing the generation schema or prompts. It is
+intentionally destructive: after validating that Azure credentials are present,
+it removes the generated bundle and all private OKF state before discovery.
+Use `just okf-generate` for interruption-safe resume.
+
 See [src/okf/README.md](src/okf/README.md) for the complete generation workflow
 and operational reference.
 
@@ -59,61 +64,51 @@ chunk IDs. See [experiments/indexing/README.md](experiments/indexing/README.md)
 for the clean-build, incremental-update, retrieval, latency, cost, and
 answer-quality protocol.
 
-### Improved OKF retrieval
+### OKF navigation
 
-OKF now has two independently measurable retrieval modes:
+`okf` progressively follows generated hierarchy indexes and opens several
+complete concept files within fixed action, document, and context budgets.
+Opened concepts are answer evidence, and answers cite their exact relative
+Markdown paths. The navigator opens another advertised concept when the files
+read so far do not contain enough information.
 
-- `okf` keeps pure progressive navigation through the generated hierarchy.
-- `okf_search` first applies local BM25-style search to concept metadata
-    (title, description, aliases, tags, search terms, and language), then lets the
-    same Azure navigator inspect the shortlisted **complete concepts**. It does
-    not retrieve page chunks.
-
-Both modes now use an independent evidence-sufficiency check before accepting
-an answer, controlled backtracking with budgets of 12 actions and 8 complete
-concepts, query-aware ordering of visited concepts and their source-page
-provenance, and a per-question action trace. Future enrichment preserves richer
-`search_terms` and `source_evidence` metadata and explicitly asks Azure not to
-drop small supported facts. New bundle generation extracts atomic facts,
-source-specific summaries, multilingual aliases, and realistic named and vague
-retrieval questions for every page; these are preserved deterministically in
-frontmatter and a source-evidence section. Generated indexes include aliases,
-search terms, retrieval hints, and tags;
-collections larger than 20 entries are split into bounded browse indexes, and
-root collection descriptions list representative entities instead of only an
-entry count.
+Concept frontmatter contains only type, title, description, timestamp, and
+`source_page_ids` for page-level benchmark mapping. Bodies retain coherent
+Markdown and a standard `# Citations` section. Generated indexes expose only
+titles and descriptions; collections larger than 20 entries are split into
+bounded browse indexes.
 
 Rebuild the deterministic indexes after changing or importing a bundle:
 
 ```bash
-uv run python -c "from pathlib import Path; from src.okf.bundle import regenerate_indexes; regenerate_indexes(Path('data/okf/tourism'))"
+just okf-index
 just okf-validate
 ```
 
-Compare the pure and metadata-assisted variants without overwriting an older
+Compare OKF navigation with chunk retrieval without overwriting an older
 checkpoint:
 
 ```bash
 uv run python experiments/indexing/compare_qwen_modes.py \
-    --methods sparse_rerank,qwen_hybrid_rerank,okf,okf_search \
+    --methods sparse_rerank,qwen_hybrid_rerank,okf \
     --okf-bundle data/okf/tourism --limit 100000 --warmup 5 \
     --output .local/retrieval-results-okf.md \
     --checkpoint .local/retrieval-results-okf.checkpoint.json
 ```
 
-When an OKF method is included, comparison eligibility and OKF page rankings
-automatically use only retrieval-ready source pages: a page must have generated
-atomic facts or retrieval questions in `source_evidence`. Failed enrichment
-pages therefore cannot become gold pages or consume top-result positions. The
-current bundle exposes 171 retrieval-ready pages and 2,377 eligible questions.
+When OKF is included, comparison uses golden concepts rather than exact golden
+chunks or pages. A gold chunk maps to its page and then to the OKF concept whose
+`source_page_ids` contains that page. RAG results follow the same
+chunk-to-page-to-concept projection; OKF returns cited and visited concepts
+directly. A translated or duplicate sibling page therefore receives full
+`concept_recall` when it belongs to the same concept.
 
-The companion `*-judge-actions.json` file contains candidates, visited files,
-citations, evidence decisions, stop reasons, ranked page IDs, and Azure query
-counts. Diagnose wrong routing, rejected evidence, or exhausted budgets from
-these traces before increasing limits further. The synthetic benchmark still
-favours retrieval of the source chunk from which each question was generated;
-page recall should therefore be interpreted separately from answer correctness
-and evidence support.
+The companion `*-judge-actions.json` file contains visited files, citations,
+stop reasons, ranked concepts, and Azure query counts. Diagnose wrong routing or
+exhausted budgets from these traces before increasing limits further. The
+synthetic benchmark still favours retrieval of the source chunk from which each
+question was generated; concept recall should therefore be interpreted
+separately from answer correctness and evidence support.
 
 Search defaults to top 10 final results. Override per query:
 

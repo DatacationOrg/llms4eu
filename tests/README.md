@@ -17,9 +17,9 @@ behavior with a stub indexer.
 Eval tests cover metric math only; they do not run model inference.
 
 `test_okf.py` covers OKF parsing, safe paths, complete-page selection,
-bottom-up indexes, mocked three-phase generation, canonical alias reuse,
-existing-bundle catalog seeding, provenance, resume behavior, and constrained
-navigation. It does not make Azure requests.
+bottom-up indexes, mocked three-phase generation, canonical title reuse,
+existing-bundle catalog seeding, provenance, multipart resume and clean-reset
+behavior, and full-concept navigation. It does not make Azure requests.
 
 Performance measurements are not unit tests. The comparative protocol requires
 controlled repeated runs and raw observations described in

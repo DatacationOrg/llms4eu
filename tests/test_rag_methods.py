@@ -1,7 +1,12 @@
 import pytest
 
 from src.retrieval import methods
-from src.shared.indexers import AzureEmbeddingIndexer
+from src.shared.indexers import (
+    AzureEmbeddingIndexer,
+    Nemotron3EmbedIndexer,
+    build_indexer,
+    provider_names,
+)
 
 
 def test_retriever_catalog_generates_public_names():
@@ -14,6 +19,12 @@ def test_retriever_catalog_generates_public_names():
     assert "qwen4b_hybrid" in names
     assert "qwen4b_rerank" in names
     assert "qwen4b_hybrid_rerank" in names
+    assert "nemotron" in names
+    assert "nemotron_hybrid" in names
+    assert "nemotron_rerank" in names
+    assert "nemotron_hybrid_rerank" in names
+    assert "nemotron_hybrid_agentic" in names
+    assert "azure_hybrid_agentic" in names
     assert "qwen4b_chunk" not in names
     assert "sparse_hybrid" not in names
 
@@ -21,6 +32,17 @@ def test_retriever_catalog_generates_public_names():
 def test_build_retriever_rejects_unknown_name():
     with pytest.raises(ValueError, match="Unknown retriever"):
         methods.build_retriever("missing")
+
+
+def test_nemotron_embedding_provider_uses_retrieval_defaults():
+    indexer = build_indexer("nemotron")
+
+    assert "nemotron" in provider_names()
+    assert isinstance(indexer, Nemotron3EmbedIndexer)
+    assert indexer.model_name == "nvidia/Nemotron-3-Embed-1B-BF16"
+    assert indexer.max_seq_length == 4096
+    assert indexer.dtype == "bfloat16"
+    assert indexer.attn_implementation == "sdpa"
 
 
 def test_ensure_retriever_ready_accepts_ready_vector_provider(monkeypatch):
@@ -49,6 +71,26 @@ def test_reranker_uses_discovered_defaults(monkeypatch):
     assert retriever.max_length == 2048
     assert retriever.prompt_name is None
     assert retriever.prompt is None
+
+
+def test_nemotron_agent_uses_hybrid_reranked_nemotron_chunks(monkeypatch):
+    monkeypatch.setattr(methods, "enabled_provider_names", lambda: ["nemotron"])
+
+    retriever = methods.build_retriever("nemotron_hybrid_agentic")
+
+    assert retriever.name == "nemotron_hybrid_agentic"
+    assert retriever.base_retriever.name == "nemotron_hybrid_rerank"
+    assert retriever.base_retriever.base_retriever.name == "nemotron_hybrid"
+
+
+def test_azure_agent_uses_hybrid_reranked_azure_chunks(monkeypatch):
+    monkeypatch.setattr(methods, "enabled_provider_names", lambda: ["azure"])
+
+    retriever = methods.build_retriever("azure_hybrid_agentic")
+
+    assert retriever.name == "azure_hybrid_agentic"
+    assert retriever.base_retriever.name == "azure_hybrid_rerank"
+    assert retriever.base_retriever.base_retriever.name == "azure_hybrid"
 
 
 def test_azure_embedding_batch_size_defaults_to_rpm_friendly_max(monkeypatch):

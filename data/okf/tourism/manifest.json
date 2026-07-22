@@ -1,47 +1,25 @@
 {
   "okf_version": "0.1",
-  "generated_at": "2026-07-15T14:06:23+00:00",
+  "generated_at": "2026-07-21T16:49:14+00:00",
   "source_db": "data/db/pages.db",
   "source_filter": null,
-  "generation_mode": "refresh_retrieval",
+  "generation_mode": "resume",
   "selected_pages": 176,
   "discovered_pages": 0,
   "resolved_pages": 0,
   "processed_pages": 0,
-  "resumed_pages": 171,
-  "covered_pages": 171,
-  "failures": {
+  "resumed_pages": 176,
+  "covered_pages": 176,
+  "fallback_pages": {
+    "a602d430-fdf6-53e1-8510-85bd4bb6a3fb": "structured Azure Foundry call failed after 3 attempts: ValueError: response did not contain a JSON object",
     "40a9a7f1-a218-5ac0-89a2-17d16af614f8": "structured Azure Foundry call failed after 3 attempts: ValueError: response did not contain a JSON object",
     "88f427f2-0c11-5c79-88b8-c23a2b5e0540": "structured Azure Foundry call failed after 3 attempts: ValueError: response did not contain a JSON object",
-    "0f440f97-d70b-5b08-adc9-46e19c6262f2": "structured Azure Foundry call failed after 3 attempts: ValueError: response did not contain a JSON object",
-    "f1310a30-23d0-5e22-91bf-ceb08abba33a": "structured Azure Foundry call failed after 3 attempts: ValueError: response did not contain a JSON object",
-    "8fcef78b-9c34-597a-b327-6d427bf08a30": "structured Azure Foundry call failed after 3 attempts: ValueError: response did not contain a JSON object"
+    "556d0c5d-bdf9-5ce9-ba1d-db382ded170c": "structured Azure Foundry call failed after 3 attempts: HTTPStatusError: Client error '400 Bad Request' for url 'https://hub-llms4eu.services.ai.azure.com/openai/v1/chat/completions'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/400; response body: {\"id\":\"8718b00e9ad44eb999d609f0df23f6b8\",\"model\":\"DeepSeek-V4-Pro\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"\"},\"finish_reason\":\"content_filter\",\"content_filter_results\":{\"error\":{\"code\":\"content_filter\",\"message\":\"Response content blocked by label 'MultiSeverity_ViolenceScore'.\"}}}],\"usage\":{\"prompt_tokens\":2179,\"completion_tokens\":1507,\"total_tokens\":3686},\"created\":1784649580,\"object\":\"chat.completion\",\"prompt_filter_results\":null}"
   },
-  "concepts": 141,
-  "catalog_concepts": 141,
-  "retrieval_metadata": {
-    "concepts_with_search_terms": 136,
-    "concepts_with_retrieval_queries": 136,
-    "source_evidence_pages": 171,
-    "atomic_facts": 5289
-  },
+  "failures": {},
+  "concepts": 128,
+  "catalog_concepts": 128,
   "model": "DeepSeek-V4-Pro",
   "validation_errors": [],
-  "validation_warnings": [
-    "concept/time-zone.md: broken link: timezone/utc_plus_1.md",
-    "concept/time-zone.md: broken link: concept/daylight-saving-time.md",
-    "concept/time-zone.md: broken link: timezone/utc_plus_02_00.md",
-    "destinations/brestanica-railway-station.md: broken link: destinations/brestanica.md",
-    "people/andrej-elsbacher.md: broken link: ../destinations/brestanica/index.md",
-    "people/anton-zeit.md: broken link: ../destinations/brestanica/index.md",
-    "people/ivan-matko.md: broken link: ../destinations/brestanica/index.md",
-    "people/ivan-skafar.md: broken link: destinations/brestanica.md",
-    "people/josip-brinar.md: broken link: destinations/brestanica.md",
-    "people/primoz-kozemus.md: broken link: destinations/brestanica.md",
-    "timezone/utc_plus_1.md: broken link: concept/time-zone.md",
-    "timezone/utc_plus_1.md: broken link: timezone/utc_plus_02_00.md",
-    "timezone/utc_plus_1.md: broken link: timezone/utc_plus_02_00.md",
-    "timezone/utc_plus_1.md: broken link: timezone/utc_plus_02_00.md",
-    "timezone/utc_plus_1.md: broken link: timezone/utc_plus_02_00.md"
-  ]
+  "validation_warnings": []
 }

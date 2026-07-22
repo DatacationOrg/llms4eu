@@ -105,7 +105,9 @@ class AgenticRetriever:
                 # retrieved a smaller pool; top up so ranking metrics aren't capped.
                 if current_limit < limit:
                     chunks = self.base_retriever.retrieve(current_query, limit)
-                return chunks[:limit]
+                # Preserve results beyond the requested benchmark cutoff when the
+                # agent expanded its search so that expansion can be scored.
+                return chunks
 
             reformulated = (verdict.reformulated_query or "").strip()
             if reformulated and reformulated != current_query:
@@ -119,7 +121,7 @@ class AgenticRetriever:
             break
 
         self.batch_stats.record(attempt_count)
-        return best_chunks[:limit]
+        return best_chunks
 
     def retrieve_batch(
         self,

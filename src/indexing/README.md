@@ -3,7 +3,7 @@
 Builds local vector indexes for document chunks.
 
 The indexer boundary is provider-shaped: English MiniLM, Qwen multilingual,
-Qwen 4B, and Azure embeddings all expose the same `embed_documents` /
+Qwen 4B, Nemotron 3 Embed 1B, and Azure embeddings all expose the same `embed_documents` /
 `embed_query` methods from `src.shared.indexers`.
 
 Chunk vector collections are derived state in Chroma. SQLite remains the source
@@ -14,7 +14,7 @@ rebuilds.
 Current chunk collections are storage names, not public retrieval method names:
 
 ```text
-page_chunks_{english,qwen,qwen4b,azure}_chunk
+page_chunks_{english,qwen,qwen4b,nemotron,azure}_chunk
 ```
 
 Chunk indexing embeds title, heading path, and chunk text via
@@ -29,6 +29,15 @@ Rebuild one collection:
 
 ```bash
 uv run python -m src.indexing.chunks --method qwen
+```
+
+The Nemotron collection uses `nvidia/Nemotron-3-Embed-1B-BF16`, its saved
+query/document prompts, BF16 weights, SDPA attention, and a 4096-token indexing
+limit. It requires a CUDA-capable NVIDIA GPU for practical inference. Once the
+model is cached, rebuild the independent 2048-dimensional collection with:
+
+```bash
+uv run python -m src.indexing.chunks --method nemotron
 ```
 
 Azure indexing prompts for typed confirmation before sending embedding requests.

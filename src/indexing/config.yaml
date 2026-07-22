@@ -4,6 +4,7 @@ providers:
   - english
   - qwen
   - qwen4b
+  - nemotron
   - azure
 english_embedding_model: sentence-transformers/all-MiniLM-L6-v2
 qwen_embedding_model: Qwen/Qwen3-Embedding-0.6B
@@ -11,6 +12,12 @@ qwen_batch_size: 8
 qwen4b_embedding_model: Qwen/Qwen3-Embedding-4B
 qwen4b_batch_size: 1
 qwen4b_local_files_only: true
+nemotron_embedding_model: nvidia/Nemotron-3-Embed-1B-BF16
+nemotron_batch_size: 8
+nemotron_max_seq_length: 4096
+nemotron_dtype: bfloat16
+nemotron_attn_implementation: sdpa
+nemotron_local_files_only: true
 embedding_max_seq_length: 512
 qwen_local_files_only: true
 # Azure endpoint rejects more than 96 texts in one embeddings request.

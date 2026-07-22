@@ -85,9 +85,14 @@ class AzureFoundryStructuredLlm:
         retries: int = 3,
     ) -> T:
         last_error: Exception | None = None
-        for _ in range(retries):
+        for attempt in range(retries):
             try:
-                content = self._request(prompt, output_schema)
+                retry_prompt = (
+                    prompt
+                    if attempt == 0
+                    else _with_json_retry_instruction(prompt, last_error)
+                )
+                content = self._request(retry_prompt, output_schema)
                 return output_schema.model_validate_json(_json_object(content))
             except (httpx.HTTPError, KeyError, ValueError) as exc:
                 last_error = exc
@@ -106,6 +111,7 @@ class AzureFoundryStructuredLlm:
             "messages": _azure_messages(prompt, output_schema),
             "temperature": self.temperature,
             "max_tokens": self.max_tokens,
+            "response_format": {"type": "json_object"},
         }
         with httpx.Client(timeout=self.timeout_seconds) as client:
             response = client.post(
@@ -116,8 +122,20 @@ class AzureFoundryStructuredLlm:
                 },
                 json=payload,
             )
-        response.raise_for_status()
-        return response.json()["choices"][0]["message"]["content"]
+        try:
+            response.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            detail = response.text.strip()[:2000]
+            raise httpx.HTTPStatusError(
+                f"{exc}; response body: {detail or '(empty)'}",
+                request=exc.request,
+                response=exc.response,
+            ) from exc
+        message = response.json()["choices"][0]["message"]
+        content = message.get("content") or ""
+        if "{" not in content:
+            content = message.get("reasoning_content") or content
+        return content
 
 
 def run_structured_outputs(
@@ -198,3 +216,15 @@ def _json_object(text: str) -> str:
     if not match:
         raise ValueError("response did not contain a JSON object")
     return match.group(0)
+
+
+def _with_json_retry_instruction(
+    prompt: StructuredPrompt, error: Exception | None
+) -> StructuredPrompt:
+    instruction = (
+        "The previous response was invalid. Return the requested JSON object "
+        "immediately, with no reasoning, commentary, or Markdown fences."
+    )
+    if isinstance(prompt, str):
+        return f"{prompt}\n\n{instruction}"
+    return [*prompt, ("human", instruction)]
