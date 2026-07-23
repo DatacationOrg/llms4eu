@@ -12,8 +12,6 @@ uv run python experiments/indexing/evaluate_embedding_models.py --providers qwen
 uv run python experiments/indexing/compare_qwen_modes.py
 uv run python experiments/indexing/compare_qwen_modes.py --category crosslingual
 uv run python experiments/indexing/compare_qwen_modes.py --limit 100
-
-just okf-benchmark 19
 ```
 
 `evaluate_embedding_models.py` compares the embedding providers listed in
@@ -24,10 +22,11 @@ before building embeddings.
 `config.yaml` sets the default warmup count. Warmup queries are excluded from
 timing.
 
-By default, `compare_qwen_modes.py` runs the sparse rerank baseline, Qwen and
-Nemotron hybrid-reranked chunk indexes, and OKF concept retrieval. It writes to
-`docs/retrieval-results-chunks-okf.md`, keeping the existing agentic report and
-checkpoint separate:
+By default, `compare_qwen_modes.py` runs the primary chunk benchmark: sparse
+rerank, Qwen4B hybrid rerank, Nemotron vector and hybrid rerank, Azure hybrid
+rerank, and the Azure and Nemotron hybrid agentic methods. It retains the
+historical `docs/retrieval-results-chunks-okf.md` output name so existing chunk
+checkpoints continue to resume:
 
 ```bash
 uv run python experiments/indexing/compare_qwen_modes.py
@@ -35,7 +34,7 @@ uv run python experiments/indexing/compare_qwen_modes.py
 
 ### Evidence-equivalence judge
 
-Strict chunk/concept metrics remain the primary retrieval metrics. A separate
+Strict chunk metrics remain the primary retrieval metrics. A separate
 post-hoc judge can audit strict misses to determine whether the retrieved
 evidence nevertheless contains the same answer-bearing facts as the golden
 chunks. It reports both collective evidence equivalence and cases containing an
@@ -87,26 +86,10 @@ the deepest observed rank. Those expanded columns contain values only for
 agentic methods; non-agentic baselines are shown as `-` because they were not
 retrieved beyond the standard cutoff.
 
-These scripts remain retrieval experiments. Their chunk qrels cannot be used
-directly for OKF because concepts and chunks have different granularity.
+The retired OKF experiment used the following protocol. It remains documented
+for interpreting historical findings, but has no active runner.
 
-`compare_okf_rag.py` is a coverage-matched evidence-acquisition pilot. It selects
-only approved questions whose gold source page occurs in the current OKF bundle,
-then compares Qwen hybrid RAG, agentic Qwen hybrid RAG, and OKF navigation. Its
-speed table reports `seconds`, `ms/query`, `queries/query`, and total `queries`;
-it also reports concept hit and MRR. RAG queries count retrieval attempts,
-while OKF queries count Azure navigation actions. The pilot does not replace the
-blinded end-to-end answer benchmark.
-
-OKF has one hierarchy-based evaluation mode. It progressively opens complete
-concept files and ranks cited concepts followed by other visited concepts. It
-does not use metadata BM25, retrieval-readiness filtering, or raw SQLite source
-windows during navigation.
-Published runs must state whether the bundle was resumed or cleanly rebuilt.
-Use a clean rebuild after generator/schema changes so stale concepts do not
-affect coverage or quality.
-
-## OKF versus chunk-RAG benchmark protocol
+## Historical OKF versus chunk-RAG benchmark protocol
 
 A fair comparison freezes one `data/db/pages.db` snapshot and records its hash,
 selected page IDs, source bytes, languages, and page count. Scraping and

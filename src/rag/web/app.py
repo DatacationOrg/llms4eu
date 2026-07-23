@@ -7,7 +7,7 @@ from typing import Any
 
 from authlib.integrations.starlette_client import OAuth, OAuthError
 from fastapi import FastAPI, HTTPException, Request, status
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from pydantic import BaseModel, Field
 from starlette.middleware.sessions import SessionMiddleware
 
@@ -429,10 +429,10 @@ def create_app() -> FastAPI:
     )
 
     @app.get("/", response_class=HTMLResponse)
-    async def index(request: Request) -> str | RedirectResponse:
+    async def index(request: Request) -> Response:
         if get_session_user(request) is None:
             return RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
-        return HTML
+        return HTMLResponse(HTML)
 
     @app.get("/login")
     async def login(request: Request):
@@ -470,7 +470,9 @@ def create_app() -> FastAPI:
     async def session(request: Request) -> SessionResponse:
         user = get_session_user(request)
         if user is None:
-            return SessionResponse(authenticated=False, auth_configured=is_auth_configured())
+            return SessionResponse(
+                authenticated=False, auth_configured=is_auth_configured()
+            )
         return SessionResponse(
             authenticated=True,
             auth_configured=is_auth_configured(),
@@ -559,7 +561,9 @@ def _redirect_uri(request: Request) -> str:
 
 def _claims_to_session_user(claims: dict[str, Any]) -> dict[str, str | None]:
     return {
-        "name": claims.get("name") or claims.get("preferred_username") or "Unknown user",
+        "name": claims.get("name")
+        or claims.get("preferred_username")
+        or "Unknown user",
         "email": claims.get("email") or claims.get("preferred_username"),
         "username": claims.get("preferred_username"),
         "subject": claims.get("sub") or claims.get("oid") or "unknown-subject",

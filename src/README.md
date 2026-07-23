@@ -21,11 +21,6 @@ SQLite ingest, and the small local scrape UI.
 `eval` owns labels, metrics, timing, and reports. It asks `retrieval` for named
 retrievers to compare.
 
-`okf` owns complete-page concept discovery, global canonicalization, concept
-enrichment, bundle validation, and hierarchical whole-document navigation. It
-reads raw pages from `db` but does not depend on chunk preprocessing, indexing,
-vector storage, or chunk retrieval.
-
 `shared` is not a service. It holds code used by more than one script.
 
 Orchestration folders can import infrastructure folders (`db`, `vector_store`)
@@ -34,7 +29,5 @@ when a later pipeline stage consumes an earlier artifact.
 
 No `__init__.py` files are needed; namespace packages are enough here.
 
-Cross-representation evaluation belongs in `eval` or a dedicated benchmark
-orchestrator, not inside either implementation. The required clean-build,
-incremental, page-evidence, and answer-quality protocol is documented in
-[`experiments/indexing/README.md`](../experiments/indexing/README.md).
+Benchmark orchestration belongs in `eval` or a dedicated experiment, not in a
+retriever implementation.

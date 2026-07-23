@@ -15,11 +15,6 @@ from src.eval.equivalence import (
     EvidenceDocument,
     EvidenceEquivalenceJudge,
 )
-from src.okf.evidence import (
-    invert_page_map,
-    load_bundle_page_map,
-    project_pages_to_concepts,
-)
 from src.shared.env import ROOT, load_local_env
 from src.shared.llm import AzureFoundryStructuredLlm, LocalOllamaStructuredLlm
 
@@ -38,9 +33,6 @@ class IncrementalEquivalenceAudit:
     questions: dict[str, dict[str, str]] = field(init=False)
     relevant_ids: dict[str, list[str]] = field(init=False)
     chunks: dict[str, str] = field(init=False)
-    chunk_pages: dict[str, str] = field(init=False)
-    bundle_root: Path = field(init=False)
-    page_concepts: dict[str, list[str]] = field(init=False)
     cache: dict[str, Any] = field(init=False)
 
     def __post_init__(self) -> None:
@@ -56,17 +48,7 @@ class IncrementalEquivalenceAudit:
             self.questions,
             self.relevant_ids,
             self.chunks,
-            self.chunk_pages,
         ) = _load_evidence(timed_ids)
-        self.bundle_root = Path(
-            signature.get("okf_bundle") or ROOT / "data/okf/tourism"
-        )
-        concept_pages = (
-            load_bundle_page_map(self.bundle_root)
-            if signature.get("scoring_unit") == "okf_concept"
-            else {}
-        )
-        self.page_concepts = invert_page_map(concept_pages) if concept_pages else {}
         self.cache = _load_cache(
             self.cache_path,
             model_id=self.model_id,
@@ -96,20 +78,15 @@ class IncrementalEquivalenceAudit:
         if question is None or not gold_ids:
             return
         if _strict_hit(
-            method_name=method_name,
             ranked=ranked,
             gold_ids=gold_ids,
             cutoff=self.cutoff,
-            chunk_pages=self.chunk_pages,
-            page_concepts=self.page_concepts,
         ):
             return
 
         retrieved = _retrieved_documents(
-            method_name=method_name,
             ranked=ranked[: self.cutoff],
             chunks=self.chunks,
-            bundle_root=self.bundle_root,
         )
         golden = [
             EvidenceDocument(id=chunk_id, text=self.chunks[chunk_id])
@@ -176,20 +153,15 @@ class IncrementalEquivalenceAudit:
                     continue
                 summary["questions"] += 1
                 if _strict_hit(
-                    method_name=method_name,
                     ranked=ranked,
                     gold_ids=gold_ids,
                     cutoff=self.cutoff,
-                    chunk_pages=self.chunk_pages,
-                    page_concepts=self.page_concepts,
                 ):
                     summary["strict_hits"] += 1
                     continue
                 retrieved = _retrieved_documents(
-                    method_name=method_name,
                     ranked=ranked[: self.cutoff],
                     chunks=self.chunks,
-                    bundle_root=self.bundle_root,
                 )
                 golden = [
                     EvidenceDocument(id=chunk_id, text=self.chunks[chunk_id])
@@ -286,14 +258,7 @@ def judge_checkpoint(
         raise ValueError("Checkpoint has no timed questions or retrieval methods")
 
     initialize_page_artifacts_db()
-    questions, relevant_ids, chunks, chunk_pages = _load_evidence(set(timed_ids))
-    bundle_root = Path(signature.get("okf_bundle") or ROOT / "data/okf/tourism")
-    concept_pages = (
-        load_bundle_page_map(bundle_root)
-        if signature.get("scoring_unit") == "okf_concept"
-        else {}
-    )
-    page_concepts = invert_page_map(concept_pages) if concept_pages else {}
+    questions, relevant_ids, chunks = _load_evidence(set(timed_ids))
     cache = _load_cache(cache_path, model_id=model_id, cutoff=cutoff)
     judgments = cache.setdefault("judgments", {})
     summaries: dict[str, dict[str, int]] = {}
@@ -319,12 +284,9 @@ def judge_checkpoint(
                 continue
             summary["questions"] += 1
             if _strict_hit(
-                method_name=method_name,
                 ranked=ranked,
                 gold_ids=gold_ids,
                 cutoff=cutoff,
-                chunk_pages=chunk_pages,
-                page_concepts=page_concepts,
             ):
                 summary["strict_hits"] += 1
                 continue
@@ -332,10 +294,8 @@ def judge_checkpoint(
                 continue
 
             retrieved = _retrieved_documents(
-                method_name=method_name,
                 ranked=ranked[:cutoff],
                 chunks=chunks,
-                bundle_root=bundle_root,
             )
             golden = [
                 EvidenceDocument(id=chunk_id, text=chunks[chunk_id])
@@ -411,7 +371,6 @@ def _load_evidence(
     dict[str, dict[str, str]],
     dict[str, list[str]],
     dict[str, str],
-    dict[str, str],
 ]:
     with connect_pages() as conn:
         questions = {
@@ -431,62 +390,28 @@ def _load_evidence(
                 relevant_ids.setdefault(question_id, []).append(str(row["chunk_id"]))
         rows = conn.execute("select id, page_id, text from page_chunks").fetchall()
         chunks = {str(row["id"]): str(row["text"]) for row in rows}
-        chunk_pages = {str(row["id"]): str(row["page_id"]) for row in rows}
-    return questions, relevant_ids, chunks, chunk_pages
+    return questions, relevant_ids, chunks
 
 
 def _strict_hit(
     *,
-    method_name: str,
     ranked: list[str],
     gold_ids: list[str],
     cutoff: int,
-    chunk_pages: dict[str, str],
-    page_concepts: dict[str, list[str]],
 ) -> bool:
-    if not page_concepts:
-        return bool(set(gold_ids).intersection(ranked[:cutoff]))
-    gold_concepts = set(
-        project_pages_to_concepts(
-            [chunk_pages[item] for item in gold_ids if item in chunk_pages],
-            page_concepts,
-        )
-    )
-    ranked_concepts = (
-        ranked
-        if method_name == "okf"
-        else project_pages_to_concepts(
-            [chunk_pages[item] for item in ranked if item in chunk_pages],
-            page_concepts,
-        )
-    )
-    return bool(gold_concepts.intersection(ranked_concepts[:cutoff]))
+    return bool(set(gold_ids).intersection(ranked[:cutoff]))
 
 
 def _retrieved_documents(
     *,
-    method_name: str,
     ranked: list[str],
     chunks: dict[str, str],
-    bundle_root: Path,
 ) -> list[EvidenceDocument]:
-    if method_name != "okf":
-        return [
-            EvidenceDocument(id=item, text=chunks[item])
-            for item in ranked
-            if item in chunks
-        ]
-
-    documents = []
-    root = bundle_root.resolve()
-    for item in ranked:
-        path = (root / item).resolve()
-        if root not in path.parents or not path.is_file():
-            continue
-        documents.append(
-            EvidenceDocument(id=item, text=path.read_text(encoding="utf-8"))
-        )
-    return documents
+    return [
+        EvidenceDocument(id=item, text=chunks[item])
+        for item in ranked
+        if item in chunks
+    ]
 
 
 def _judgment_key(
