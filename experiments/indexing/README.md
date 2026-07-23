@@ -12,7 +12,34 @@ uv run python experiments/indexing/evaluate_embedding_models.py --providers qwen
 uv run python experiments/indexing/compare_qwen_modes.py
 uv run python experiments/indexing/compare_qwen_modes.py --category crosslingual
 uv run python experiments/indexing/compare_qwen_modes.py --limit 100
+
+# Paired legacy/v2 reranker and agent comparisons
+just eval-index nemotron v2
+uv run python experiments/indexing/compare_qwen_modes.py \
+	--methods phase2-nemotron \
+	--output docs/retrieval-results-phase2-nemotron.md
 ```
+
+`phase2-nemotron` and `phase2-azure` compare each provider's v1 and v2
+hybrid-reranked baseline and agent. `phase2` includes both provider groups. The
+v2 indexes are separate derived artifacts, so existing collections, retrieval
+method names, reports, and checkpoints remain valid.
+
+When a selected agentic method and its matching reranked baseline are both in
+the run, the report adds paired agentic diagnostics at the configured category
+hit cutoff. For example, `nemotron_hybrid_agentic_v2` is paired with
+`nemotron_hybrid_rerank_v2`. The summary reports retry/rewrite/expansion counts,
+recovered and lost hits, retry precision, retry recall, and mean retried versus
+non-retried latency. Here retry precision is the fraction of retries that
+improve the first relevant rank; retry recall is the fraction of baseline misses
+that the agent retries.
+
+A sibling `*-agentic-diagnostics.json` retains per-question category,
+baseline/agent hit and rank, rank delta, reranker top score, top-1/top-2 margin,
+score spread, judge verdict/reason, query count, total latency, and retrieval,
+judge, and top-up stage latency. Existing checkpoints without observations can
+still derive quality/action metrics from their action logs, but stage and
+per-query latency fields are available only for newly measured questions.
 
 `evaluate_embedding_models.py` compares the embedding providers listed in
 `src/indexing/config.yaml`. Missing vector collections are built through the
@@ -195,3 +222,9 @@ Large or credential-adjacent traces belong under `.local/`. Commit only
 reviewed aggregate reports. A complete runner should retain raw per-page and
 per-query observations, resource samples, token/cost accounting, paired answer
 outputs, and statistical summaries so results can be recomputed.
+
+The original 19-question pilot was recovered from ignored local report artifacts
+and preserved in
+[docs/archived_okf-rag-results-2026-07-15.md](../../docs/archived_okf-rag-results-2026-07-15.md).
+Treat it as historical evidence only: it is not directly comparable with the
+later broad chunk evaluation.

@@ -4,6 +4,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from src.indexing.chunk_text import LEGACY_CHUNK_VERSION
 from src.retrieval.base import RankedChunk
 
 if TYPE_CHECKING:
@@ -16,9 +17,15 @@ class VectorChunkRetriever:
 
     name: str
     provider: str
+    chunk_version: str = LEGACY_CHUNK_VERSION
 
     def retrieve(self, query: str, limit: int) -> list[RankedChunk]:
-        chunks = _query_chunk_vectors()(self.provider, query, limit)
+        chunks = _query_chunk_vectors()(
+            self.provider,
+            query,
+            limit,
+            self.chunk_version,
+        )
         return [_ranked_chunk(chunk) for chunk in chunks]
 
     def retrieve_batch(
@@ -26,7 +33,12 @@ class VectorChunkRetriever:
         queries: list[str],
         limit: int,
     ) -> dict[int, list[RankedChunk]]:
-        rankings = _query_chunk_vectors_batch()(self.provider, queries, limit)
+        rankings = _query_chunk_vectors_batch()(
+            self.provider,
+            queries,
+            limit,
+            self.chunk_version,
+        )
         return {
             index: [_ranked_chunk(chunk) for chunk in chunks]
             for index, chunks in rankings.items()
@@ -37,14 +49,14 @@ def _ranked_chunk(chunk: ScoredChunk) -> RankedChunk:
     return RankedChunk(id=chunk.id, score=chunk.score, text=chunk.text)
 
 
-def _query_chunk_vectors() -> Callable[[str, str, int], list[ScoredChunk]]:
+def _query_chunk_vectors() -> Callable[[str, str, int, str], list[ScoredChunk]]:
     from src.vector_store.chunks import query_chunk_vectors
 
     return query_chunk_vectors
 
 
 def _query_chunk_vectors_batch() -> Callable[
-    [str, list[str], int],
+    [str, list[str], int, str],
     dict[int, list[ScoredChunk]],
 ]:
     from src.vector_store.chunks import query_chunk_vectors_batch

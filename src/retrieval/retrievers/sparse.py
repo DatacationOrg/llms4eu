@@ -7,6 +7,11 @@ from dataclasses import dataclass
 from functools import cache
 
 from src.db.pages import connect_pages as connect
+from src.indexing.chunk_text import (
+    LEGACY_CHUNK_VERSION,
+    PageChunk,
+    chunk_text_representation,
+)
 from src.retrieval.base import RankedChunk, retrieve_batch_default
 
 TOKEN_RE = re.compile(r"[^\W_]+", re.UNICODE)
@@ -17,9 +22,10 @@ class SparseRetriever:
     name: str = "sparse"
     k1: float = 1.5
     b: float = 0.75
+    chunk_version: str = LEGACY_CHUNK_VERSION
 
     def retrieve(self, query: str, limit: int) -> list[RankedChunk]:
-        corpus = _corpus()
+        corpus = _corpus(self.chunk_version)
         query_terms = _tokens(query)
         scores = []
         for chunk in corpus:
@@ -65,14 +71,39 @@ class Corpus:
 
 
 @cache
-def _corpus() -> Corpus:
+def _corpus(chunk_version: str = LEGACY_CHUNK_VERSION) -> Corpus:
+    representation = chunk_text_representation(chunk_version)
     with connect() as conn:
-        rows = conn.execute("select id, text from page_chunks order by id").fetchall()
+        rows = conn.execute(
+            """
+            select c.id, c.page_id, c.chunk_index, c.heading_path, c.text,
+                   m.title, m.source, s.language, m.page_kind
+            from page_chunks c
+            join page_metadata m on m.id = c.page_id
+            left join page_sources s on s.source = m.source
+            order by c.id
+            """
+        ).fetchall()
 
     chunks = []
     document_frequency: Counter[str] = Counter()
     for row in rows:
-        terms = _tokens(row["text"])
+        chunk = PageChunk(
+            id=row["id"],
+            page_id=row["page_id"],
+            chunk_index=row["chunk_index"],
+            heading_path=row["heading_path"],
+            text=row["text"],
+            title=row["title"],
+            source=row["source"],
+            language=row["language"],
+            page_kind=row["page_kind"],
+        )
+        terms = _tokens(
+            row["text"]
+            if chunk_version == LEGACY_CHUNK_VERSION
+            else representation.text_for_embedding(chunk)
+        )
         term_counts = Counter(terms)
         chunks.append(ChunkTerms(row["id"], row["text"], term_counts, len(terms) or 1))
         document_frequency.update(term_counts)

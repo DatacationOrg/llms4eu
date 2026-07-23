@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import time
 
 from pydantic import BaseModel, Field
 
@@ -38,6 +39,8 @@ class AgenticBatchStats:
         judge_query: str,
         chunks: list[RankedChunk],
         verdict: ChunkSufficiency,
+        retrieval_ms: float,
+        judge_ms: float,
     ) -> None:
         self.action_log.append(
             {
@@ -48,8 +51,15 @@ class AgenticBatchStats:
                     {"id": c.id, "score": c.score, "text": c.text} for c in chunks
                 ],
                 "verdict": verdict.model_dump(),
+                "retrieval_ms": retrieval_ms,
+                "judge_ms": judge_ms,
+                "top_up_ms": 0.0,
             }
         )
+
+    def record_top_up(self, elapsed_ms: float) -> None:
+        if self.action_log:
+            self.action_log[-1]["top_up_ms"] = elapsed_ms
 
     def total_queries(self) -> int:
         return sum(self.query_attempt_counts)
@@ -87,24 +97,34 @@ class AgenticRetriever:
 
         for _ in range(max(1, self.max_attempts)):
             attempt_count += 1
+            retrieval_started = time.perf_counter()
             chunks = self.base_retriever.retrieve(current_query, current_limit)
+            retrieval_ms = (time.perf_counter() - retrieval_started) * 1000
             if len(chunks) > len(best_chunks):
                 best_chunks = chunks
 
+            judge_started = time.perf_counter()
             verdict = self._evaluate_sufficiency(current_query, chunks)
+            judge_ms = (time.perf_counter() - judge_started) * 1000
             self.batch_stats.record_action(
                 original_query=query,
                 attempt=attempt_count,
                 judge_query=current_query,
                 chunks=chunks,
                 verdict=verdict,
+                retrieval_ms=retrieval_ms,
+                judge_ms=judge_ms,
             )
             if verdict.sufficient:
                 self.batch_stats.record(attempt_count)
                 # Never return fewer than `limit` just because an early attempt
                 # retrieved a smaller pool; top up so ranking metrics aren't capped.
                 if current_limit < limit:
+                    top_up_started = time.perf_counter()
                     chunks = self.base_retriever.retrieve(current_query, limit)
+                    self.batch_stats.record_top_up(
+                        (time.perf_counter() - top_up_started) * 1000
+                    )
                 # Preserve results beyond the requested benchmark cutoff when the
                 # agent expanded its search so that expansion can be scored.
                 return chunks

@@ -4,6 +4,11 @@ from dataclasses import dataclass
 from typing import Protocol
 
 
+LEGACY_CHUNK_VERSION = "v1"
+CONTEXTUAL_CHUNK_VERSION = "v2"
+CHUNK_VERSIONS = (LEGACY_CHUNK_VERSION, CONTEXTUAL_CHUNK_VERSION)
+
+
 @dataclass(frozen=True)
 class PageChunk:
     """Canonical chunk fields used for embedding text construction."""
@@ -13,6 +18,10 @@ class PageChunk:
     heading_path: str | None
     text: str
     title: str | None = None
+    chunk_index: int = 0
+    source: str | None = None
+    language: str | None = None
+    page_kind: str | None = None
 
 
 class ChunkTextRepresentation(Protocol):
@@ -32,3 +41,30 @@ class TitleHeadingChunkText:
     def text_for_embedding(self, chunk: PageChunk) -> str:
         parts = [chunk.title or "", chunk.heading_path or "", chunk.text]
         return "\n".join(part for part in parts if part)
+
+
+@dataclass(frozen=True)
+class MetadataContextChunkText:
+    """Situate a chunk with deterministic page metadata for retrieval."""
+
+    name: str = "metadata_context_chunk"
+
+    def text_for_embedding(self, chunk: PageChunk) -> str:
+        context = [
+            ("Document", chunk.title),
+            ("Section", chunk.heading_path),
+            ("Source language", chunk.language),
+            ("Source collection", chunk.source),
+            ("Document type", chunk.page_kind),
+        ]
+        lines = [f"{label}: {value}" for label, value in context if value]
+        lines.append(f"Content:\n{chunk.text}")
+        return "\n".join(lines)
+
+
+def chunk_text_representation(version: str) -> ChunkTextRepresentation:
+    if version == LEGACY_CHUNK_VERSION:
+        return TitleHeadingChunkText()
+    if version == CONTEXTUAL_CHUNK_VERSION:
+        return MetadataContextChunkText()
+    raise ValueError(f"Unknown chunk representation version: {version}")

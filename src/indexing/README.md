@@ -17,8 +17,17 @@ Current chunk collections are storage names, not public retrieval method names:
 page_chunks_{english,qwen,qwen4b,nemotron,azure}_chunk
 ```
 
-Chunk indexing embeds title, heading path, and chunk text via
-`TitleHeadingChunkText`.
+Two independently stored chunk-representation versions are available:
+
+- `v1` is the unchanged legacy `TitleHeadingChunkText` representation and keeps
+	the existing `page_chunks_{provider}_chunk` collection names.
+- `v2` uses `MetadataContextChunkText`: labeled title, heading, source language,
+	source collection, page kind, and chunk content. It writes separate
+	`page_chunks_v2_{provider}_chunk` collections. The retrieved evidence remains
+	the original chunk text.
+
+Both versions use the same chunk boundaries and IDs. The version changes only
+the text indexed for dense and sparse retrieval, allowing paired comparisons.
 
 Model and collection settings live in `config.yaml`.
 
@@ -29,6 +38,12 @@ Rebuild one collection:
 
 ```bash
 uv run python -m src.indexing.chunks --method qwen
+```
+
+Build the metadata-context collection without replacing v1:
+
+```bash
+uv run python -m src.indexing.chunks --method qwen --chunk-version v2
 ```
 
 The Nemotron collection uses `nvidia/Nemotron-3-Embed-1B-BF16`, its saved
@@ -46,7 +61,8 @@ Use `--yes` only for deliberate non-interactive runs.
 Rebuild the default regenerable vector cache:
 
 ```bash
-just eval-index qwen
+just eval-index qwen v1
+just eval-index qwen v2
 ```
 
 Durable reference databases belong under `data/db/`. Regenerable Chroma cache

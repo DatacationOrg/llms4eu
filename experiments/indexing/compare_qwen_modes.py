@@ -9,6 +9,11 @@ from typing import Any
 
 from _cli import run_cli
 from src.db.pages import initialize_page_artifacts_db
+from src.eval.agentic_diagnostics import (
+    build_agentic_diagnostics,
+    format_agentic_diagnostics,
+)
+from src.eval.equivalence import EvidenceEquivalenceJudge
 from src.eval.evaluate import CONFIG as EVAL_CONFIG
 from src.eval.evaluate import (
     EvalRun,
@@ -26,7 +31,6 @@ from src.retrieval.methods import (
 )
 from src.retrieval.retrievers.agentic import AgenticRetriever
 from src.shared.env import ROOT, load_local_env, load_yaml
-from src.eval.equivalence import EvidenceEquivalenceJudge
 
 DEFAULT_METHODS = (
     "sparse_rerank",
@@ -37,6 +41,20 @@ DEFAULT_METHODS = (
     "azure_hybrid_agentic",
     "nemotron_hybrid_agentic",
 )
+PHASE2_METHODS = {
+    "phase2-nemotron": (
+        "nemotron_hybrid_rerank",
+        "nemotron_hybrid_rerank_v2",
+        "nemotron_hybrid_agentic",
+        "nemotron_hybrid_agentic_v2",
+    ),
+    "phase2-azure": (
+        "azure_hybrid_rerank",
+        "azure_hybrid_rerank_v2",
+        "azure_hybrid_agentic",
+        "azure_hybrid_agentic_v2",
+    ),
+}
 DEFAULT_OUTPUT = Path("docs/retrieval-results-chunks-okf.md")
 CONFIG = load_yaml(ROOT / "experiments" / "indexing" / "config.yaml")
 
@@ -91,6 +109,7 @@ def main() -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(report + "\n", encoding="utf-8")
     _save_action_logs_from_state(state, method_names, output_path)
+    _save_agentic_diagnostics(run, state, method_names, output_path)
     if checkpoint_path.exists() and not args.keep_checkpoint:
         checkpoint_path.unlink()
 
@@ -105,7 +124,8 @@ def _parse_args() -> argparse.Namespace:
         help=(
             "Comma-separated retriever names to compare. Defaults to the primary "
             "sparse, Qwen4B, Nemotron, Azure, and agentic benchmark suite. Use "
-            "'all-agentic' to include every registered agentic method."
+            "'all-agentic' to include every registered agentic method, or "
+            "'phase2', 'phase2-nemotron', or 'phase2-azure' for v1/v2 comparisons."
         ),
     )
     parser.add_argument("--category")
@@ -176,8 +196,13 @@ def _agentic_retrievers() -> list[str]:
 
 
 def _resolve_methods(raw_methods: str) -> list[str]:
-    if raw_methods.strip().lower() in {"all", "all-agentic"}:
+    group = raw_methods.strip().lower()
+    if group in {"all", "all-agentic"}:
         return _agentic_retrievers()
+    if group == "phase2":
+        return list(dict.fromkeys(sum(PHASE2_METHODS.values(), ())))
+    if group in PHASE2_METHODS:
+        return list(PHASE2_METHODS[group])
 
     methods = [name.strip() for name in raw_methods.split(",") if name.strip()]
     if not methods:
@@ -215,7 +240,44 @@ def _format_report(
             ]
         )
     lines.extend(["", format_eval_report(run, include_categories=include_categories)])
+    diagnostics = _agentic_diagnostics(run, state, method_names)
+    formatted_diagnostics = format_agentic_diagnostics(diagnostics)
+    if formatted_diagnostics:
+        lines.extend(["", formatted_diagnostics])
     return "\n".join(lines)
+
+
+def _agentic_diagnostics(
+    run: EvalRun,
+    state: dict[str, Any],
+    method_names: list[str],
+) -> dict[str, Any]:
+    return build_agentic_diagnostics(
+        questions=run.questions,
+        relevance=run.relevance,
+        rankings=run.rankings,
+        method_states=state.get("methods", {}),
+        method_names=method_names,
+        cutoff=int(EVAL_CONFIG["category_hit_k"]),
+    )
+
+
+def _save_agentic_diagnostics(
+    run: EvalRun,
+    state: dict[str, Any],
+    method_names: list[str],
+    output_path: Path,
+) -> None:
+    diagnostics = _agentic_diagnostics(run, state, method_names)
+    if not diagnostics.get("summaries"):
+        return
+    path = output_path.with_name(f"{output_path.stem}-agentic-diagnostics.json")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(diagnostics, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    print(f"Agentic diagnostics saved to: {path}")
 
 
 def _add_equivalence_judgments(
@@ -480,7 +542,9 @@ def _run_timed_round_robin(
             after_failures = int(getattr(retriever, "failures", 0))
 
             if action_log is not None:
-                new_entries = action_log[prev_log_len:]
+                new_entries = [dict(entry) for entry in action_log[prev_log_len:]]
+                for entry in new_entries:
+                    entry["question_id"] = str(row["id"])
                 method_state.setdefault("action_log", []).extend(new_entries)
 
             method_state["elapsed_seconds"] += elapsed
@@ -491,6 +555,11 @@ def _run_timed_round_robin(
                 after_failures - before_failures, 0
             )
             method_state["rankings"][str(row["id"])] = [chunk.id for chunk in chunks]
+            method_state.setdefault("observations", {})[str(row["id"])] = {
+                "elapsed_seconds": elapsed,
+                "query_count": _query_delta(before_queries, after_queries),
+                "actions": new_entries if action_log is not None else [],
+            }
             method_state["next_index"] = next_index + 1
             if equivalence_audit is not None:
                 equivalence_audit.judge_prediction(
@@ -575,6 +644,7 @@ def _load_or_initialize_state(
                 "timed_total_queries": 0.0,
                 "rankings": {},
                 "action_log": [],
+                "observations": {},
                 "failures": 0,
             }
             for name in method_names
@@ -620,6 +690,7 @@ def _empty_method_state() -> dict[str, Any]:
         "timed_total_queries": 0.0,
         "rankings": {},
         "action_log": [],
+        "observations": {},
         "failures": 0,
     }
 
@@ -781,6 +852,10 @@ def _build_live_report(
         )
 
     body = format_eval_report(partial_run, include_categories=include_categories)
+    diagnostics = _agentic_diagnostics(partial_run, state, method_names)
+    formatted_diagnostics = format_agentic_diagnostics(diagnostics)
+    if formatted_diagnostics:
+        body = f"{body}\n\n{formatted_diagnostics}"
     header.extend(["", body])
     return "\n".join(header)
 

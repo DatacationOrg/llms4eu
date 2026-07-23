@@ -18,6 +18,12 @@ Reusable chunk retrieval methods.
 - `qwen_hybrid_agentic`, `nemotron_hybrid_agentic`, and `azure_hybrid_agentic`:
   the agentic sufficiency
   and query-reformulation loop over the provider's hybrid-reranked chunks.
+- Every dense, hybrid, reranked, and agentic method also has a `_v2` variant,
+  such as `nemotron_hybrid_rerank_v2` and
+  `nemotron_hybrid_agentic_v2`. These use isolated metadata-context dense and
+  sparse indexes. Unsuffixed names retain the legacy v1 behavior.
+- `sparse_v2` and `sparse_rerank_v2` use the same metadata-context text as v2
+  dense retrieval; v1 sparse methods continue to index raw chunk text.
 
 Retrieval tuning lives in `config.yaml`. Enabled vector providers come from
 `src/indexing/config.yaml`; eval defaults come from `src/eval/config.yaml`.

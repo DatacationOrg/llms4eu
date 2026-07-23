@@ -1,4 +1,8 @@
 collection_name: page_chunks
+default_chunk_version: v1
+chunk_versions:
+  v1: title_heading_chunk
+  v2: metadata_context_chunk
 default_provider: qwen
 providers:
   - english

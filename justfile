@@ -25,8 +25,11 @@ test:
 eval-chunks:
     uv run python -m src.preprocess.chunks
 
-eval-index METHOD="qwen":
-    uv run python -m src.indexing.chunks --method {{METHOD}}
+eval-index METHOD="qwen" VERSION="v1":
+    uv run python -m src.indexing.chunks --method {{METHOD}} --chunk-version {{VERSION}}
+
+eval-phase2 METHODS="phase2-nemotron" OUTPUT="docs/retrieval-results-phase2.md":
+    uv run python experiments/indexing/compare_qwen_modes.py --methods {{METHODS}} --output {{OUTPUT}}
 
 eval-generate LIMIT="10":
     uv run python -m src.eval.generate_dataset --limit {{LIMIT}}
