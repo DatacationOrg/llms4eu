@@ -11,9 +11,12 @@ reranker_max_length: 2048
 reranker_local_files_only: true
 reranker_prompt_name:
 reranker_prompt:
+cohere_reranker_model: Cohere-rerank-v4.0-pro
+cohere_reranker_timeout_seconds: 90
+cohere_reranker_retries: 3
 agentic_judge_retries: 3
 agentic_max_attempts: 3
 agentic_min_sufficient_chunks: 2
-agentic_initial_limit: 5
+agentic_initial_limit: 10
 agentic_limit_step: 5
 agentic_max_limit: 20

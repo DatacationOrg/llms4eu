@@ -24,11 +24,19 @@ def test_retriever_catalog_generates_public_names():
     assert "nemotron_rerank" in names
     assert "nemotron_hybrid_rerank" in names
     assert "nemotron_hybrid_agentic" in names
-    assert "azure_hybrid_agentic" in names
+    assert "embed_v4_hybrid_agentic" in names
     assert "sparse_v2" in names
     assert "qwen4b_hybrid_rerank_v2" in names
     assert "nemotron_hybrid_agentic_v2" in names
-    assert "azure_hybrid_agentic_v2" in names
+    assert "embed_v4_hybrid_agentic_v2" in names
+    assert "embed_v4_hybrid_rerank_cohere" in names
+    assert "embed_v4_hybrid_agentic_cohere" in names
+    assert "sparse_rerank_cohere" in names
+    assert "qwen4b_rerank_cohere" in names
+    assert "nemotron_hybrid_rerank_cohere" in names
+    assert "embed_v4_hybrid_rerank_cohere_v2" in names
+    assert not any(name.startswith("azure") for name in names)
+    assert not any(name.startswith("cohere_v4") for name in names)
     assert "qwen4b_chunk" not in names
     assert "sparse_hybrid" not in names
 
@@ -91,24 +99,64 @@ def test_reranker_uses_discovered_defaults(monkeypatch):
     assert retriever.prompt is None
 
 
+def test_cohere_reranker_uses_azure_deployment_id(monkeypatch):
+    monkeypatch.setattr(methods, "enabled_provider_names", lambda: ["stub"])
+    monkeypatch.setenv(
+        "AZURE_COHERE_RERANK_ENDPOINT",
+        "https://example.test/v2/rerank",
+    )
+    monkeypatch.setenv("AZURE_COHERE_RERANK_API_KEY", "key")
+
+    retriever = methods.build_retriever("stub_hybrid_rerank_cohere_v2")
+
+    assert retriever.name == "stub_hybrid_rerank_cohere_v2"
+    assert retriever.model_name == "Cohere-rerank-v4.0-pro"
+    assert retriever.endpoint == "https://example.test/v2/rerank"
+    assert retriever.base_retriever.name == "stub_hybrid_v2"
+
+
+def test_embed_v4_cohere_agent_is_an_alternative_not_a_second_reranker(
+    monkeypatch,
+):
+    monkeypatch.setenv(
+        "AZURE_COHERE_RERANK_ENDPOINT",
+        "https://example.test/v2/rerank",
+    )
+    monkeypatch.setenv("AZURE_COHERE_RERANK_API_KEY", "key")
+
+    retriever = methods.build_retriever("embed_v4_hybrid_agentic_cohere")
+
+    assert retriever.name == "embed_v4_hybrid_agentic_cohere"
+    assert retriever.initial_limit == 10
+    assert retriever.base_retriever.name == "embed_v4_hybrid_rerank_cohere"
+    assert retriever.base_retriever.model_name == "Cohere-rerank-v4.0-pro"
+    hybrid = retriever.base_retriever.base_retriever
+    assert hybrid.name == "embed_v4_hybrid"
+    assert hybrid.retrievers[0].provider == "azure"
+
+
 def test_nemotron_agent_uses_hybrid_reranked_nemotron_chunks(monkeypatch):
     monkeypatch.setattr(methods, "enabled_provider_names", lambda: ["nemotron"])
 
     retriever = methods.build_retriever("nemotron_hybrid_agentic")
 
     assert retriever.name == "nemotron_hybrid_agentic"
+    assert retriever.initial_limit == 10
+    assert retriever.limit_step == 5
     assert retriever.base_retriever.name == "nemotron_hybrid_rerank"
     assert retriever.base_retriever.base_retriever.name == "nemotron_hybrid"
 
 
-def test_azure_agent_uses_hybrid_reranked_azure_chunks(monkeypatch):
+def test_embed_v4_agent_uses_internal_azure_embedding_index(monkeypatch):
     monkeypatch.setattr(methods, "enabled_provider_names", lambda: ["azure"])
 
-    retriever = methods.build_retriever("azure_hybrid_agentic")
+    retriever = methods.build_retriever("embed_v4_hybrid_agentic")
 
-    assert retriever.name == "azure_hybrid_agentic"
-    assert retriever.base_retriever.name == "azure_hybrid_rerank"
-    assert retriever.base_retriever.base_retriever.name == "azure_hybrid"
+    assert retriever.name == "embed_v4_hybrid_agentic"
+    assert retriever.base_retriever.name == "embed_v4_hybrid_rerank"
+    hybrid = retriever.base_retriever.base_retriever
+    assert hybrid.name == "embed_v4_hybrid"
+    assert hybrid.retrievers[0].provider == "azure"
 
 
 def test_v2_agent_uses_v2_dense_and_sparse_representations(monkeypatch):

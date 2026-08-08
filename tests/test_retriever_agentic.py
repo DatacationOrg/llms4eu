@@ -145,10 +145,10 @@ def test_agentic_retriever_uses_azure_judge_provider(monkeypatch):
     assert calls[0][1] == 5
 
 
-def test_agentic_retriever_uses_5_10_15_limit_schedule(monkeypatch):
+def test_agentic_retriever_uses_10_15_20_limit_schedule(monkeypatch):
     expanded_chunks = [
         RankedChunk(id=f"c{index}", score=float(index), text="expanded")
-        for index in range(15)
+        for index in range(20)
     ]
     base = StubRetriever(
         [
@@ -163,9 +163,9 @@ def test_agentic_retriever_uses_5_10_15_limit_schedule(monkeypatch):
         judge_retries=1,
         max_attempts=3,
         min_sufficient_chunks=1,
-        initial_limit=5,
+        initial_limit=10,
         limit_step=5,
-        max_limit=15,
+        max_limit=20,
     )
 
     monkeypatch.setattr(
@@ -180,7 +180,7 @@ def test_agentic_retriever_uses_5_10_15_limit_schedule(monkeypatch):
 
     chunks = retriever.retrieve("query", 10)
 
-    assert base.calls == [("query", 5), ("query", 10), ("query", 15)]
+    assert base.calls == [("query", 10), ("query", 15), ("query", 20)]
     assert chunks == expanded_chunks
 
 

@@ -20,7 +20,7 @@ uv run python experiments/indexing/compare_qwen_modes.py \
 	--output docs/retrieval-results-phase2-nemotron.md
 ```
 
-`phase2-nemotron` and `phase2-azure` compare each provider's v1 and v2
+`phase2-nemotron` and `phase2-embed-v4` compare each provider's v1 and v2
 hybrid-reranked baseline and agent. `phase2` includes both provider groups. The
 v2 indexes are separate derived artifacts, so existing collections, retrieval
 method names, reports, and checkpoints remain valid.
@@ -113,10 +113,20 @@ the deepest observed rank. Those expanded columns contain values only for
 agentic methods; non-agentic baselines are shown as `-` because they were not
 retrieved beyond the standard cutoff.
 
-The retired OKF experiment used the following protocol. It remains documented
-for interpreting historical findings, but has no active runner.
+OKF can be included in the checkpointed comparison with `--methods
+comprehensive-okf`. Mixed runs report per-method metrics: chunk RAG methods use
+their native chunk qrels and `hit@K` metrics, while OKF alone uses projected
+concept qrels to classify its `hit@K` values. Both use the same report columns,
+but RAG methods are never evaluated with OKF concept matching.
 
-## Historical OKF versus chunk-RAG benchmark protocol
+Use `--methods okf-only` when you want concept-level scoring. In that mode,
+qrels and rankings are projected onto the shared OKF concept ontology.
+
+The `comprehensive-okf` group includes the sparse, Qwen4B, Nemotron, and
+`embed-v-4-0` Qwen3-reranked baselines, the `embed-v-4-0` and Nemotron
+agentic methods, and OKF. Cohere reranking is not part of this group.
+
+## OKF versus chunk-RAG benchmark protocol
 
 A fair comparison freezes one `data/db/pages.db` snapshot and records its hash,
 selected page IDs, source bytes, languages, and page count. Scraping and
@@ -160,22 +170,21 @@ client round-trip timing when available.
 
 ### Representation-neutral effectiveness
 
-Keep existing chunk qrels for native RAG evaluation. The shared track projects
-both relevance and rankings onto the OKF concept ontology:
+Keep existing chunk qrels for native RAG evaluation. Only OKF metrics project
+relevance onto the OKF concept ontology:
 
 1. A gold chunk maps to its source page.
 2. The page maps to every concept listing it in `source_page_ids`; these are the
 	question's golden concepts.
-3. RAG results map from ranked chunks to pages to concepts, preserving first
-	occurrence and removing duplicates.
-4. OKF results are already ranked concepts: cited concepts first, then other
+3. OKF results are already ranked concepts: cited concepts first, then other
 	visited concepts.
 
-Reports label the resulting metrics `concept_hit@K`, `concept_recall@K`, and
-`concept_mrr@K`. Thus an English or Slovenian sibling page receives full credit
-when both pages belong to the castle concept. No fuzzy answer-token or substring
-matching expands qrels at evaluation time: phrase occurrence does not prove that
-a page expresses the same entity or supports the answer. The optional
+Reports use the shared columns `hit@K`, `recall@K`, and `mrr@K`. For OKF rows,
+these values use concept relevance; for RAG rows, they use chunk relevance. A
+sibling chunk therefore does not receive strict RAG credit merely because its
+page maps to the same concept. No fuzzy answer-token or substring matching
+expands qrels at evaluation time: phrase occurrence does not prove that a page
+expresses the same entity or supports the answer. The optional
 evidence-equivalence audit is reported beside, never merged into, these strict
 metrics. Exact duplicates in different concepts instead indicate a
 canonicalization issue to fix in the OKF bundle. Concept retrieval also remains

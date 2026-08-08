@@ -79,7 +79,7 @@ class AgenticRetriever:
     judge_retries: int = 3
     max_attempts: int = 3
     min_sufficient_chunks: int = 2
-    initial_limit: int = 5
+    initial_limit: int = 10
     limit_step: int = 5
     max_limit: int = 30
     batch_stats: AgenticBatchStats = field(

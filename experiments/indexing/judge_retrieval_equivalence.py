@@ -15,12 +15,51 @@ from src.eval.equivalence import (
     EvidenceDocument,
     EvidenceEquivalenceJudge,
 )
+from src.okf.evidence import (
+    invert_page_map,
+    load_bundle_page_map,
+    project_pages_to_concepts,
+)
 from src.shared.env import ROOT, load_local_env
 from src.shared.llm import AzureFoundryStructuredLlm, LocalOllamaStructuredLlm
 
 DEFAULT_CHECKPOINT = Path("docs/retrieval-results-chunks-okf.md.checkpoint.json")
 DEFAULT_OUTPUT = Path("docs/retrieval-equivalence-judge.md")
 DEFAULT_LOCAL_MODEL = "gemma4:26b"
+
+
+@dataclass(frozen=True)
+class _EvidenceSpace:
+    questions: dict[str, dict[str, str]]
+    relevant_ids: dict[str, list[str]]
+    documents: dict[str, str]
+    chunk_pages: dict[str, str] = field(default_factory=dict)
+    page_concepts: dict[str, list[str]] = field(default_factory=dict)
+    okf_methods: frozenset[str] = frozenset()
+    concept_relevant_ids: dict[str, list[str]] = field(default_factory=dict)
+    concept_documents: dict[str, str] = field(default_factory=dict)
+
+    @property
+    def concept_scoring(self) -> bool:
+        return bool(self.concept_documents)
+
+    def relevant_for(self, method_name: str, question_id: str) -> list[str]:
+        source = (
+            self.concept_relevant_ids
+            if method_name in self.okf_methods
+            else self.relevant_ids
+        )
+        return source.get(question_id, [])
+
+    def documents_for(self, method_name: str) -> dict[str, str]:
+        return (
+            self.concept_documents
+            if method_name in self.okf_methods
+            else self.documents
+        )
+
+    def project_ranking(self, method_name: str, ranked: list[str]) -> list[str]:
+        return ranked
 
 
 @dataclass
@@ -30,9 +69,7 @@ class IncrementalEquivalenceAudit:
     model_id: str
     cutoff: int
     cache_path: Path
-    questions: dict[str, dict[str, str]] = field(init=False)
-    relevant_ids: dict[str, list[str]] = field(init=False)
-    chunks: dict[str, str] = field(init=False)
+    evidence: _EvidenceSpace = field(init=False)
     cache: dict[str, Any] = field(init=False)
 
     def __post_init__(self) -> None:
@@ -44,11 +81,7 @@ class IncrementalEquivalenceAudit:
             raise ValueError("Checkpoint has no timed questions")
 
         initialize_page_artifacts_db()
-        (
-            self.questions,
-            self.relevant_ids,
-            self.chunks,
-        ) = _load_evidence(timed_ids)
+        self.evidence = _load_evidence_space(signature, timed_ids)
         self.cache = _load_cache(
             self.cache_path,
             model_id=self.model_id,
@@ -73,10 +106,11 @@ class IncrementalEquivalenceAudit:
         question_id: str,
         ranked: list[str],
     ) -> None:
-        question = self.questions.get(str(question_id))
-        gold_ids = self.relevant_ids.get(str(question_id), [])
+        question = self.evidence.questions.get(str(question_id))
+        gold_ids = self.evidence.relevant_for(method_name, str(question_id))
         if question is None or not gold_ids:
             return
+        ranked = self.evidence.project_ranking(method_name, ranked)
         if _strict_hit(
             ranked=ranked,
             gold_ids=gold_ids,
@@ -84,14 +118,15 @@ class IncrementalEquivalenceAudit:
         ):
             return
 
+        documents = self.evidence.documents_for(method_name)
         retrieved = _retrieved_documents(
             ranked=ranked[: self.cutoff],
-            chunks=self.chunks,
+            chunks=documents,
         )
         golden = [
-            EvidenceDocument(id=chunk_id, text=self.chunks[chunk_id])
+            EvidenceDocument(id=chunk_id, text=documents[chunk_id])
             for chunk_id in gold_ids
-            if chunk_id in self.chunks
+            if chunk_id in documents
         ]
         if not golden or not retrieved:
             return
@@ -147,10 +182,11 @@ class IncrementalEquivalenceAudit:
             rankings = self.state["methods"][method_name].get("rankings", {})
             for question_id in question_ids:
                 ranked = rankings.get(str(question_id))
-                question = self.questions.get(str(question_id))
-                gold_ids = self.relevant_ids.get(str(question_id), [])
+                question = self.evidence.questions.get(str(question_id))
+                gold_ids = self.evidence.relevant_for(method_name, str(question_id))
                 if ranked is None or question is None or not gold_ids:
                     continue
+                ranked = self.evidence.project_ranking(method_name, ranked)
                 summary["questions"] += 1
                 if _strict_hit(
                     ranked=ranked,
@@ -159,14 +195,15 @@ class IncrementalEquivalenceAudit:
                 ):
                     summary["strict_hits"] += 1
                     continue
+                documents = self.evidence.documents_for(method_name)
                 retrieved = _retrieved_documents(
                     ranked=ranked[: self.cutoff],
-                    chunks=self.chunks,
+                    chunks=documents,
                 )
                 golden = [
-                    EvidenceDocument(id=chunk_id, text=self.chunks[chunk_id])
+                    EvidenceDocument(id=chunk_id, text=documents[chunk_id])
                     for chunk_id in gold_ids
-                    if chunk_id in self.chunks
+                    if chunk_id in documents
                 ]
                 if not golden or not retrieved:
                     continue
@@ -258,7 +295,7 @@ def judge_checkpoint(
         raise ValueError("Checkpoint has no timed questions or retrieval methods")
 
     initialize_page_artifacts_db()
-    questions, relevant_ids, chunks = _load_evidence(set(timed_ids))
+    evidence = _load_evidence_space(signature, set(timed_ids))
     cache = _load_cache(cache_path, model_id=model_id, cutoff=cutoff)
     judgments = cache.setdefault("judgments", {})
     summaries: dict[str, dict[str, int]] = {}
@@ -278,10 +315,11 @@ def judge_checkpoint(
         rankings = method_state.get("rankings", {})
         for question_id in timed_ids:
             ranked = rankings.get(question_id)
-            question = questions.get(question_id)
-            gold_ids = relevant_ids.get(question_id, [])
+            question = evidence.questions.get(question_id)
+            gold_ids = evidence.relevant_for(method_name, question_id)
             if ranked is None or question is None or not gold_ids:
                 continue
+            ranked = evidence.project_ranking(method_name, ranked)
             summary["questions"] += 1
             if _strict_hit(
                 ranked=ranked,
@@ -293,14 +331,15 @@ def judge_checkpoint(
             if limit is not None and judged_for_method >= limit:
                 continue
 
+            documents = evidence.documents_for(method_name)
             retrieved = _retrieved_documents(
                 ranked=ranked[:cutoff],
-                chunks=chunks,
+                chunks=documents,
             )
             golden = [
-                EvidenceDocument(id=chunk_id, text=chunks[chunk_id])
+                EvidenceDocument(id=chunk_id, text=documents[chunk_id])
                 for chunk_id in gold_ids
-                if chunk_id in chunks
+                if chunk_id in documents
             ]
             if not golden or not retrieved:
                 summary["failures"] += 1
@@ -391,6 +430,55 @@ def _load_evidence(
         rows = conn.execute("select id, page_id, text from page_chunks").fetchall()
         chunks = {str(row["id"]): str(row["text"]) for row in rows}
     return questions, relevant_ids, chunks
+
+
+def _load_evidence_space(
+    signature: dict[str, Any],
+    timed_ids: set[str],
+) -> _EvidenceSpace:
+    questions, relevant_ids, chunks = _load_evidence(timed_ids)
+    if signature.get("scoring_unit") not in {"okf_concept", "mixed"}:
+        return _EvidenceSpace(
+            questions=questions,
+            relevant_ids=relevant_ids,
+            documents=chunks,
+        )
+
+    bundle_value = signature.get("okf_bundle")
+    if not bundle_value:
+        raise ValueError("Concept-scored checkpoint has no OKF bundle")
+    bundle_root = Path(str(bundle_value)).resolve()
+    concept_pages = load_bundle_page_map(bundle_root)
+    page_concepts = invert_page_map(concept_pages)
+    if not page_concepts:
+        raise ValueError(f"OKF bundle has no source page provenance: {bundle_root}")
+
+    with connect_pages() as conn:
+        chunk_pages = {
+            str(row["id"]): str(row["page_id"])
+            for row in conn.execute("select id, page_id from page_chunks")
+        }
+    concept_relevance = {
+        question_id: project_pages_to_concepts(
+            [chunk_pages[item] for item in gold_ids if item in chunk_pages],
+            page_concepts,
+        )
+        for question_id, gold_ids in relevant_ids.items()
+    }
+    documents = {
+        concept: (bundle_root / concept).read_text(encoding="utf-8")
+        for concept in concept_pages
+    }
+    return _EvidenceSpace(
+        questions=questions,
+        relevant_ids=relevant_ids,
+        documents=chunks,
+        chunk_pages=chunk_pages,
+        page_concepts=page_concepts,
+        okf_methods=frozenset(str(name) for name in signature.get("okf_methods", [])),
+        concept_relevant_ids=concept_relevance,
+        concept_documents=documents,
+    )
 
 
 def _strict_hit(

@@ -102,8 +102,14 @@ def test_agentic_diagnostics_reports_paired_retry_quality_and_latency():
 
 def test_agent_baseline_mapping_preserves_v2_suffix():
     assert baseline_for_agent("qwen_agentic") == "qwen_rerank"
-    assert baseline_for_agent("azure_hybrid_agentic_v2") == "azure_hybrid_rerank_v2"
-    assert baseline_for_agent("azure_hybrid_rerank") is None
+    assert (
+        baseline_for_agent("embed_v4_hybrid_agentic_v2") == "embed_v4_hybrid_rerank_v2"
+    )
+    assert baseline_for_agent("embed_v4_hybrid_rerank") is None
+    assert (
+        baseline_for_agent("embed_v4_hybrid_agentic_cohere")
+        == "embed_v4_hybrid_rerank_cohere"
+    )
 
 
 def _action(

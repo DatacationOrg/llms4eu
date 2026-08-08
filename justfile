@@ -51,3 +51,27 @@ eval-equivalence CHECKPOINT="docs/retrieval-results-chunks-okf.md.checkpoint.jso
 
 eval-inspect LIMIT="20":
     uv run python -m src.eval.inspect_dataset --limit {{LIMIT}}
+
+okf-pilot SOURCE="castle_rajhenburg" LIMIT="2":
+    uv run python -m src.okf.generate --source {{SOURCE}} --limit {{LIMIT}}
+
+okf-generate:
+    uv run python -m src.okf.generate
+
+okf-rebuild:
+    uv run python -m src.okf.generate --clean
+
+okf-index:
+    uv run python -c "from pathlib import Path; from src.okf.bundle import regenerate_indexes; regenerate_indexes(Path('data/okf/tourism'))"
+
+okf-validate:
+    uv run python -m src.okf.validate
+
+okf-ask *question:
+    uv run python -m src.okf.answer "{{question}}"
+
+okf-benchmark LIMIT="19":
+    uv run python experiments/indexing/compare_okf_rag.py --limit {{LIMIT}}
+
+okf-comprehensive:
+    uv run python experiments/indexing/compare_qwen_modes.py --methods comprehensive-okf --output docs/retrieval-results-comprehensive-2026-07-27.md --checkpoint docs/retrieval-results-comprehensive-2026-07-27.md.checkpoint.json --judge-equivalence --judge-k 15 --judge-cache docs/retrieval-results-comprehensive-2026-07-27.md.equivalence.json --keep-checkpoint

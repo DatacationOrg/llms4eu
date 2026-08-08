@@ -37,6 +37,8 @@ class EvalRun:
     timings: dict[str, dict[str, float]]
     score_names: list[str]
     scores: dict[str, dict[str, float]]
+    category_metric_names: dict[str, str] | None = None
+    category_scores: dict[str, dict[str, float]] | None = None
 
 
 def evaluate(
@@ -74,9 +76,13 @@ def format_eval_report(
         _timing_table(run),
     ]
     if include_categories:
+        category_title = f"hit@{CONFIG['category_hit_k']} by category"
+        if run.category_metric_names:
+            metric_names = list(dict.fromkeys(run.category_metric_names.values()))
+            category_title = f"{' / '.join(metric_names)} by category"
         sections.extend(
             [
-                f"hit@{CONFIG['category_hit_k']} by category",
+                category_title,
                 _category_table(run),
             ]
         )
@@ -387,6 +393,33 @@ def _query_effort(retriever: Retriever, question_count: int) -> dict[str, float]
 def _category_table(run: EvalRun) -> str:
     question_type_by_id = {row["id"]: row["question_type"] for row in run.questions}
     types = sorted(set(question_type_by_id.values()))
+    if run.category_metric_names is not None and run.category_scores is not None:
+        metric_names = set(run.category_metric_names.values())
+        if len(metric_names) == 1:
+            rows = [
+                [
+                    method_name,
+                    *(
+                        run.category_scores[method_name][question_type]
+                        for question_type in types
+                    ),
+                ]
+                for method_name in run.methods
+            ]
+            return bold_best_table(["method", *types], rows)
+        rows = [
+            [
+                method_name,
+                run.category_metric_names[method_name],
+                *(
+                    run.category_scores[method_name][question_type]
+                    for question_type in types
+                ),
+            ]
+            for method_name in run.methods
+        ]
+        return bold_best_table(["method", "metric", *types], rows)
+
     relevance_by_type = defaultdict(list)
     for row in run.relevance:
         relevance_by_type[question_type_by_id[row["question_id"]]].append(row)
