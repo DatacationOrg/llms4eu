@@ -106,7 +106,7 @@ def _corpus(chunk_version: str = LEGACY_CHUNK_VERSION) -> Corpus:
         )
         term_counts = Counter(terms)
         chunks.append(ChunkTerms(row["id"], row["text"], term_counts, len(terms) or 1))
-        document_frequency.update(term_counts)
+        document_frequency.update(term_counts.keys())
 
     document_count = len(chunks)
     if not document_count:
