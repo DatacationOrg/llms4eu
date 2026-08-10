@@ -179,7 +179,14 @@ def run_eval(
 def load_eval_rows(
     limit: int | None = None,
     category: str | None = None,
+    variant: str | None = None,
 ) -> tuple[list[dict], list[dict]]:
+    """Approved questions and their gold chunks.
+
+    `variant` selects one chunking variant's generated question set; omit it to
+    load every variant's questions, which is what the existing single-variant
+    reports do.
+    """
     with connect() as conn:
         question_sql = """
                 select id, question, answer, question_type, question_language
@@ -187,6 +194,9 @@ def load_eval_rows(
                 where approved = 1
                 """
         params = {}
+        if variant is not None:
+            question_sql += "\n                and variant = :variant"
+            params["variant"] = variant
         if category is not None:
             question_sql += "\n                and question_type = :category"
             params["category"] = category
@@ -259,7 +269,13 @@ def score_eval_rankings(
     metric_ks = tuple(CONFIG["metric_ks"])
     standard_k = max(metric_ks)
     score_names = [f"hit@{k}" for k in metric_ks]
-    score_names.extend([f"recall@{standard_k}", f"mrr@{CONFIG['mrr_k']}"])
+    score_names.extend(
+        [
+            f"recall@{standard_k}",
+            f"mrr@{CONFIG['mrr_k']}",
+            f"ndcg@{CONFIG['mrr_k']}",
+        ]
+    )
     scores = {
         name: score_rankings(
             relevance,
@@ -287,6 +303,7 @@ def score_eval_rankings(
         f"hit@{expanded_k}",
         f"recall@{expanded_k}",
         f"mrr@{expanded_k}",
+        f"ndcg@{expanded_k}",
     ]
     score_names.extend(expanded_names)
     for name in method_names:

@@ -8,6 +8,7 @@ from functools import cache
 
 from src.db.pages import connect_pages as connect
 from src.indexing.chunk_text import (
+    BASE_CHUNK_VARIANT,
     LEGACY_CHUNK_VERSION,
     PageChunk,
     chunk_text_representation,
@@ -23,9 +24,10 @@ class SparseRetriever:
     k1: float = 1.5
     b: float = 0.75
     chunk_version: str = LEGACY_CHUNK_VERSION
+    chunk_variant: str = BASE_CHUNK_VARIANT
 
     def retrieve(self, query: str, limit: int) -> list[RankedChunk]:
-        corpus = _corpus(self.chunk_version)
+        corpus = _corpus(self.chunk_version, self.chunk_variant)
         query_terms = _tokens(query)
         scores = []
         for chunk in corpus:
@@ -71,18 +73,23 @@ class Corpus:
 
 
 @cache
-def _corpus(chunk_version: str = LEGACY_CHUNK_VERSION) -> Corpus:
+def _corpus(
+    chunk_version: str = LEGACY_CHUNK_VERSION,
+    chunk_variant: str = BASE_CHUNK_VARIANT,
+) -> Corpus:
     representation = chunk_text_representation(chunk_version)
     with connect() as conn:
         rows = conn.execute(
             """
-            select c.id, c.page_id, c.chunk_index, c.heading_path, c.text,
-                   m.title, m.source, s.language, m.page_kind
+            select c.id, c.page_id, c.chunk_index, c.variant, c.heading_path,
+                   c.text, m.title, m.source, s.language, m.page_kind
             from page_chunks c
             join page_metadata m on m.id = c.page_id
             left join page_sources s on s.source = m.source
+            where c.variant = ?
             order by c.id
-            """
+            """,
+            (chunk_variant,),
         ).fetchall()
 
     chunks = []
@@ -98,6 +105,7 @@ def _corpus(chunk_version: str = LEGACY_CHUNK_VERSION) -> Corpus:
             source=row["source"],
             language=row["language"],
             page_kind=row["page_kind"],
+            variant=row["variant"],
         )
         terms = _tokens(
             row["text"]

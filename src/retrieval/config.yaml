@@ -32,3 +32,17 @@ agentic_tools_search_limit: 5
 # The richer ToolAction schema is unreliable via tool calls (1/3) but solid via
 # json_schema (9/10); the plain sufficiency judge is the other way around.
 agentic_tools_structured_method: json_schema
+# Direct Corpus Interaction (RISE-style). dci_shortlist_k is the BM25 chunk
+# shortlist; dci_max_documents is K, the bounded working set of pages. Sweep K
+# with the dci_k<N> methods: larger K is not monotonically better.
+dci_shortlist_k: 1000
+dci_max_documents: 1000
+dci_k_sweep: [10, 50, 200]
+dci_max_steps: 8
+dci_search_limit: 30
+dci_read_limit: 120
+# Measured per schema, not assumed: CorpusAction is 3/3 via tool calls and 0/3
+# via json_schema at every num_predict, K and reasoning level tried. ToolAction
+# is the other way around. Re-measure before changing either.
+dci_structured_method: function_calling
+dci_num_predict: 4096

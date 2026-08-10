@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import re
 import uuid
+from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
@@ -10,6 +11,7 @@ from pydantic import BaseModel, Field, ValidationError
 
 from src.db.pages import connect_pages as connect
 from src.db.pages import initialize_page_artifacts_db as initialize_eval_db
+from src.indexing.chunk_text import BASE_CHUNK_VARIANT
 from src.shared.env import load_local_env, load_yaml
 from src.shared.llm import (
     LocalOllamaStructuredLlm,
@@ -135,10 +137,15 @@ def generate_dataset(
     limit: int | None,
     model_id: str | None = None,
     reasoning: bool | str | None = None,
+    variant: str = BASE_CHUNK_VARIANT,
+    sample: int | None = None,
 ) -> None:
     initialize_eval_db()
-    chunks = _eligible_unprocessed_chunks(limit)
-    print(f"found {len(chunks)} eligible unprocessed chunks", flush=True)
+    chunks = _eligible_unprocessed_chunks(limit, variant, sample)
+    print(
+        f"found {len(chunks)} eligible unprocessed {variant} chunks",
+        flush=True,
+    )
     model_name = _resolve_model_name(model_id or CONFIG["question_model"])
     structured_model = structured_local_model(
         model_name,
@@ -162,7 +169,7 @@ def generate_dataset(
             questions = [
                 item for item in _flatten_questions(result) if _valid_question(*item)
             ]
-            inserted += insert_questions(conn, chunk["id"], questions)
+            inserted += insert_questions(conn, chunk["id"], questions, variant)
             print(f"[{index}/{len(chunks)}] got {len(questions)} questions", flush=True)
     print(
         f"processed {len(chunks)} chunks, inserted up to {inserted} questions",
@@ -170,27 +177,104 @@ def generate_dataset(
     )
 
 
-def _eligible_unprocessed_chunks(limit: int | None) -> list[dict]:
+def _eligible_unprocessed_chunks(
+    limit: int | None,
+    variant: str = BASE_CHUNK_VARIANT,
+    sample: int | None = None,
+) -> list[dict]:
     with connect() as conn:
         rows = [
             dict(row)
             for row in conn.execute(
                 """
-                select c.id, c.text, c.heading_path, m.title, s.language
+                select c.id, c.text, c.heading_path, m.title, m.source,
+                       m.page_kind, s.language
                 from page_chunks c
                 join page_metadata m on m.id = c.page_id
                 join page_sources s on s.source = m.source
-                where not exists (
-                  select 1
-                  from eval_relevant_chunks r
-                  where r.chunk_id = c.id
-                )
+                where c.variant = ?
+                  and not exists (
+                    select 1
+                    from eval_relevant_chunks r
+                    where r.chunk_id = c.id
+                  )
                 order by c.id
-                """
+                """,
+                (variant,),
             )
         ]
     chunks = [row for row in rows if _is_fact_dense(row["text"])]
+    if sample:
+        chunks = _stratified_sample(chunks, sample)
     return chunks[:limit] if limit else chunks
+
+
+def _stratified_sample(chunks: list[dict], sample: int) -> list[dict]:
+    """Pick `sample` chunks spread over source, page kind and chunk length.
+
+    A finer variant has thousands of chunks, and generating five questions for
+    every one of them costs more than the ablation needs. Sampling is
+    deterministic — strata are visited in a fixed interleaved order and chunks
+    within a stratum in `uuid5` order — so a rerun selects the same chunks
+    without carrying a random seed.
+    """
+    if sample >= len(chunks):
+        return chunks
+
+    strata: dict[tuple, list[dict]] = defaultdict(list)
+    for chunk in chunks:
+        key = (chunk["source"], chunk["page_kind"], _length_bucket(chunk["text"]))
+        strata[key].append(chunk)
+    for items in strata.values():
+        items.sort(key=lambda chunk: uuid.uuid5(uuid.NAMESPACE_URL, chunk["id"]).int)
+
+    keys = _interleave(list(strata))
+    picked: list[dict] = []
+    depth = 0
+    while len(picked) < sample:
+        progressed = False
+        for key in keys:
+            if depth < len(strata[key]):
+                picked.append(strata[key][depth])
+                progressed = True
+                if len(picked) == sample:
+                    break
+        if not progressed:
+            break
+        depth += 1
+    return sorted(picked, key=lambda chunk: chunk["id"])
+
+
+def _interleave(keys: list[tuple]) -> list[tuple]:
+    """Order stratum keys so each dimension rotates before the next repeats.
+
+    Visiting sorted keys instead would drain the alphabetically first source
+    before reaching any other, which is exactly the imbalance stratifying is
+    supposed to prevent when there are more strata than the sample size.
+    """
+    if not keys:
+        return []
+    if len(keys[0]) == 1:
+        return sorted(keys)
+
+    tails: dict = defaultdict(list)
+    for key in keys:
+        tails[key[0]].append(key[1:])
+    ordered = {head: _interleave(items) for head, items in tails.items()}
+
+    result: list[tuple] = []
+    heads = sorted(ordered)
+    depth = 0
+    while len(result) < len(keys):
+        for head in heads:
+            if depth < len(ordered[head]):
+                result.append((head, *ordered[head][depth]))
+        depth += 1
+    return result
+
+
+def _length_bucket(text: str) -> int:
+    return len(text) // 500
 
 
 def _resolve_model_name(model_name: str) -> str:
@@ -236,6 +320,7 @@ def insert_questions(
     conn,
     chunk_id: str,
     questions: list[tuple[str, QuestionCandidate]],
+    variant: str = BASE_CHUNK_VARIANT,
 ) -> int:
     inserted = 0
     for question_type, item in questions:
@@ -243,8 +328,8 @@ def insert_questions(
         cursor = conn.execute(
             """
             insert or ignore into eval_questions (
-              id, question, answer, question_type, question_language
-            ) values (?, ?, ?, ?, ?)
+              id, question, answer, question_type, question_language, variant
+            ) values (?, ?, ?, ?, ?, ?)
             """,
             (
                 question_id,
@@ -252,6 +337,7 @@ def insert_questions(
                 item.answer.strip(),
                 question_type,
                 item.question_language,
+                variant,
             ),
         )
         conn.execute(
@@ -331,6 +417,7 @@ def generate_missing_questions(
     limit: int | None,
     workers: int = 4,
     model_id: str | None = None,
+    variant: str = BASE_CHUNK_VARIANT,
 ) -> None:
     initialize_eval_db()
     load_local_env()
@@ -341,8 +428,8 @@ def generate_missing_questions(
         num_predict=512,
         method="function_calling",
     )
-    tasks = _missing_question_tasks(limit)
-    print(f"found {len(tasks)} missing question slots", flush=True)
+    tasks = _missing_question_tasks(limit, variant)
+    print(f"found {len(tasks)} missing {variant} question slots", flush=True)
 
     inserted = 0
     completed = 0
@@ -354,7 +441,7 @@ def generate_missing_questions(
             if item and _valid_question(task["question_type"], item):
                 with connect() as conn:
                     inserted += insert_questions(
-                        conn, task["id"], [(task["question_type"], item)]
+                        conn, task["id"], [(task["question_type"], item)], variant
                     )
             if completed % 25 == 0 or completed == len(tasks):
                 print(
@@ -364,7 +451,10 @@ def generate_missing_questions(
     print(f"done, inserted {inserted} questions", flush=True)
 
 
-def _missing_question_tasks(limit: int | None) -> list[dict]:
+def _missing_question_tasks(
+    limit: int | None,
+    variant: str = BASE_CHUNK_VARIANT,
+) -> list[dict]:
     with connect() as conn:
         rows = [
             dict(row)
@@ -377,9 +467,11 @@ def _missing_question_tasks(limit: int | None) -> list[dict]:
                 join page_sources s on s.source = m.source
                 left join eval_relevant_chunks r on r.chunk_id = c.id
                 left join eval_questions q on q.id = r.question_id and q.approved = 1
+                where c.variant = ?
                 group by c.id, c.text, c.heading_path, m.title, s.language
                 order by c.id
-                """
+                """,
+                (variant,),
             )
         ]
 
@@ -463,11 +555,27 @@ def main() -> None:
     parser.add_argument("--reasoning", action="store_true")
     parser.add_argument("--fill-missing", action="store_true")
     parser.add_argument("--workers", type=int, default=4)
+    parser.add_argument(
+        "--variant",
+        default=BASE_CHUNK_VARIANT,
+        help="Chunking variant to generate questions for",
+    )
+    parser.add_argument(
+        "--sample",
+        type=int,
+        help="Generate for this many chunks, stratified over source, kind and length",
+    )
     args = parser.parse_args()
     if args.fill_missing:
-        generate_missing_questions(args.limit, args.workers, args.model)
+        generate_missing_questions(args.limit, args.workers, args.model, args.variant)
     else:
-        generate_dataset(args.limit, args.model, args.reasoning or None)
+        generate_dataset(
+            args.limit,
+            args.model,
+            args.reasoning or None,
+            args.variant,
+            args.sample,
+        )
 
 
 if __name__ == "__main__":

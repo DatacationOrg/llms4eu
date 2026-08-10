@@ -6,7 +6,8 @@ from src.indexing.chunk_text import (
     TitleHeadingChunkText,
     chunk_text_representation,
 )
-from src.preprocess.chunks import chunk_markdown, rebuild_page_chunks
+from src.preprocess.chunks import rebuild_page_chunks
+from src.preprocess.legacy_chunker import chunk_markdown
 
 
 def test_chunk_markdown_preserves_heading_path():

@@ -191,6 +191,42 @@ Three properties earn their keep and should survive edits:
 Repeated identical tool calls are answered from the prompt instead of rerunning
 the query: the first version burned its whole budget re-searching one term.
 
+## Direct Corpus Interaction
+
+`dci` gives the agent the corpus as files instead of a vector index: BM25 picks
+a bounded working set of at most K pages, `src/retrieval/workspace.py`
+materializes them as line-numbered Markdown, and the agent explores with
+`search`, `read` and `toc` until it can name chunk ids. Sweep K with
+`dci_k10` / `dci_k50` / `dci_k200`, since larger K is not monotonically better.
+
+Every chunk is written behind a `<!-- chunk: <id> | <heading> -->` marker, so a
+grep hit at a line maps back to exactly one `page_chunks.id`. That marker is the
+whole reason the method is scoreable against the existing chunk qrels rather
+than needing its own ground truth.
+
+**No `bash()`.** The papers hand the agent a general shell. This gives it three
+bounded tools; `search` invokes ripgrep through a fixed argument vector, never a
+shell string, so model output is always a search pattern and never a command. A
+benchmark does not need arbitrary command execution to measure retrieval.
+
+Two invariants protect the scores:
+
+- A cited chunk id that does not exist is dropped, never ranked. A hallucinated
+  id would otherwise be scored as a confident wrong answer.
+- The BM25 shortlist is appended below the agent's citations, so a ranking that
+  stops after two cited chunks cannot score worse than BM25 merely for being
+  short.
+
+Sized for a corpus far larger than today's 176 pages: pages stream out of SQLite
+one at a time, each page carries a content hash so a rebuild rewrites only what
+changed, and path/page/chunk lookups are materialized once per load instead of
+per query.
+
+`CorpusAction` needs `method="function_calling"` (3/3, against 0/3 for
+`json_schema` at every `num_predict`, K and reasoning level tried) — the
+opposite of `ToolAction` in the tool agent. The right structured-output mode is
+a per-schema measurement, not a per-model setting.
+
 ## Local-Only Inference
 
 Every model call in the repo runs on local hardware. There is no hosted-model
