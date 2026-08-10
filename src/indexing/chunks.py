@@ -2,22 +2,20 @@ from __future__ import annotations
 
 import argparse
 
-from src.vector_store.chunks import DEFAULT_INDEXING_PROVIDER, INDEXING_PROVIDERS
+from src.indexing.chunk_text import CHUNK_VERSIONS
+from src.vector_store.chunks import (
+    DEFAULT_CHUNK_VERSION,
+    DEFAULT_INDEXING_PROVIDER,
+    INDEXING_PROVIDERS,
+)
 from src.vector_store.chunks import rebuild_chunk_collection
 
 
 def rebuild_chunk_vector_index(
     method: str = DEFAULT_INDEXING_PROVIDER,
-    assume_yes: bool = False,
+    chunk_version: str = DEFAULT_CHUNK_VERSION,
 ) -> None:
-    if method == "azure" and not assume_yes:
-        from src.shared.cli import confirm
-
-        if not confirm(
-            "Do you want to run Azure embeddings and spend quota? [yes/no]: "
-        ):
-            raise RuntimeError("Azure indexing cancelled.")
-    rebuild_chunk_collection(method)
+    rebuild_chunk_collection(method, chunk_version)
 
 
 def main() -> None:
@@ -27,9 +25,13 @@ def main() -> None:
         choices=INDEXING_PROVIDERS,
         default=DEFAULT_INDEXING_PROVIDER,
     )
-    parser.add_argument("--yes", action="store_true")
+    parser.add_argument(
+        "--chunk-version",
+        choices=CHUNK_VERSIONS,
+        default=DEFAULT_CHUNK_VERSION,
+    )
     args = parser.parse_args()
-    rebuild_chunk_vector_index(args.method, assume_yes=args.yes)
+    rebuild_chunk_vector_index(args.method, chunk_version=args.chunk_version)
 
 
 if __name__ == "__main__":

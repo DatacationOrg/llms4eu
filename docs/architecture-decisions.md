@@ -18,7 +18,7 @@ Reason: eval should compare application retrieval methods, not own them.
 User-facing names describe method intent, not storage details.
 
 - `sparse`: lexical retrieval, currently BM25 internally.
-- `english`, `qwen`, `qwen4b`, `azure`: dense/vector providers.
+- `english`, `qwen`, `qwen4b`, `nemotron`: dense/vector providers.
 - `*_hybrid`: dense provider plus sparse retrieval.
 - `*_rerank`: rerank candidates from one base retriever.
 - `*_hybrid_rerank`: rerank hybrid candidates.
@@ -33,8 +33,9 @@ better in measured runs and is current active hybrid strategy.
 
 Historical read:
 
-- Azure weighted hybrid was strongest measured method.
-- Qwen 4B weighted hybrid was strongest local method.
+- Azure `embed-v-4-0` weighted hybrid was the strongest method ever measured,
+  but that provider has been removed (see "Local-Only Inference" below).
+- Qwen 4B weighted hybrid is the strongest remaining method.
 - Default hybrid weights are 70% vector, 30% sparse.
 
 Keep RRF as historical context in research docs unless new eval justifies
@@ -107,18 +108,25 @@ The OKF experiment is a second knowledge representation over the same canonical
 raw pages, not another chunk retriever.
 
 - `page_metadata` and `page_markdown_content` are its read-only source.
-- Azure Foundry discovers conservative page proposals, resolves them against a
+- The local model discovers conservative page proposals, resolves them against a
   global canonical catalog, and enriches the resulting fixed concepts.
-- Existing durable concepts seed canonicalization; exact normalized aliases are
+- Existing durable concepts seed canonicalization; exact normalized titles are
   resolved before model-assisted batched resolution.
-- Generated concepts retain page-level provenance and source URL citations.
+- Generated concepts use minimal OKF frontmatter, retain source URLs in the
+  standard body citations section, and keep source page IDs only for evaluation.
 - Discovery inventory, canonical catalog, and enrichment checkpoints stay under
   `.local/okf/`; the validated bundle lives in `data/okf/tourism/`.
-- OKF answer evaluation is answer-level. Concept ids are not compared with the
-  chunk ids used by hit, recall, and MRR metrics.
+- Online answering follows bundle indexes and reads complete concept files; it
+  does not reopen raw database pages or select source-text windows.
+- Normal generation resumes incrementally. A deliberate clean rebuild deletes
+  the bundle and all private OKF state first, preventing stale concepts and old
+  generated prose from seeding a redesigned catalog.
+- Shared retrieval evaluation projects gold and retrieved chunks through their
+  source pages to OKF concept IDs. This credits translated and duplicate sibling
+  pages when canonicalization assigns them to the same concept.
 
-Reason: evaluating whole linked knowledge documents as if they were ranked page
-chunks would conflate representation granularity with answer quality.
+Reason: exact-page scoring penalizes valid alternate sources, while direct
+concept-to-chunk comparison conflates representation granularity.
 
 ## OKF Versus RAG Benchmarking
 
@@ -130,8 +138,8 @@ quality. There is no composite OKF-versus-RAG score.
 - Shared scraping and Markdown extraction are excluded from representation
   build time.
 - RAG chunk qrels remain valid for RAG-only retrieval studies.
-- Shared retrieval uses human-reviewed source-page qrels by mapping chunks and
-  OKF `source_page_ids` to the same page identities.
+- Shared retrieval derives golden concepts from existing chunk qrels and OKF
+  `source_page_ids`, then projects every method to the same concept ontology.
 - Build results include wall time, throughput, coverage, retries, model usage,
   cost, memory, artifact size, and storage amplification.
 - Query results include p50/p95/p99 latency, throughput, failures, context use,
@@ -144,3 +152,91 @@ quality. There is no composite OKF-versus-RAG score.
 Reason: industry IR and search benchmarks report effectiveness together with
 latency, throughput, build cost, and storage. The complete protocol and sources
 are in [`experiments/indexing/README.md`](../experiments/indexing/README.md).
+
+## Agentic Page Tools
+
+`*_hybrid_agentic_tools` extends the agentic loop with two read-only tools over
+the source page behind a retrieved chunk: `list_sections(page_id)` for a table
+of contents and `search_in_page(page_id, term)` for sibling chunks. Both return
+real `page_chunks.id` values, so anything the agent finds is scored against the
+existing chunk qrels. Found chunks are inserted directly after the ranked chunk
+of the same page, because the anchor's rank carries the retrieval system's
+confidence in that page.
+
+It is a separate method rather than a change to `*_hybrid_agentic`, so the
+plain agent stays a live baseline in the same run.
+
+Measured motivation, over 300 questions with `qwen_hybrid_rerank`: 75.3% already
+hit@10, **13.3% miss while the gold chunk's page is nevertheless ranked** (what
+these tools can recover), and 11.3% miss with the page absent (out of reach).
+
+The prompt, not the plumbing, decides whether tools are used at all. Over the 40
+recoverable misses:
+
+| prompt | search_in_page | reformulate | recovered |
+|---|---|---|---|
+| "do these chunks answer the query?" | 1 | 37 | 2/40 |
+| literal-answer gate + unseen-chunk counts | 42 | 0 | 5/40 |
+
+Three properties earn their keep and should survive edits:
+
+- **Sufficiency requires a literal answer**, not topical relevance. The first
+  prompt declared `sufficient` on 25 of 40 questions that were all misses, which
+  blocked every tool call downstream.
+- **Each chunk reports `showing N of M chunks from this page`.** Without it the
+  agent cannot know unread material exists on a page it already has.
+- **`reformulate` is the last resort**, because it discards a page that was
+  already correct.
+
+Repeated identical tool calls are answered from the prompt instead of rerunning
+the query: the first version burned its whole budget re-searching one term.
+
+## Local-Only Inference
+
+Every model call in the repo runs on local hardware. There is no hosted-model
+or credential path in the tree.
+
+- Embeddings and reranking run through sentence-transformers; the agentic
+  sufficiency judge, the OKF navigator and generator, the evidence-equivalence
+  judge, and eval question generation all run through Ollama behind the
+  `StructuredLlm` protocol in `src/shared/llm.py`.
+- Agent model is `gpt-oss:20b` at low reasoning effort, set by
+  `agentic_judge_model` in `src/retrieval/config.yaml`, `model` in
+  `src/okf/config.yaml`, and `DEFAULT_LOCAL_MODEL` in the equivalence judge.
+- Removed: the Azure Foundry chat client (`DeepSeek-V4-Pro`), the Azure
+  embedding provider (`embed-v-4-0`, published as `embed_v4_*`), and the
+  Azure-hosted Cohere reranker (`*_cohere*`).
+
+Reason for going local: the hosted path cost quota, imposed a ~125k tok/min
+rate limit on the agentic judge, hit content filters on tourism source text,
+and made runs non-reproducible for anyone without the credentials.
+
+Reason for `gpt-oss:20b` specifically: it was chosen on measured structured-output
+reliability, not on reputation. Over 10 real sufficiency prompts (8k-20k chars)
+built from live `qwen_hybrid_rerank` results:
+
+| model | mode | valid verdicts | median |
+|---|---|---|---|
+| `gpt-oss:20b` (low) | tool call | 10/10 | 1.9s |
+| `gemma4:31b` | tool call | 10/10 | 7.8s |
+| `gemma4:26b` | tool call | 5/10 | 2.7s |
+| `gemma4:26b` | json_schema | 0/10 | - |
+
+Every `gemma4:26b` failure was a Slovenian question, where it returns no tool
+call at all; in `json_schema` mode with reasoning off it answers in prose
+instead of JSON on all inputs. `gemma4:31b` is reliable but 4x slower for a
+judge called once per retrieval attempt.
+
+Two consequences for the LLM layer:
+
+- Structured output uses `method="function_calling"` (tool calls), not
+  `json_schema`. `structured_local_model` takes a `method` argument so callers
+  that still work with `json_schema` are unaffected.
+- `LocalOllamaStructuredLlm.structured_output` treats a `None` result as a
+  failed attempt and retries, then raises. Tool-call mode returns `None` when
+  the model answers without calling the tool, and LangChain's `with_retry` does
+  not catch that because it is not an exception.
+
+Consequence: agentic and `embed_v4_*` numbers in existing `docs/` reports were
+produced with the hosted models and are not directly comparable to new runs.
+Label them as historical rather than re-baselining old reports.

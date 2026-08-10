@@ -1,18 +1,14 @@
 from __future__ import annotations
 
-import os
-import re
 from collections.abc import Sequence
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from typing import Protocol, TypeVar
 
-import httpx
 from langchain_ollama import ChatOllama
 from pydantic import BaseModel
 
 __all__ = [
-    "AzureFoundryStructuredLlm",
     "LocalOllamaStructuredLlm",
     "StructuredLlm",
     "StructuredPrompt",
@@ -41,6 +37,7 @@ class LocalOllamaStructuredLlm:
     reasoning: bool | str | None = True
     num_ctx: int | None = None
     num_predict: int | None = None
+    method: str = "json_schema"
 
     def structured_output(
         self,
@@ -55,69 +52,37 @@ class LocalOllamaStructuredLlm:
             reasoning=self.reasoning,
             num_ctx=self.num_ctx,
             num_predict=self.num_predict,
+            method=self.method,
         )
-        return model.with_retry(stop_after_attempt=retries).invoke(_messages(prompt))
-
-
-@dataclass(frozen=True)
-class AzureFoundryStructuredLlm:
-    endpoint: str
-    api_key: str
-    model: str
-    timeout_seconds: int = 90
-    temperature: float = 0
-    max_tokens: int = 1024
-
-    @classmethod
-    def from_env(cls, **overrides) -> AzureFoundryStructuredLlm:
-        return cls(
-            endpoint=os.environ["AZURE_AI_ENDPOINT"],
-            api_key=os.environ["AZURE_AI_API_KEY"],
-            model=os.environ["AZURE_AI_MODEL"],
-            **overrides,
-        )
-
-    def structured_output(
-        self,
-        prompt: StructuredPrompt,
-        output_schema: type[T],
-        *,
-        retries: int = 3,
-    ) -> T:
         last_error: Exception | None = None
-        for _ in range(retries):
+        for attempt in range(max(1, retries)):
+            # Temperature is 0 for reproducibility, so an identical prompt
+            # reproduces an identical failure. Each retry must name what went
+            # wrong, or the extra attempts are wasted calls.
+            retry_prompt = (
+                prompt
+                if attempt == 0
+                else _with_correction(prompt, last_error, output_schema)
+            )
             try:
-                content = self._request(prompt, output_schema)
-                return output_schema.model_validate_json(_json_object(content))
-            except (httpx.HTTPError, KeyError, ValueError) as exc:
+                result = model.invoke(_messages(retry_prompt))
+            except Exception as exc:  # transport, parse, and validation failures
                 last_error = exc
+                continue
+            # function_calling yields None when the model answers without
+            # calling the tool; that is a failed attempt, not a valid result.
+            if result is not None:
+                return result
+            last_error = ValueError("model returned no structured output")
         detail = (
             f"{type(last_error).__name__}: {last_error}"
             if last_error is not None
             else "unknown error"
         )
         raise RuntimeError(
-            f"structured Azure Foundry call failed after {retries} attempts: {detail}"
+            f"structured call to {self.model_id} failed after "
+            f"{max(1, retries)} attempts: {detail}"
         ) from last_error
-
-    def _request(self, prompt: StructuredPrompt, output_schema: type[BaseModel]) -> str:
-        payload = {
-            "model": self.model,
-            "messages": _azure_messages(prompt, output_schema),
-            "temperature": self.temperature,
-            "max_tokens": self.max_tokens,
-        }
-        with httpx.Client(timeout=self.timeout_seconds) as client:
-            response = client.post(
-                f"{self.endpoint.rstrip('/')}/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {self.api_key}",
-                    "Content-Type": "application/json",
-                },
-                json=payload,
-            )
-        response.raise_for_status()
-        return response.json()["choices"][0]["message"]["content"]
 
 
 def run_structured_outputs(
@@ -150,18 +115,20 @@ def structured_local_model(
     reasoning: bool | str | None = True,
     num_ctx: int | None = None,
     num_predict: int | None = None,
+    method: str = "json_schema",
 ):
-    """Create a local Ollama chat model that returns the requested Pydantic shape."""
+    """Create a local Ollama chat model that returns the requested Pydantic shape.
+
+    Use `method="function_calling"` for models that ignore `json_schema` when
+    reasoning is disabled; Gemma 4 answers such prompts in prose instead of JSON.
+    """
     return ChatOllama(
         model=model_id,
         num_ctx=num_ctx,
         num_predict=num_predict,
         reasoning=reasoning,
         temperature=0,
-    ).with_structured_output(
-        schema,
-        method="json_schema",
-    )
+    ).with_structured_output(schema, method=method)
 
 
 def _messages(prompt: StructuredPrompt) -> StructuredPrompt:
@@ -170,31 +137,19 @@ def _messages(prompt: StructuredPrompt) -> StructuredPrompt:
     return list(prompt)
 
 
-def _azure_messages(
+def _with_correction(
     prompt: StructuredPrompt,
+    error: Exception | None,
     output_schema: type[BaseModel],
-) -> list[dict[str, str]]:
-    schema_instruction = (
-        "Return only a JSON object matching this schema: "
-        f"{output_schema.model_json_schema()}"
+) -> StructuredPrompt:
+    """Tell the model what it got wrong so the retry differs from the attempt."""
+    required = output_schema.model_json_schema().get("required", [])
+    instruction = (
+        "The previous response was rejected: "
+        f"{type(error).__name__}: {error}. "
+        "Answer again by calling the tool with every required field present"
+        + (f": {', '.join(required)}." if required else ".")
     )
     if isinstance(prompt, str):
-        return [
-            {"role": "system", "content": schema_instruction},
-            {"role": "user", "content": prompt},
-        ]
-    messages = [
-        {"role": _azure_role(role), "content": content} for role, content in prompt
-    ]
-    return [{"role": "system", "content": schema_instruction}, *messages]
-
-
-def _azure_role(role: str) -> str:
-    return "user" if role == "human" else role
-
-
-def _json_object(text: str) -> str:
-    match = re.search(r"\{.*\}", text, re.DOTALL)
-    if not match:
-        raise ValueError("response did not contain a JSON object")
-    return match.group(0)
+        return f"{prompt}\n\n{instruction}"
+    return [*prompt, ("human", instruction)]

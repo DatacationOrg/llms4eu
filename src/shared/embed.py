@@ -1,3 +1,4 @@
+import torch
 from sentence_transformers import SentenceTransformer
 
 
@@ -5,13 +6,26 @@ __all__ = ["load_embedder", "embed_texts"]
 
 
 def load_embedder(
-    model_name: str, *, local_files_only: bool = True
+    model_name: str,
+    *,
+    local_files_only: bool = True,
+    dtype: str | None = None,
+    attn_implementation: str | None = None,
 ) -> SentenceTransformer:
     """Load a SentenceTransformers model from the local cache by default.
 
     Use local_files_only=False only for explicit model download/cache warmup.
     """
-    return SentenceTransformer(model_name, local_files_only=local_files_only)
+    model_kwargs = {}
+    if dtype is not None:
+        model_kwargs["dtype"] = getattr(torch, dtype)
+    if attn_implementation is not None:
+        model_kwargs["attn_implementation"] = attn_implementation
+    return SentenceTransformer(
+        model_name,
+        local_files_only=local_files_only,
+        model_kwargs=model_kwargs,
+    )
 
 
 def embed_texts(

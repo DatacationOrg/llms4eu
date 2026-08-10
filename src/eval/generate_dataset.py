@@ -11,7 +11,11 @@ from pydantic import BaseModel, Field, ValidationError
 from src.db.pages import connect_pages as connect
 from src.db.pages import initialize_page_artifacts_db as initialize_eval_db
 from src.shared.env import load_local_env, load_yaml
-from src.shared.llm import AzureFoundryStructuredLlm, structured_local_model
+from src.shared.llm import (
+    LocalOllamaStructuredLlm,
+    StructuredLlm,
+    structured_local_model,
+)
 
 CONFIG = load_yaml(Path(__file__).with_name("config.yaml"))
 
@@ -99,7 +103,7 @@ class QuestionCandidate(BaseModel):
     )
 
 
-class FoundryQuestionAnswer(BaseModel):
+class SingleQuestionAnswer(BaseModel):
     question: str | None = Field(default=None, max_length=QUESTION_MAX_CHARS)
     answer: str | None = Field(default=None, max_length=ANSWER_MAX_CHARS)
 
@@ -323,17 +327,27 @@ def _question_id(chunk_id: str, question: QuestionCandidate) -> str:
     return str(uuid.uuid5(uuid.NAMESPACE_URL, key))
 
 
-def generate_missing_with_foundry(limit: int | None, workers: int = 10) -> None:
+def generate_missing_questions(
+    limit: int | None,
+    workers: int = 4,
+    model_id: str | None = None,
+) -> None:
     initialize_eval_db()
     load_local_env()
-    client = AzureFoundryStructuredLlm.from_env(max_tokens=512)
+    client = LocalOllamaStructuredLlm(
+        model_id=_resolve_model_name(model_id or CONFIG["question_model"]),
+        reasoning=CONFIG["question_model_reasoning"],
+        num_ctx=CONFIG["question_model_num_ctx"],
+        num_predict=512,
+        method="function_calling",
+    )
     tasks = _missing_question_tasks(limit)
     print(f"found {len(tasks)} missing question slots", flush=True)
 
     inserted = 0
     completed = 0
     with ThreadPoolExecutor(max_workers=workers) as pool:
-        futures = [pool.submit(_foundry_question, task, client) for task in tasks]
+        futures = [pool.submit(_single_question, task, client) for task in tasks]
         for future in as_completed(futures):
             completed += 1
             task, item = future.result()
@@ -388,9 +402,9 @@ def _missing_question_tasks(limit: int | None) -> list[dict]:
     return tasks
 
 
-def _foundry_question(
+def _single_question(
     task: dict,
-    client: AzureFoundryStructuredLlm,
+    client: StructuredLlm,
 ) -> tuple[dict, QuestionCandidate | None]:
     language = (
         task["target_language"]
@@ -403,7 +417,7 @@ def _foundry_question(
                 ("system", _single_question_system_prompt(task, language)),
                 ("human", _human_prompt(task)),
             ],
-            FoundryQuestionAnswer,
+            SingleQuestionAnswer,
             retries=3,
         )
         if not qa.question or not qa.answer:
@@ -447,11 +461,11 @@ def main() -> None:
     parser.add_argument("--limit", type=int)
     parser.add_argument("--model")
     parser.add_argument("--reasoning", action="store_true")
-    parser.add_argument("--foundry-missing", action="store_true")
-    parser.add_argument("--workers", type=int, default=10)
+    parser.add_argument("--fill-missing", action="store_true")
+    parser.add_argument("--workers", type=int, default=4)
     args = parser.parse_args()
-    if args.foundry_missing:
-        generate_missing_with_foundry(args.limit, args.workers)
+    if args.fill_missing:
+        generate_missing_questions(args.limit, args.workers, args.model)
     else:
         generate_dataset(args.limit, args.model, args.reasoning or None)
 

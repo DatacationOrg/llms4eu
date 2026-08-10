@@ -67,7 +67,7 @@ def bold_best_table(headers: list[str], rows: list[list[str | float]]) -> str:
         rendered_rows.append(rendered)
 
     widths = [
-        max(len(_plain(row[index])) for row in [headers, *rendered_rows])
+        max(len(row[index]) for row in [headers, *rendered_rows])
         for index in range(len(headers))
     ]
     lines = [
@@ -104,7 +104,3 @@ def plain_table(headers: list[str], rows: list[list[str | int]]) -> str:
         for row in rendered_rows
     )
     return "\n".join(lines)
-
-
-def _plain(text: str) -> str:
-    return text.replace("**", "")

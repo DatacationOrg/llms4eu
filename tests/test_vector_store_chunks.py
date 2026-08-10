@@ -1,6 +1,8 @@
 import sqlite3
 
 import src.vector_store.chunks as chunk_vectors
+from src.retrieval.retrievers import sparse as sparse_module
+from src.retrieval.retrievers.sparse import SparseRetriever
 from src.vector_store.chunks import (
     collection_ready,
     enabled_provider_names,
@@ -64,10 +66,63 @@ def test_chunk_collection_rebuild_readiness_and_query(monkeypatch, tmp_path):
     assert [hit.id for hit in small_batch_hits[1]] == ["chunk-forest"]
 
 
+def test_v2_chunk_collection_is_isolated_and_contains_metadata(monkeypatch, tmp_path):
+    db_path = tmp_path / "raw_pages.db"
+    _write_chunk_fixture(db_path)
+
+    monkeypatch.setenv("CHROMA_PATH", str(tmp_path / "chroma"))
+    monkeypatch.setattr("src.db.pages.raw_pages_db_path", lambda: db_path)
+    monkeypatch.setattr(
+        "src.vector_store.chunks.build_indexer", lambda *_: StubIndexer()
+    )
+
+    rebuild_chunk_collection("qwen")
+    rebuild_chunk_collection("qwen", "v2")
+
+    assert collection_ready("qwen")
+    assert collection_ready("qwen", "v2")
+    assert chunk_vectors._collection_name("qwen", "v1") != (
+        chunk_vectors._collection_name("qwen", "v2")
+    )
+    hits = query_chunk_vectors("qwen", "castle history", limit=1, version="v2")
+    assert [hit.id for hit in hits] == ["chunk-castle"]
+
+    collection = chunk_vectors._client().get_collection(
+        chunk_vectors._collection_name("qwen", "v2")
+    )
+    stored = collection.get(ids=["chunk-castle"], include=["metadatas"])
+    assert stored["metadatas"][0] == {
+        "chunk_index": 0,
+        "id": "chunk-castle",
+        "language": "en",
+        "page_id": "page-castle",
+        "page_kind": "prose",
+        "source": "fixture",
+        "title": "Castle Page",
+    }
+
+
 def test_enabled_provider_names_comes_from_indexing_config(monkeypatch):
     monkeypatch.setattr(chunk_vectors, "INDEXING_PROVIDERS", ("qwen", "english"))
 
     assert enabled_provider_names() == ["english", "qwen"]
+
+
+def test_v2_sparse_indexes_metadata_without_changing_v1(monkeypatch, tmp_path):
+    db_path = tmp_path / "raw_pages.db"
+    _write_chunk_fixture(db_path)
+    monkeypatch.setattr("src.db.pages.raw_pages_db_path", lambda: db_path)
+    sparse_module._corpus.cache_clear()
+
+    legacy_hits = SparseRetriever(chunk_version="v1").retrieve("fixture", limit=2)
+    contextual_hits = SparseRetriever(chunk_version="v2").retrieve(
+        "fixture",
+        limit=2,
+    )
+
+    assert legacy_hits == []
+    assert {hit.id for hit in contextual_hits} == {"chunk-castle", "chunk-forest"}
+    sparse_module._corpus.cache_clear()
 
 
 def _write_chunk_fixture(path):
@@ -77,7 +132,8 @@ def _write_chunk_fixture(path):
             create table page_metadata (
               id text primary key,
               title text,
-              source text not null
+                            source text not null,
+                            page_kind text not null
             );
             create table page_sources (
               source text primary key,
@@ -92,9 +148,10 @@ def _write_chunk_fixture(path):
               char_count integer not null,
               unique(page_id, chunk_index)
             );
-            insert into page_metadata (id, title, source)
-            values ('page-castle', 'Castle Page', 'fixture'),
-                   ('page-forest', 'Forest Page', 'fixture');
+                 insert into page_sources (source, language) values ('fixture', 'en');
+                 insert into page_metadata (id, title, source, page_kind)
+                 values ('page-castle', 'Castle Page', 'fixture', 'prose'),
+                     ('page-forest', 'Forest Page', 'fixture', 'prose');
             insert into page_chunks (
               id, page_id, chunk_index, heading_path, text, char_count
             )

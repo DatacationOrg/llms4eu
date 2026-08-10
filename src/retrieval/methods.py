@@ -4,8 +4,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
+from src.indexing.chunk_text import CONTEXTUAL_CHUNK_VERSION, LEGACY_CHUNK_VERSION
 from src.retrieval.base import Retriever
-from src.retrieval.retrievers.agentic import AgenticRetriever
+from src.retrieval.retrievers.agentic import AgenticRetriever, default_judge
+from src.retrieval.retrievers.agentic_tools import AgenticToolRetriever
 from src.retrieval.retrievers.fusion import WeightedScoreFusionRetriever
 from src.retrieval.retrievers.rerank import CrossEncoderRerankRetriever
 from src.retrieval.retrievers.sparse import SparseRetriever
@@ -23,6 +25,7 @@ class RetrieverSpec:
     name: str
     build: Callable[[], Retriever]
     provider: str | None = None
+    chunk_version: str = LEGACY_CHUNK_VERSION
 
     @property
     def requires_index(self) -> bool:
@@ -32,10 +35,9 @@ class RetrieverSpec:
 class MissingRetrieverIndexes(RuntimeError):
     def __init__(self, missing: dict[str, str]) -> None:
         self.missing = missing
-        providers = sorted(set(missing.values()))
+        requirements = sorted(set(missing.values()))
         commands = "\n".join(
-            f"  uv run python -m src.indexing.chunks --method {provider}"
-            for provider in providers
+            _index_build_command(requirement) for requirement in requirements
         )
         methods = ", ".join(sorted(missing))
         super().__init__(
@@ -73,9 +75,12 @@ def missing_retriever_indexes(names: list[str]) -> dict[str, str]:
 
     missing = {}
     for name in names:
-        provider_name = specs[name].provider
-        if provider_name is not None and not collection_ready(provider_name):
-            missing[name] = provider_name
+        spec = specs[name]
+        if spec.provider is not None and not _collection_ready(
+            spec.provider,
+            spec.chunk_version,
+        ):
+            missing[name] = _index_requirement(spec.provider, spec.chunk_version)
     return missing
 
 
@@ -86,102 +91,242 @@ def _specs() -> dict[str, RetrieverSpec]:
             "sparse_rerank",
             _build_sparse_rerank,
         ),
+        "sparse_v2": RetrieverSpec(
+            "sparse_v2",
+            lambda: _sparse(CONTEXTUAL_CHUNK_VERSION),
+            chunk_version=CONTEXTUAL_CHUNK_VERSION,
+        ),
+        "sparse_rerank_v2": RetrieverSpec(
+            "sparse_rerank_v2",
+            lambda: _build_sparse_rerank(CONTEXTUAL_CHUNK_VERSION),
+            chunk_version=CONTEXTUAL_CHUNK_VERSION,
+        ),
     }
     for provider_name in enabled_provider_names():
-        specs.update(_provider_specs(provider_name))
+        specs.update(_provider_specs(provider_name, LEGACY_CHUNK_VERSION))
+        specs.update(_provider_specs(provider_name, CONTEXTUAL_CHUNK_VERSION))
     return specs
 
 
-def _provider_specs(provider_name: str) -> dict[str, RetrieverSpec]:
+def _provider_specs(
+    provider_name: str,
+    chunk_version: str,
+) -> dict[str, RetrieverSpec]:
+    suffix = _version_suffix(chunk_version)
     specs = {
-        provider_name: RetrieverSpec(
-            provider_name,
-            lambda provider=provider_name: _vector(provider),
+        f"{provider_name}{suffix}": RetrieverSpec(
+            f"{provider_name}{suffix}",
+            lambda provider=provider_name, version=chunk_version: _vector(
+                provider, version
+            ),
             provider=provider_name,
+            chunk_version=chunk_version,
         ),
-        f"{provider_name}_hybrid": RetrieverSpec(
-            f"{provider_name}_hybrid",
-            lambda provider=provider_name: _hybrid(provider),
+        f"{provider_name}_hybrid{suffix}": RetrieverSpec(
+            f"{provider_name}_hybrid{suffix}",
+            lambda provider=provider_name, version=chunk_version: _hybrid(
+                provider, version
+            ),
             provider=provider_name,
+            chunk_version=chunk_version,
         ),
-        f"{provider_name}_rerank": RetrieverSpec(
-            f"{provider_name}_rerank",
-            lambda provider=provider_name: _vector_rerank(provider),
+        f"{provider_name}_rerank{suffix}": RetrieverSpec(
+            f"{provider_name}_rerank{suffix}",
+            lambda provider=provider_name, version=chunk_version: _vector_rerank(
+                provider, version
+            ),
             provider=provider_name,
+            chunk_version=chunk_version,
         ),
-        f"{provider_name}_hybrid_rerank": RetrieverSpec(
-            f"{provider_name}_hybrid_rerank",
-            lambda provider=provider_name: _hybrid_rerank(provider),
+        f"{provider_name}_hybrid_rerank{suffix}": RetrieverSpec(
+            f"{provider_name}_hybrid_rerank{suffix}",
+            lambda provider=provider_name, version=chunk_version: _hybrid_rerank(
+                provider, version
+            ),
             provider=provider_name,
+            chunk_version=chunk_version,
         ),
     }
     if provider_name == "qwen":
-        specs["qwen_agentic"] = RetrieverSpec(
-            "qwen_agentic",
-            _qwen_agentic,
+        name = f"qwen_agentic{suffix}"
+        specs[name] = RetrieverSpec(
+            name,
+            lambda version=chunk_version: _qwen_agentic(version),
             provider="qwen",
+            chunk_version=chunk_version,
         )
-        specs["qwen_hybrid_agentic"] = RetrieverSpec(
-            "qwen_hybrid_agentic",
-            _qwen_hybrid_agentic,
-            provider="qwen",
+    if provider_name in {"qwen", "nemotron"}:
+        name = f"{provider_name}_hybrid_agentic{suffix}"
+        specs[name] = RetrieverSpec(
+            name,
+            lambda provider=provider_name, version=chunk_version: _hybrid_agentic(
+                provider, version
+            ),
+            provider=provider_name,
+            chunk_version=chunk_version,
+        )
+        name = f"{provider_name}_hybrid_agentic_tools{suffix}"
+        specs[name] = RetrieverSpec(
+            name,
+            lambda provider=provider_name, version=chunk_version: _hybrid_agentic_tools(
+                provider, version
+            ),
+            provider=provider_name,
+            chunk_version=chunk_version,
         )
     return specs
 
 
-def _sparse() -> SparseRetriever:
-    return SparseRetriever(k1=CONFIG["sparse_k1"], b=CONFIG["sparse_b"])
+def _sparse(chunk_version: str = LEGACY_CHUNK_VERSION) -> SparseRetriever:
+    return SparseRetriever(
+        name=f"sparse{_version_suffix(chunk_version)}",
+        k1=CONFIG["sparse_k1"],
+        b=CONFIG["sparse_b"],
+        chunk_version=chunk_version,
+    )
 
 
-def _build_sparse_rerank() -> CrossEncoderRerankRetriever:
-    return _reranker("sparse_rerank", _sparse())
+def _build_sparse_rerank(
+    chunk_version: str = LEGACY_CHUNK_VERSION,
+) -> CrossEncoderRerankRetriever:
+    suffix = _version_suffix(chunk_version)
+    return _reranker(f"sparse_rerank{suffix}", _sparse(chunk_version))
 
 
-def _vector(provider_name: str) -> Retriever:
-    return VectorChunkRetriever(name=provider_name, provider=provider_name)
+def _vector(
+    provider_name: str,
+    chunk_version: str = LEGACY_CHUNK_VERSION,
+) -> Retriever:
+    return VectorChunkRetriever(
+        name=f"{provider_name}{_version_suffix(chunk_version)}",
+        provider=provider_name,
+        chunk_version=chunk_version,
+    )
 
 
-def _hybrid(provider_name: str) -> WeightedScoreFusionRetriever:
+def _hybrid(
+    provider_name: str,
+    chunk_version: str = LEGACY_CHUNK_VERSION,
+) -> WeightedScoreFusionRetriever:
+    suffix = _version_suffix(chunk_version)
     return WeightedScoreFusionRetriever(
-        name=f"{provider_name}_hybrid",
-        retrievers=(_vector(provider_name), _sparse()),
+        name=f"{provider_name}_hybrid{suffix}",
+        retrievers=(
+            _vector(provider_name, chunk_version),
+            _sparse(chunk_version),
+        ),
         candidate_limit=CONFIG["rerank_candidate_limit"],
         weights=(CONFIG["hybrid_vector_weight"], CONFIG["hybrid_sparse_weight"]),
     )
 
 
-def _vector_rerank(provider_name: str) -> CrossEncoderRerankRetriever:
-    return _reranker(f"{provider_name}_rerank", _vector(provider_name))
+def _vector_rerank(
+    provider_name: str,
+    chunk_version: str = LEGACY_CHUNK_VERSION,
+) -> CrossEncoderRerankRetriever:
+    suffix = _version_suffix(chunk_version)
+    return _reranker(
+        f"{provider_name}_rerank{suffix}",
+        _vector(provider_name, chunk_version),
+    )
 
 
-def _hybrid_rerank(provider_name: str) -> CrossEncoderRerankRetriever:
-    return _reranker(f"{provider_name}_hybrid_rerank", _hybrid(provider_name))
+def _hybrid_rerank(
+    provider_name: str,
+    chunk_version: str = LEGACY_CHUNK_VERSION,
+) -> CrossEncoderRerankRetriever:
+    suffix = _version_suffix(chunk_version)
+    return _reranker(
+        f"{provider_name}_hybrid_rerank{suffix}",
+        _hybrid(provider_name, chunk_version),
+    )
 
 
-def _qwen_agentic() -> AgenticRetriever:
+def _qwen_agentic(
+    chunk_version: str = LEGACY_CHUNK_VERSION,
+) -> AgenticRetriever:
+    suffix = _version_suffix(chunk_version)
     return AgenticRetriever(
-        name="qwen_agentic",
-        base_retriever=_vector_rerank("qwen"),
+        name=f"qwen_agentic{suffix}",
+        base_retriever=_vector_rerank("qwen", chunk_version),
         judge_retries=CONFIG["agentic_judge_retries"],
         max_attempts=CONFIG["agentic_max_attempts"],
         min_sufficient_chunks=CONFIG["agentic_min_sufficient_chunks"],
         initial_limit=CONFIG["agentic_initial_limit"],
         limit_step=CONFIG["agentic_limit_step"],
         max_limit=CONFIG["agentic_max_limit"],
+        judge=default_judge(CONFIG),
     )
 
 
-def _qwen_hybrid_agentic() -> AgenticRetriever:
+def _hybrid_agentic(
+    provider_name: str,
+    chunk_version: str = LEGACY_CHUNK_VERSION,
+) -> AgenticRetriever:
+    suffix = _version_suffix(chunk_version)
     return AgenticRetriever(
-        name="qwen_hybrid_agentic",
-        base_retriever=_hybrid_rerank("qwen"),
+        name=f"{provider_name}_hybrid_agentic{suffix}",
+        base_retriever=_hybrid_rerank(provider_name, chunk_version),
         judge_retries=CONFIG["agentic_judge_retries"],
         max_attempts=CONFIG["agentic_max_attempts"],
         min_sufficient_chunks=CONFIG["agentic_min_sufficient_chunks"],
         initial_limit=CONFIG["agentic_initial_limit"],
         limit_step=CONFIG["agentic_limit_step"],
         max_limit=CONFIG["agentic_max_limit"],
+        judge=default_judge(CONFIG),
     )
+
+
+def _hybrid_agentic_tools(
+    provider_name: str,
+    chunk_version: str = LEGACY_CHUNK_VERSION,
+) -> AgenticToolRetriever:
+    suffix = _version_suffix(chunk_version)
+    return AgenticToolRetriever(
+        name=f"{provider_name}_hybrid_agentic_tools{suffix}",
+        base_retriever=_hybrid_rerank(provider_name, chunk_version),
+        judge_retries=CONFIG["agentic_judge_retries"],
+        max_attempts=CONFIG["agentic_tools_max_attempts"],
+        min_sufficient_chunks=CONFIG["agentic_min_sufficient_chunks"],
+        initial_limit=CONFIG["agentic_initial_limit"],
+        limit_step=CONFIG["agentic_limit_step"],
+        max_limit=CONFIG["agentic_max_limit"],
+        max_tool_calls=CONFIG["agentic_tools_max_tool_calls"],
+        section_limit=CONFIG["agentic_tools_section_limit"],
+        search_limit=CONFIG["agentic_tools_search_limit"],
+        judge=default_judge(
+            {
+                **CONFIG,
+                "agentic_judge_structured_method": CONFIG[
+                    "agentic_tools_structured_method"
+                ],
+            }
+        ),
+    )
+
+
+def _version_suffix(chunk_version: str) -> str:
+    return "" if chunk_version == LEGACY_CHUNK_VERSION else f"_{chunk_version}"
+
+
+def _collection_ready(provider: str, chunk_version: str) -> bool:
+    if chunk_version == LEGACY_CHUNK_VERSION:
+        return collection_ready(provider)
+    return collection_ready(provider, chunk_version)
+
+
+def _index_requirement(provider: str, chunk_version: str) -> str:
+    if chunk_version == LEGACY_CHUNK_VERSION:
+        return provider
+    return f"{provider}@{chunk_version}"
+
+
+def _index_build_command(requirement: str) -> str:
+    provider, _, chunk_version = requirement.partition("@")
+    command = f"  uv run python -m src.indexing.chunks --method {provider}"
+    if chunk_version:
+        command += f" --chunk-version {chunk_version}"
+    return command
 
 
 def _reranker(name: str, base_retriever: Retriever) -> CrossEncoderRerankRetriever:

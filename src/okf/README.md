@@ -1,201 +1,111 @@
 # Open Knowledge Format
 
-Generates and consumes an OKF v0.1 tourism bundle from complete scraped pages.
-Unlike normal RAG, OKF generation and navigation never read `page_chunks`.
+Generates and consumes a minimal OKF v0.1 tourism bundle from complete scraped
+pages. Generation reads complete Markdown from `data/db/pages.db`; navigation
+reads only the generated OKF hierarchy and complete concept files.
 
-## Architecture and inputs
+## Generation
 
-The canonical input is `data/db/pages.db`. The read-only source adapter loads
-successful, non-empty rows from `page_metadata`, complete Markdown from
-`page_markdown_content`, and source language metadata from `page_sources`.
-Every selected row becomes a source page containing its ID, source, URL, title,
-language, and complete Markdown. Optional source and page-limit filters are
-applied before generation.
+The resumable pipeline has three phases:
 
-```mermaid
-flowchart TD
-	A[Complete Markdown pages in SQLite] --> B[Azure discovery]
-	B --> C[Persistent proposal inventory]
-	C --> D[Exact matching and Azure canonicalization]
-	D --> E[Persistent canonical catalog]
-	A --> F[Canonical concept enrichment]
-	E --> F
-	F --> G[Atomic Markdown concept writes]
-	G --> H[Bounded indexes, validation, and manifest]
-```
+1. The model proposes one primary concept for each complete source page.
+2. Exact matching and batched model resolution canonicalize proposals against a
+   persistent global catalog.
+3. The model creates or augments coherent Markdown concepts from assigned pages.
 
-Generation reads `page_metadata` and `page_markdown_content` from the canonical
-SQLite database in read-only mode. It runs three resumable phases:
+Private inventory, catalog, and enrichment checkpoints live under
+`.local/okf/`. Concept and checkpoint writes use temporary sibling files and
+atomic replacement. Completed pages are skipped on resume.
 
-1. Azure proposes one conservative primary concept and aliases per complete page.
-2. Exact matching and batched Azure resolution merge proposals into one global
-	canonical catalog, seeded from concepts already in the durable bundle.
-3. Azure enriches each fixed canonical concept from every assigned complete
-	page; Python merges provenance, aliases, languages, tags, and citations.
+Pages above 60,000 characters are split at Markdown headings and paragraph
+boundaries into target parts of at most 45,000 characters. Part-level discovery
+is consolidated into one page concept, while part-level enrichment progress is
+checkpointed. This remains necessary: the current source corpus contains a
+264,863-character page and another page above 60,000 characters. Splitting is a
+generation safeguard only; navigation reads complete OKF concepts.
 
-Discovery produces discriminative descriptions and multilingual search terms.
-When proposals resolve to an existing concept, Python retains their aliases,
-tags, search terms, and alternate titles instead of dropping that routing
-metadata. Enrichment additionally extracts source summaries, atomic facts, and
-natural-language retrieval queries. Python stores these per page and rebuilds a
-durable `# Source evidence by page` section, so later concept rewrites cannot
-silently summarize away small names, dates, quantities, or relationships.
+Generation and navigation both use the local Ollama model named by `model` in
+`config.yaml` (`gpt-oss:20b`). Ollama must be running with that model pulled;
+no credentials or network access are required.
 
-The private inventory, catalog, and enrichment checkpoint live under
-`.local/okf/` and can be resumed safely. Pages above 60,000 characters are
-split at Markdown headings and paragraph boundaries into parts of at most
-45,000 characters. Part-level discovery is consolidated back to one page
-concept, and enrichment evidence is merged under the original page ID; no page
-tail is silently truncated.
+The bundle currently in `data/okf/tourism/` predates this switch and was
+generated with a hosted model, as its `manifest.json` records. It is still
+usable as-is; a clean rebuild regenerates it locally.
 
-Required environment variables:
-
-- `AZURE_AI_ENDPOINT`
-- `AZURE_AI_API_KEY`
-- `AZURE_AI_MODEL`
-
-Runtime policy is defined in `config.yaml`. Important defaults are a 60,000
-character source-page split threshold, 45,000-character target parts, a
-180-second Azure timeout, 8,192 output tokens, and three structured-output
-attempts. `generate_bundle()` loads the local `.env`; credentials are never
-written to documents, indexes, manifests, or checkpoints, and exact API-key
-occurrences are redacted before failures are persisted.
-
-Run a pilot and then resume across the full corpus:
+Run generation and validation with:
 
 ```bash
 just okf-pilot
 just okf-generate
-just okf-refresh-retrieval
+just okf-rebuild
 just okf-validate
 just okf-ask What is Rajhenburg Castle?
+just okf-benchmark
 ```
 
-Generated concepts are written to `data/okf/tourism/`. The manifest reports
-discovery, resolution, enrichment, coverage, failures, model deployment,
-concept count, and validation findings. Secrets are never written to the bundle
-or checkpoint.
+OKF is not part of the default retrieval benchmark. To score it against chunk
+RAG, use `just okf-benchmark`, or pass `--methods okf-only` to
+`experiments/indexing/compare_qwen_modes.py` for concept-level scoring.
 
-Use `just okf-refresh-retrieval` after upgrading an older bundle. It reuses the
-durable discovery inventory and canonical page assignments but re-runs
-enrichment so every assigned page receives atomic facts, source summaries, and
-retrieval queries. `--force` remains the clean, more expensive option that also
-repeats discovery and global canonicalization.
+### Resume and clean rebuilds
 
-Refresh progress lives independently in `.local/okf/retrieval-refresh.json` and
-resumes across interruptions, including from the last successful part of an
-oversized page. Refresh calls retain the existing concept body and request only
-retrieval metadata. Detailed final Azure HTTP, JSON, or validation errors are
-stored after retries, while merged metadata is bounded to prevent context growth.
+- `just okf-generate` resumes from `.local/okf/` and leaves completed work alone.
+- `just okf-rebuild` uses `--clean`: it deletes `data/okf/tourism/` plus the
+   complete `.local/okf/` state directory, then rebuilds all pages from
+   `pages.db`. Clean mode rejects source filters and limits to avoid replacing a
+   full bundle with a partial one.
 
-## Generation phases
+Use a clean rebuild after schema, taxonomy, or prompt changes. It is destructive
+and runs the local model over the full corpus, so keep a Git commit or external
+copy if the previous bundle must remain recoverable.
 
-### Discovery and splitting
+## Documents and indexes
 
-Discovery asks Azure for one conservative primary concept per source page:
-stable concept ID, semantic type, title, discriminative description, tags,
-aliases, and multilingual search terms. Concept IDs must have at least two
-lowercase path components, cannot use traversal or reserved names, and must
-resolve inside the bundle.
+Generated concept frontmatter contains only:
 
-Pages above the configured threshold are split at Markdown headings and
-paragraph boundaries. Only oversized individual blocks fall back to newline,
-sentence, whitespace, and hard character boundaries. Each part is discovered
-separately, then consolidated into one page proposal. Enrichment processes all
-parts under the same source-page and concept identity, and part-level progress
-is checkpointed so successful parts are not repeated.
+- `type`
+- `title`
+- `description`
+- `timestamp`
+- `source_page_ids`, retained only for page-level evaluation compatibility
 
-### Global canonicalization
+The body is coherent Markdown with a final standard `# Citations` section.
+Aliases, tags, languages, synthetic search terms and queries, source-evidence
+mappings, atomic-fact metadata, and retrieval-readiness metadata are not stored.
 
-Proposals are resolved before documents are written. Python first performs
-conservative normalized title/alias and type matching. Remaining proposals are
-resolved in Azure batches against the global catalog, which includes prior
-batches and durable concepts already in the bundle. Every page must be assigned
-exactly once. Equivalent translated proposals may reuse one concept, while
-independently meaningful entities remain separate. Aliases, tags, alternate
-titles, and search terms are merged deterministically into the selected concept.
+Indexes are regenerated from deepest directories upward. Entries expose only a
+concept title and description. Collections above 20 entries are split into
+bounded browse indexes. Validation requires parseable frontmatter, the four
+required descriptive fields, and a non-empty body. Escaping links are errors;
+missing internal links are warnings.
 
-### Enrichment and deterministic evidence
+The generated manifest records source selection, resumability counts, failures,
+concept counts, the generating model, and validation findings.
 
-Azure enriches each fixed concept from every assigned complete page. It returns
-the final title and description, tags, aliases, search terms, realistic
-retrieval questions, a source-specific summary, atomic facts, and structured
-Markdown. During retrieval refresh, the existing body is retained and only
-metadata is requested.
+## Navigation and evaluation
 
-Python owns the durable merge. It de-duplicates provenance and metadata,
-retains the original concept type, caps accumulated search terms, retrieval
-questions, and facts, and stores each page's title, source, URL, language,
-summary, facts, search terms, and retrieval questions under
-`source_evidence[page_id]`. It then rebuilds `# Source evidence by page` and
-`# Citations` deterministically, preventing later concept rewrites from
-silently dropping small facts or source URLs.
+The answer command starts at the root index and follows only advertised relative
+Markdown links. It may open several concept files within configured step,
+document, and character budgets. Concepts that exceed the remaining character
+budget are represented by query-focused excerpts so large files remain
+retrievable. Opened concept files are answer evidence; indexes route but are not
+valid citations. Answers cite exact opened concept paths. The navigator may open
+another advertised concept when the files read so far do not contain enough
+information.
 
-Concept and checkpoint writes use a temporary sibling, flush and `fsync`, then
-atomically replace the target. Interrupted runs therefore retain the previous
-complete document. Normal runs skip successfully completed pages; `--force`
-reprocesses selected pages but intentionally does not delete the existing
-bundle or orphaned concepts.
+The evaluation adapter ranks cited concepts first and then other visited
+concepts. Golden concepts are derived by mapping each gold chunk to its source
+page and then through concept `source_page_ids`. RAG results use the same
+projection, so retrieving a translated or duplicate sibling page gets full
+concept credit. There is one `okf` mode: no BM25 metadata shortlist, raw SQLite
+source window, or retrieval-readiness filter participates in navigation.
 
-## Indexes, validation, and manifest
+For fair comparison with chunk RAG, hold the question set, answer model, context
+budget, and load constant and report concept retrieval separately from native
+chunk retrieval and answer correctness. The complete protocol is in
+[`experiments/indexing/README.md`](../../experiments/indexing/README.md).
 
-After enrichment, indexes are regenerated from deepest directories upward.
-Entries contain concept titles and discriminative descriptions; large
-collections are split into bounded browse indexes. Validation requires
-parseable YAML frontmatter, type, title, description, timestamp, and a non-empty
-body. Links escaping the bundle are errors; missing internal targets are
-warnings because evolving OKF bundles may be incomplete.
-
-The generated `manifest.json` records the source database, selection filters,
-processed/resumed/covered pages, failures, concept and retrieval-metadata
-counts, Azure deployment, and validation findings. It is operational metadata,
-not a credential store.
-
-For a new unsplit page, generation normally requires discovery and enrichment
-plus a share of a batched canonicalization request. An initial run over $N$
-pages is therefore approximately
-
-$$
-2N + \left\lceil \frac{U}{B} \right\rceil
-$$
-
-requests before retries, where $U$ is the number of proposals not resolved by
-exact matching and $B$ is the resolution batch size. Multipart pages require
-one discovery and enrichment request per part plus consolidation.
-
-The answer command starts at the root index and asks Azure for one structured
-navigation action at a time. Concept documents and indexes are treated as
-**routing metadata only**: the navigator sees a concept's title, description,
-tags, aliases, search terms, and its list of source pages, but never its
-generated summary or extracted facts. To gather evidence it must `open_source`
-a specific source page, which loads **verbatim windowed slices of the raw
-article** from `data/db/pages.db`. Answers may cite only opened source pages,
-and a separate structured evidence check verifies the raw windows directly
-support the answer before it is accepted; rejected answers trigger backtracking.
-Step, document, source, and context budgets are enforced, and every action and
-evidence decision is retained as a diagnostic trace. This deliberately prevents
-answering from summarized versions of the underlying articles.
-
-`okf` remains the pure hierarchy baseline. `okf_search` ranks title,
-description, aliases, tags, generated search terms, and language with local
-BM25-style scoring, then opens whole concepts. Source pages within visited
-concepts are ordered from concept relevance and per-source metadata instead of
-frontmatter order. Large generated collections are split at 20 links per browse
-index, while index descriptions expose representative titles and keywords.
-
-The comparison runner enables `retrieval_ready_only` for both OKF variants. A
-source page is eligible only when its `source_evidence` contains atomic facts or
-retrieval questions. Enrichment failures are excluded from both the evaluation
-question set and returned page rankings.
-
-For a fair comparison with chunk RAG, measure clean and incremental build cost,
-online latency and context use, page-level evidence retrieval, and blinded
-answer quality separately. Concept IDs are not chunk qrels. The complete
-protocol is in [`experiments/indexing/README.md`](../../experiments/indexing/README.md).
-
-## Tests and limitations
-
-Run focused checks with:
+## Tests
 
 ```bash
 uv run --extra dev pytest tests/test_okf.py
@@ -204,8 +114,6 @@ uv run --extra dev ruff check src/okf tests/test_okf.py
 ```
 
 Current limitations include one primary concept per page, model-assisted
-semantic canonicalization, prompt-enforced preservation of narrative prose,
-source-level rather than claim-level attribution, no destructive orphan
-pruning, and a combined prompt that can still grow when many pages enrich one
-concept. The bundle remains portable Markdown that can be inspected in Git or
-consumed without the Azure generation runtime.
+canonicalization, source-page rather than claim-level benchmark attribution, no
+automatic orphan pruning during resume runs, and prompts that can grow
+when many pages enrich one concept. A clean rebuild removes orphans.

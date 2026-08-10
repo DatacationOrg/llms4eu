@@ -1,0 +1,86 @@
+---
+type: exhibitions
+title: Temporary Exhibitions at Grad Rajhenburg
+description: A rotating program of temporary art and cultural exhibitions hosted at
+  Rajhenburg Castle in Brestanica, Slovenia, featuring contemporary Slovenian artists.
+timestamp: '2026-07-21T11:08:08+00:00'
+source_page_ids:
+- 5d59ee66-79d6-506e-9caa-5b0bd7f14e99
+- 6e017c70-1744-59e6-bdee-7bd180538f50
+---
+
+# Temporary Exhibitions at Grad Rajhenburg
+
+A rotating program of temporary art and cultural exhibitions hosted at Rajhenburg Castle in Brestanica, Slovenia, featuring contemporary Slovenian artists.
+
+## Current and Upcoming Exhibitions
+
+- **Simona Šuc, Pokrajina razdalje**
+  Exhibition duration: 27. March 2026 – 28. February 2027
+  Painter Simona Šuc presents works whose common denominator is drawing. The line, as the basic building block of compositions, travels freely across the painting surface, closes into circular or breaks into crystalline forms, is firmly closed or interrupted. With different rhythms and shapes, it composes dynamic landscapes. The artist transfers the question of distance into communication with the viewer, as with a dynamic installation and unconventional approaches to the painting medium, she transcends the established frameworks of presenting paintings and places them in close contact with the viewer. The viewer enters a landscape that evokes joy and wonder, the kind that has always pervaded explorers in their discoveries.
+
+- **Hana Stupica, Med svetlobo in sencami**
+  Exhibition duration: 25. October 2025 – 7. December 2025
+  Hana Stupica's exhibition *Med svetlobo in sencami* (Between Light and Shadows) in the tower of Rajhenburg Castle encompasses her illustrations for Schönwerth's fairy tales, *Zajčkova hišica* (The Bunny's Little House), and *Zgodbe za vina Fedora* (Stories for Fedora's Wines). Illustration is inseparably linked to the story, the work it refers to, but the meaning of 'picture in a book' only developed in the 19th century; the term itself means to illustrate, derived from the Latin for light – to illuminate. The artist's illustrations in the exhibition come to life in their own independent meaning, regardless of whether we know the works for which they were created.
+
+- **Zven kamna**
+  A musical-sculptural project
+  Exhibition duration: 4. September 2025 – 12. October 2025
+  *Zven kamna* (The Sound of Stone) is an original musical-sculptural project created through the collaboration of the Slovenian Percussion Project (Slovenski tolkalni projekt) and academic sculptor Alenka Vidrgar. Stone is not only an aesthetic or visual element, nor is it merely a source of sound, but a visual-sound synergy. The sculptor and percussionists spent a lot of time in quarries and the studio, researching and searching for the sound of stone. The results are inspiring. *Zven kamna* is an innovative project and reflects the mutual complementarity of musical and sculptural art. It is also interactive; mallets are available next to the sculptures so that visitors can create and hear the stone themselves. The sculptures are made from selected stone with excellent acoustic properties from the Lipica quarry. The project is a continuation of the *Zveneče skulpture* (Sounding Sculptures) project, which was carried out at the Ljubljana Festival 2016. Since then, the exhibition and concerts have toured domestically and abroad (Maribor, Koper, Celovec, Milje …). Text: Franci Krevh, Alenka Vidrgar
+
+- **Oto Rimele, Koprnenja svetlobe**
+  Exhibition duration: 17. April 2025 – 8. March 2026
+  Oto Rimele is a deep explorer of light. He has gained many admirers with his paintings – objects, which he explains as "light catchers". Through a painting process that he has refined over many years, he succeeds in achieving the impression of a complete dematerialisation of the artefacts placed in the exhibition space. The tangibility of the material images eludes perception, and the visitor is overwhelmed by the tactility of the relief-like coloured shadows that glow like an aura around the object. And because Oto Rimele exposes his creations to daylight whenever possible, his exhibitions are different at every moment. Just as the light intensifies each day from dawn to midday and then gradually fades until darkness falls in the evening, Rimele's exhibitions are a remarkable experience of luminous variability that can never be predicted in advance, and one day is never the same as the one before. Rimele's paintings demand a contemplative approach, they are a kind of invitation to go deep inside oneself. The artist says that they allow us to "move from the anthropocentric position of the contemporary times into the zone of natural and cosmic order". We may describe Oto Rimele's paintings as simply beautiful if we follow Plotinus' understanding of Beauty and trust the ancient sage that the contemplation of Beauty also makes the one who contemplates it beautiful.
+
+- **Janko Orač, Grafika osebno**
+  Exhibition duration: 4. April 2025 – 1. March 2026
+  The last decade of Janko Orač’s art practice has clearly demonstrated that he possesses sovereignty and artistic maturity, evident in the exceptional quality of his cycles. In his exploration, Orač remains split between the medium of painting and, through drawing, printmaking, constructing his works in his signature rhythmic layering of colours and applications of paint to the surface, as well as the arrangement of signs and symbols within the pictorial field in the build-up and balance of the compositional whole. Most of the works presented in the selection at Rajhenburg Castle on this occasion date back to the last two or three years, when, in his eternal quest, he has been building on his print cycles Nocturno and Odtisi globin (Prints of Depths). (Goran Milovanović, from the exhibition catalogue)
+
+## Past Exhibitions
+
+- **Martina Koritnik Fajt, Retrospektiva**
+  Exhibition duration: 1. March 2024 – 2. March 2025
+  Martina Koritnik Fajt (1947−2020) graduated in 1973 in the class of Professor Gabrijel Stupica in the Painting Department at the Academy of Fine Arts and Design in Ljubljana. The most noticeable influence in her artistic poetics was left by Professor Zoran Didek. As a prominent cultural and educational figure, she influenced generations of pupils at the primary schools in Kostanjevica na Krki and Podbočje. She lived and worked in Krško. From 1993, she worked as a freelance artist and was a longstanding member of DLUD and ZDSLU.
+
+- **Andrej Brumen Čop I Posebno osebno: podobe oseb**
+  Temporary exhibition
+  Exhibition duration: 17. February 2023 – 30. December 2023
+  Andrej Brumen Čop focuses on figurative motifs. He uses various techniques in his artwork. Mostly he works in the media of drawing, watercolour and painting, less often in printmaking. His motifs are plants, animals, people, natural and urban environments as well as various events in which he combines these elements. The paintings of the human figure shown in this exhibition can be divided into several groups. One group consists of portraits: most of them are busts, some are half-length portraits, and some are standing, sitting or reclining. In addition, there are full-length and half-length nudes. An important group of representations are the self-portraits, of which there are many in the painter’s oeuvre, both in painting and especially in drawing. Equally extensive is the group of paintings depicting people involved in current or past events, or whom the artist has encountered through other works of art. The sitter is caught in the moment, so the painting tells and illustrates a story. Nuša, 1991, oil on canvas, 43 x 43 cm, private property. Dolores, 1991, oil on canvas, 43 x 43 cm. Miha 3, 2009, oil and wax on canvas, 50 x 50 cm.
+
+- **Boštjan Kavčič I PREHAJANJA. Sculptures from the Point of Perception**
+  Temporary exhibition
+  Exhibition duration: 21. May 2022 – 30. September 2023 (extended until 30. October)
+  About the Work of Boštjan Kavčič: Boštjan Kavčič belongs to the middle generation of Slovenian artists who began his art career at the Academy of Fine Arts in Ljubljana. In the past, he has worked with new media and carried out artistic actions and interventions in public spaces with a socially engaged touch (e.g. Garden Park, 2009; Let's Garden!, 2022; Run for Art, 2007; Made in Venice, 2005; Artificial Ecosystems I, 2001). He was one of the first Slovenian artists to design simple robots with which he drew attention to the reality of life in a digitalised society that causes a loosening of interpersonal relationships (Cubot 2.0, 2002; Rombot 1.0, 2002). At the same time, sculpture guided by the mastery of matter, creative sovereignty, intuition and the conditions of creation finds its way into his work. However, the artist does not perceive the chosen medium in the classical sense. He consciously refrains from using new technologies and materials that pollute the already saturated environment, preferring to use reusable natural materials. His work to date is characterised by a series of works collectively entitled ORGanisms, which began in 2002 and comprises over eighty stone sculptures, sixteen of which have been created this year. In the context of the new exhibition, he is no stranger to the synthesis of sculpture and utilitarian objects, their narrative connections and positioning in historical architecture. The starting point for the considerations in preparing the exhibition at Rajhenburg Castle was the history of the castle complex, which is heavily burdened by the tragic events of the last century. The settlement of the destitute Trappist Order in 1881 probably had a favourable influence on the castle's surroundings but was less the cause of their expulsion. In April 1941, the German Nazi authorities took over the castle and set up an exile camp in the higher buildings on the manor. Its former peace was not returned during post-war events when the castle was nationalised in 1947. It was in fact soon used as a penal institution for political prisoners with the aim of their comprehensive "re-education" (Fürst, 2016). Kavčič approaches each space in which he exhibits his works both meticulously and intuitively. When he sets up sculptures, he does so in tune with the energy, feeling and thought that the space evokes. His curiosity is piqued by historical themes and local features. This time it has nothing to do with the inherited tradition of Tolmin, but he was attracted by the place where the Sava River meanders from the Litija-Radeče district through the Posavje plain. The artist believes that the natural energy flows of the wider surroundings and the grounds of the Brestanica castle have come to a standstill, which is why he wants to restore them to their original state with the help of natural elements, natural resources and the visitors to the exhibition. Boštjan Kavčič works in classical sculpture, and the stones he cuts are more than just material for his work. He is on the lookout for the right piece, but it is always the latter that finds him. He marvels at the fact that stone is not just a solid substance, inanimate nature that he can shape into an associative image with the right strokes of the grinder. Geological periods of time have passed to allow it to come into being. Rain fell over billions of years, rivers eroded the surface and carried sediment into the seas. Without witnesses, the mountains rose. For the artist, a piece of stone is therefore a predisposition of an inconceivably complex fabric of the earth's history that has accumulated in the wealth of layers over so many years and has also absorbed the first organisms into itself. The artist does not shape the stone into fictitious forms but works on its surface by drawing spiral notches in it through which he restores the flow of energy.
+
+- **Irena Romih I VAJE IZ OPTIMIZMA**
+  Exhibition duration: 22. April 2022 – 30. December 2022 (extended until 30. December 2022)
+
+- **Mateja Kavčič I DREVO**
+  Exhibition duration: 25. September 2021 – 5. December 2021
+  In the attic of the round tower of Rajhenburg Castle, the exhibition *Drevo* (Tree) by artist Mateja Kavčič was opened on Saturday, 25 September 2021 at 6 PM, on view until 28 November 2021. The exhibition was extended until Sunday, 5 December 2021. Curator Nina Jeza, Artists&Poor s, wrote in the catalogue: "Mateja Kavčič presents her personal 'artist's tree' in the form of an impressive environmental installation made from natural materials, which she placed in the magnificent timber framing of the attic of the round tower of Rajhenburg Castle, thus intertwining cultural heritage with contemporary art."
+
+- **Iva Tratnik | IGRAČE IN KOSTI**
+  Temporary exhibition
+  Exhibition duration: 17. September 2021 – 13. February 2022
+  In her art practice, Iva Tratnik strolls boldly through visual art, within which she works with various mediums such as painting, drawing, collage, sculpture, photography, video, installation, and through performance, within which she explores voice, movement, mask. In her exhibitions, she also combines the visual with the staged, often positioning her paintings in a spatial manner as a kind of scenography and underscoring them with light and sound so that the viewer can experience them with the whole body and all the senses. The exhibition at Rajhenburg Castle is divided into two parts. The main part, showcasing paintings and textile collages, is installed in the Great Hall in a classical arrangement that meets the specific requirements of the space and its use. The second part, consisting of a spatial-sound installation, on the other hand, is featured separately in the Round Hall. All the works shown in the exhibition have been created in the last 10 years, with a focus on the most recent works.
+
+- **Vladimir Leben / Making Ends Meet**
+  Temporary exhibition
+  Exhibition duration: 9. October 2020 – 15. August 2021
+  As an author, Vladimir Leben bases his work on the classical medium of oil paintings on canvas. The original artist combines skilfully perfected figurative compositions with richly narrative statements, employing witty multi-level meanings to surpass comprehension on a purely symbolic level. From the beginning of his artistic carrier in the nineties and to this day, he has been working as a solo artist as well as collaborating in different projects, which brought together several artists. He is one of the founders of The Museum of Too-Modern Art, the so called collective of self-proclaimed "too-modern" artists (Oliver Marčeta, Boštjan Plesničar, Tomaž Drnovšek, Gregor Mastnak, Vladimir Leben, Ervin Potočnik, Josip Rochus Pongrac, Filip Gregorowitz and Gregor Nemec), who rejected the academic elitist approach at the end of the 20th century and expressed their tendencies for liberalisation of artistic expressions, turning away from narrowly limited artistic movements, individual styles or tendencies in order to strive to realise the ideal of pure creativity (Ivančič, n.d.). Within the collective, the artists worked on their individual productions and at the same time promoted the idea of "too-modern art". In 2003, Leben was part of the creative team involved in the realisation of the animated movie Bizgeci (Beezes), and in 2004 he worked in tandem with sculptor Damijan Kracina, realising the attention-grabbing Galapagos project, which used a conglomerate of illustrations, paintings, objects and video to form a perception of a different, better world, "[…] where nature experimented in its creativity" (Kracina, n.d.), just as the artists did. At Rajhenburg Castle Vladimir Leben presents his work through a series of wooden objects and a number of large dimension paintings on canvas, featuring animals as their principal protagonists. Animals have been Leben’s constant artistic motive, as they offer a wide thematic thesaurus. They perform entirely "human" acts; they ride trains, get their hair done at a salon, party at a discotheque and dance to the rhythm of music. Intensive colour registers refuse to try to mimic realistic manifestations of portraits, the artist intensifies the images’ narrative quality with their multiplicity, every one of his subjects caught in action, each part of the same circus, reflecting the view of the contemporary Anthropocene society.
+
+- **Contemporary Artists from Trieste**
+  A miscellany of exhibitions at Rajhenburg Castle
+  Exhibition duration: 19. October 2019 – 19. April 2020
+
+- **The American Dream**
+  Exhibition duration: 28. June 2019 – 15. September 2019
+
+- **If Slovenia were**
+  Exhibition duration: 16. November 2018 – 18. May 2019
+  Jošt Dolinšek, Jošt Franko, Katja Goljat, Ciril Jazbec, Irena Jurca, Jurij Korenjak, Primož Korošec, Tereza Kozinc, Meta Krese, Robert Marin, Dejan Mijović, Matej Povše, Boštjan Pucelj, Matjaž Rušt, Klemen Skubic, Nina Sotelšek, Ana Zibelnik, Manja Zore, curated by Klavdij Sluban
+
+# Citations
+
+- [https://www.gradrajhenburg.si/razstave/obcasne-razstave](https://www.gradrajhenburg.si/razstave/obcasne-razstave)
+- [https://www.gradrajhenburg.si/en/exhibitions/temporary-exhibitions](https://www.gradrajhenburg.si/en/exhibitions/temporary-exhibitions)

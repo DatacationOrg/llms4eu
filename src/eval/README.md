@@ -27,8 +27,8 @@ Chunk summaries are historical retrieval experiments, not steady-state eval
 inputs. Current results live in
 [`docs/retrieval-results-agentic.md`](../../docs/retrieval-results-agentic.md).
 
-Embedding and reranker inference is local unless an Azure retriever or question
-generator is selected. Azure index builds pause for typed `yes`.
+All inference is local: embeddings, reranking, question generation, and the
+agentic sufficiency judge run through sentence-transformers and Ollama.
 Eval checks that requested vector indexes already exist and reports the build
 commands when they are missing; it does not build indexes while measuring.
 
@@ -40,17 +40,3 @@ Default eval compares the `qwen` retriever. Eval reports `hit@1`, `hit@5`,
 different limit.
 
 Retriever method names and tuning live in `src/retrieval`.
-
-## OKF comparison boundary
-
-These chunk qrels remain the correct benchmark for ranked RAG retrieval, but
-they cannot score OKF concept IDs. A representation-neutral comparison maps RAG
-chunks and OKF concept provenance to reviewed source-page qrels, then evaluates
-both with page-level `nDCG@10` and `Recall@10`. End-to-end comparison uses the
-same questions, answer model, context budget, blinded judging, and paired
-statistics for factual correctness, faithfulness, citation support, latency,
-and cost.
-
-The complete protocol is in
-[`experiments/indexing/README.md`](../../experiments/indexing/README.md). Keep current
-chunk-level reports separate from future page-evidence and answer-level reports.

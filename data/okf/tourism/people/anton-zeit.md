@@ -1,247 +1,28 @@
 ---
 type: people
 title: Anton Zeit
-description: Anton Zeit was an 18th-century Baroque painter active in the Dolenjska
-  and Štajerska regions, known for religious works for Capuchin monasteries and parish
-  churches.
-tags:
-- painter
-- baroque
-- 18th-century
-- religious-art
-- slovenian-art-history
-aliases:
-- A. Zeit
-- Zeit Anton
-timestamp: '2026-07-15T12:42:27+00:00'
-okf_version: '0.1'
+description: An 18th-century Baroque painter active in the Krško region, known for
+  religious works for Capuchin monasteries and parish churches.
+timestamp: '2026-07-21T11:31:39+00:00'
 source_page_ids:
 - 6bb124ca-3b7b-5dd1-a2b8-e01a74e5fb54
-source_urls:
-- https://www.slovenska-biografija.si/oseba/sbi862127/
-source_names:
-- svn_biography
-languages:
-- sl
-search_terms:
-- A. Zeit
-- painter
-- baroque
-- 18th-century
-- religious-art
-- slovenian-art-history
-- Anton Zeit
-- Zeit Anton
-- baroque painter
-- 18th-century painter
-- Dolenjska
-- Štajerska
-- Capuchin monastery Krško
-- Zagorje pri Planini
-- Holy Family painting 1799
-- St. Dismas
-- Lawrence of Brindisi
-- Felix of Cantalice
-- Bonaventure of Ferrara
-- Francis of Assisi
-- Anthony of Padua
-- Joseph of Leonissa
-- Seraphin of Montegranaro
-- Beatrice Auersperg
-- Capuchin monastery Škofja Loka
-- Kostanjevica ob Krki
-- St. James high altar
-- Brestanica
-- Rajhenburg
-- Otočec
-- Šempeter
-- Trška Gora
-- Mengeš
-- St. Michael brotherhood
-- Bolognese painting
-retrieval_queries:
-- Kdo je bil Anton Zeit?
-- Katera dela je ustvaril Anton Zeit?
-- Kje je Anton Zeit slikal za kapucine?
-- Kdaj je Anton Zeit naslikal sveto Družino v Zagorju?
-- Katere slike Antona Zeita hrani kapucinski samostan v Krškem?
-- Kakšen je bil slikarski slog Antona Zeita?
-- Kateri italijanski vplivi so opazni pri Antonu Zeitu?
-- Kaj je znano o nečaku Antona Zeita?
-- V katero bratovščino se je vpisal Anton Zeit leta 1771?
-- Kje je Anton Zeit služboval kot beneficiat?
-- Which works by Anton Zeit have been lost?
-- What did Anton Zeit paint for the Capuchins in Krško in 1776?
-- Who commissioned the painting of St. Seraphin of Montegranaro from Anton Zeit?
-source_evidence:
-  6bb124ca-3b7b-5dd1-a2b8-e01a74e5fb54:
-    title: Zeit, Anton (?–?) - Slovenska biografija
-    source: svn_biography
-    url: https://www.slovenska-biografija.si/oseba/sbi862127/
-    language: sl
-    summary: Slovenski biografski leksikon entry detailing the life, lost and surviving
-      works, stylistic influences, and family of the Baroque painter Anton Zeit, active
-      in the Dolenjska and Štajerska regions.
-    facts:
-    - Anton Zeit was a painter.
-    - Exact biographical details for Anton Zeit have not yet been found.
-    - Anton Zeit enrolled in the priestly brotherhood of St. Michael in Mengeš in
-      1771.
-    - Anton Zeit may have been ordained in 1771.
-    - Anton Zeit served as a beneficiat on Trška Gora above Krško.
-    - Erberg's note that Anton Zeit was a beneficiat in Novo Mesto is likely an error.
-    - Anton Zeit was a talented painter.
-    - A Stations of the Cross by Anton Zeit for the old parish church in Brestanica
-      (Rajhenburg) has been lost.
-    - A painting of St. Aloysius by Anton Zeit for the parish church in Otočec (Šempeter)
-      near Novo Mesto has been lost.
-    - A Last Supper by Anton Zeit from the refectory of the Capuchin monastery in
-      Krško has been lost.
-    - The altarpiece of the Holy Family in the side chapel of the parish church in
-      Zagorje pri Planini is signed 'A. Zeit pinx. 1799'.
-    - An altarpiece of St. Dismas is in the side chapel of the parish church in Zagorje
-      pri Planini.
-    - In 1776, Anton Zeit created paintings for the Capuchins in Krško of Blessed
-      Lawrence of Brindisi, St. Felix of Cantalice, and Archbishop Bonaventure of
-      Ferrara.
-    - In 1772, Anton Zeit painted St. Francis of Assisi, St. Anthony of Padua, and
-      St. Joseph of Leonissa.
-    - Countess Beatrice Auersperg commissioned Anton Zeit to paint St. Seraphin of
-      Montegranaro in 1772.
-    - The Capuchin monastery in Krško holds paintings from 1772 and 1776 that are
-      likely Anton Zeit's work.
-    - The smoother painterly structure of the Krško paintings compared to the Zagorje
-      works is probably due to the time gap.
-    - Some canvases by Anton Zeit are likely among the 'portraits' of order saints
-      in the Capuchin monastery in Škofja Loka.
-    - The unsigned painting of St. James on the high altar of the parish church in
-      Kostanjevica ob Krki might be attributed to Anton Zeit.
-    - Stylistically, Anton Zeit was a full Baroque painter.
-    - Anton Zeit's style is closer to the manner of the mid-18th century than its
-      end.
-    - Evidence suggests Anton Zeit visited Italy.
-    - In Italy, Anton Zeit was particularly drawn to Bolognese painting of the first
-      half of the 18th century.
-    - Rubensian echoes are suspected in Anton Zeit's work.
-    - Nude parts of the body in Anton Zeit's paintings are robustly modeled.
-    - Figures in Anton Zeit's paintings are vividly animated, especially in Zagorje.
-    - Anton Zeit's color scale is somewhat muted and contends with chiaroscuro contrasts
-      of the Carracci type.
-    - Anton Zeit's works feature increasingly picturesque effects heightened by masses
-      of cumulus clouds.
-    - According to Erberg, Anton Zeit had a nephew of the same name who was also a
-      painter.
-    - Anton Zeit's nephew supposedly studied in Rome.
-    - No works by Anton Zeit's nephew are currently known.
-    search_terms:
-    - Anton Zeit
-    - A. Zeit
-    - Zeit Anton
-    - baroque painter
-    - 18th-century painter
-    - Dolenjska
-    - Štajerska
-    - Capuchin monastery Krško
-    - Zagorje pri Planini
-    - Holy Family painting 1799
-    - St. Dismas
-    - Lawrence of Brindisi
-    - Felix of Cantalice
-    - Bonaventure of Ferrara
-    - Francis of Assisi
-    - Anthony of Padua
-    - Joseph of Leonissa
-    - Seraphin of Montegranaro
-    - Beatrice Auersperg
-    - Capuchin monastery Škofja Loka
-    - Kostanjevica ob Krki
-    - St. James high altar
-    - Brestanica
-    - Rajhenburg
-    - Otočec
-    - Šempeter
-    - Trška Gora
-    - Mengeš
-    - St. Michael brotherhood
-    - Bolognese painting
-    retrieval_queries:
-    - Kdo je bil Anton Zeit?
-    - Katera dela je ustvaril Anton Zeit?
-    - Kje je Anton Zeit slikal za kapucine?
-    - Kdaj je Anton Zeit naslikal sveto Družino v Zagorju?
-    - Katere slike Antona Zeita hrani kapucinski samostan v Krškem?
-    - Kakšen je bil slikarski slog Antona Zeita?
-    - Kateri italijanski vplivi so opazni pri Antonu Zeitu?
-    - Kaj je znano o nečaku Antona Zeita?
-    - V katero bratovščino se je vpisal Anton Zeit leta 1771?
-    - Kje je Anton Zeit služboval kot beneficiat?
-    - Which works by Anton Zeit have been lost?
-    - What did Anton Zeit paint for the Capuchins in Krško in 1776?
-    - Who commissioned the painting of St. Seraphin of Montegranaro from Anton Zeit?
 ---
 
-Anton Zeit was a painter. Exact biographical details have not yet been found. He may have been ordained in 1771, the year he enrolled in the priestly brotherhood of St. Michael in Mengeš. He subsequently served as a beneficiat on Trška Gora above Krško. (Erberg's note that he was a beneficiat in Novo Mesto is likely an error.)
+## Slovenski biografski leksikon
 
-## Artistic Style and Influences
+Zeit Anton, slikar. Natančnejših življenjskih podatkov še ni bilo mogoče najti. Ker se je 1771 vpisal v duhovniško bratovščino sv. Mihaela v Mengšu, je bil morda tega leta ordiniran, nato pa je služboval kot beneficiat na Trški gori nad Krškim. (Erbergov podatek, da je bil beneficiat v Novem mestu, je najbrž pomota.)
 
-Stylistically, Zeit was a full Baroque painter, closer to the manner of the mid-18th century than its end. Evidence suggests he visited Italy, where he was particularly drawn to Bolognese painting of the first half of the 18th century; Rubensian echoes are also suspected. Nude parts of the body are robustly modeled, and figures are vividly animated (especially in Zagorje). A somewhat muted color scale contends with chiaroscuro contrasts of the Carracci type and increasingly picturesque effects, heightened by masses of cumulus clouds.
+Bil je nadarjen slikar, a njegovo delo in pomen se šele počasi razkrivata. Več njegovih v virih omenjenih del se je izgubilo, tako križev pot za staro župnijsko cerkev v Brestanici (Rajhenburg), sv. Alojzij za župnijsko cerkev v Otočcu (Šempeter) pri Novem mestu, Zadnja večerja iz refektorija kapucinskega samostana v Krškem.
 
-## Known Works
+V stranskih kapelah župnijske cerkve v Zagorju pri Planini sta v oltarjih sliki sv. Družine (signirana: A. Zeit pinx. 1799) in sv. Dizma.
 
-Several works mentioned in sources have been lost, including:
-- A Stations of the Cross for the old parish church in [Brestanica](../destinations/brestanica/index.md) (Rajhenburg).
-- A painting of St. Aloysius for the parish church in Otočec (Šempeter) near Novo Mesto.
-- A Last Supper from the refectory of the Capuchin monastery in Krško.
+Za kapucine v Krškem je – po kroniki – 1776 ustvaril slike redovnih svetnikov bl. Lavrencija Brundiškega, sv. Feliksa Kantalicijskega in redovnega eksgenerala, ferrarskega nadškofa Bonaventura. 4 leta prej je naslikal sv. Frančiška As., sv. Antona Pad., sv. Jožefa iz Leonisse in (po votivnem naročilu grofice Beatrice Auersperg) sv. Serafina a Monte Granario. Te slike, ki jih hrani kapucinski samostan v Krškem, so torej verjetno Zeitovo delo, kolikor pa se njihova bolj gladka slikarska struktura razločuje od zagorske, gre najbrž na račun časovnega razmika.
 
-### Surviving and Attributed Works
+Vsekakor se bo seznam Zeitovih del še pomnožil; verjetno je med »portreti« redovnih svetnikov v škofjeloškem kapucinskem samostanu tudi nekaj Zeitovih platen. Morda bi mu smeli pripisati tudi nesignirano sliko sv. Jakoba v velikem oltarju župnijske cerkve v Kostanjevici ob Krki.
 
-- In the side chapels of the parish church in Zagorje pri Planini, the altarpieces of the Holy Family (signed: *A. Zeit pinx. 1799*) and St. Dismas.
-- For the Capuchins in Krško, according to their chronicle, he created paintings in 1776 of the order's saints: Blessed Lawrence of Brindisi, St. Felix of Cantalice, and the order's ex-general, Archbishop Bonaventure of Ferrara.
-- Four years earlier (1772), he painted St. Francis of Assisi, St. Anthony of Padua, St. Joseph of Leonissa, and (by votive commission of Countess Beatrice Auersperg) St. Seraphin of Montegranaro. These paintings, held by the Capuchin monastery in Krško, are likely Zeit's work; any smoother painterly structure distinguishing them from the Zagorje works is probably due to the time gap.
-- It is likely that among the "portraits" of order saints in the Capuchin monastery in Škofja Loka, there are also some canvases by Zeit.
-- The unsigned painting of St. James on the high altar of the parish church in Kostanjevica ob Krki might also be attributed to him.
+Slogovno je Zeit še popoln barokist, bližji slikarskemu načinu srede kot pa konca 18. stoletja. Vse kaže, da je obiskal tudi Italijo, kjer ga je pritegnilo zlasti bolonjsko slikarstvo prve polovice 18. stoletja, slutimo pa tudi rubensovske odmeve. Goli deli telesa so krepko modelirani, figure so (zlasti v Zagorju) živo razgibane, nekoliko zamolkla barvna skala se spopada s chiaroscurnimi kontrasti carraccijevske vrste in z vedno bolj slikovitimi efekti, ki jih stopnjujejo še gmote kopastih oblakov.
 
-## Family
-
-According to Erberg, Zeit had a nephew of the same name who was also a painter and supposedly studied in Rome, but no works by him are currently known.
-
-# Source evidence by page
-
-## Zeit, Anton (?–?) - Slovenska biografija
-
-Slovenski biografski leksikon entry detailing the life, lost and surviving works, stylistic influences, and family of the Baroque painter Anton Zeit, active in the Dolenjska and Štajerska regions.
-
-- Anton Zeit was a painter.
-- Exact biographical details for Anton Zeit have not yet been found.
-- Anton Zeit enrolled in the priestly brotherhood of St. Michael in Mengeš in 1771.
-- Anton Zeit may have been ordained in 1771.
-- Anton Zeit served as a beneficiat on Trška Gora above Krško.
-- Erberg's note that Anton Zeit was a beneficiat in Novo Mesto is likely an error.
-- Anton Zeit was a talented painter.
-- A Stations of the Cross by Anton Zeit for the old parish church in Brestanica (Rajhenburg) has been lost.
-- A painting of St. Aloysius by Anton Zeit for the parish church in Otočec (Šempeter) near Novo Mesto has been lost.
-- A Last Supper by Anton Zeit from the refectory of the Capuchin monastery in Krško has been lost.
-- The altarpiece of the Holy Family in the side chapel of the parish church in Zagorje pri Planini is signed 'A. Zeit pinx. 1799'.
-- An altarpiece of St. Dismas is in the side chapel of the parish church in Zagorje pri Planini.
-- In 1776, Anton Zeit created paintings for the Capuchins in Krško of Blessed Lawrence of Brindisi, St. Felix of Cantalice, and Archbishop Bonaventure of Ferrara.
-- In 1772, Anton Zeit painted St. Francis of Assisi, St. Anthony of Padua, and St. Joseph of Leonissa.
-- Countess Beatrice Auersperg commissioned Anton Zeit to paint St. Seraphin of Montegranaro in 1772.
-- The Capuchin monastery in Krško holds paintings from 1772 and 1776 that are likely Anton Zeit's work.
-- The smoother painterly structure of the Krško paintings compared to the Zagorje works is probably due to the time gap.
-- Some canvases by Anton Zeit are likely among the 'portraits' of order saints in the Capuchin monastery in Škofja Loka.
-- The unsigned painting of St. James on the high altar of the parish church in Kostanjevica ob Krki might be attributed to Anton Zeit.
-- Stylistically, Anton Zeit was a full Baroque painter.
-- Anton Zeit's style is closer to the manner of the mid-18th century than its end.
-- Evidence suggests Anton Zeit visited Italy.
-- In Italy, Anton Zeit was particularly drawn to Bolognese painting of the first half of the 18th century.
-- Rubensian echoes are suspected in Anton Zeit's work.
-- Nude parts of the body in Anton Zeit's paintings are robustly modeled.
-- Figures in Anton Zeit's paintings are vividly animated, especially in Zagorje.
-- Anton Zeit's color scale is somewhat muted and contends with chiaroscuro contrasts of the Carracci type.
-- Anton Zeit's works feature increasingly picturesque effects heightened by masses of cumulus clouds.
-- According to Erberg, Anton Zeit had a nephew of the same name who was also a painter.
-- Anton Zeit's nephew supposedly studied in Rome.
-- No works by Anton Zeit's nephew are currently known.
+Po Erbergu naj bi bil slikar tudi Zeitov nečak istega imena, ki naj bi se šolal v Rimu, toda za zdaj ne poznamo še nobenega njegovega dela.
 
 # Citations
 

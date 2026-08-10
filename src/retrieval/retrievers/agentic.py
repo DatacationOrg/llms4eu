@@ -1,11 +1,18 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import time
 
 from pydantic import BaseModel, Field
 
 from src.retrieval.base import RankedChunk, Retriever, retrieve_batch_default
-from src.shared.llm import AzureFoundryStructuredLlm
+from src.shared.llm import LocalOllamaStructuredLlm, StructuredLlm
+
+DEFAULT_JUDGE_MODEL = "gpt-oss:20b"
+DEFAULT_JUDGE_REASONING = "low"
+DEFAULT_JUDGE_NUM_CTX = 32_768
+DEFAULT_JUDGE_NUM_PREDICT = 1024
+DEFAULT_JUDGE_METHOD = "function_calling"
 
 
 class ChunkSufficiency(BaseModel):
@@ -38,6 +45,8 @@ class AgenticBatchStats:
         judge_query: str,
         chunks: list[RankedChunk],
         verdict: ChunkSufficiency,
+        retrieval_ms: float,
+        judge_ms: float,
     ) -> None:
         self.action_log.append(
             {
@@ -48,8 +57,15 @@ class AgenticBatchStats:
                     {"id": c.id, "score": c.score, "text": c.text} for c in chunks
                 ],
                 "verdict": verdict.model_dump(),
+                "retrieval_ms": retrieval_ms,
+                "judge_ms": judge_ms,
+                "top_up_ms": 0.0,
             }
         )
+
+    def record_top_up(self, elapsed_ms: float) -> None:
+        if self.action_log:
+            self.action_log[-1]["top_up_ms"] = elapsed_ms
 
     def total_queries(self) -> int:
         return sum(self.query_attempt_counts)
@@ -69,9 +85,10 @@ class AgenticRetriever:
     judge_retries: int = 3
     max_attempts: int = 3
     min_sufficient_chunks: int = 2
-    initial_limit: int = 5
+    initial_limit: int = 10
     limit_step: int = 5
     max_limit: int = 30
+    judge: StructuredLlm | None = None
     batch_stats: AgenticBatchStats = field(
         default_factory=AgenticBatchStats,
         init=False,
@@ -87,25 +104,37 @@ class AgenticRetriever:
 
         for _ in range(max(1, self.max_attempts)):
             attempt_count += 1
+            retrieval_started = time.perf_counter()
             chunks = self.base_retriever.retrieve(current_query, current_limit)
+            retrieval_ms = (time.perf_counter() - retrieval_started) * 1000
             if len(chunks) > len(best_chunks):
                 best_chunks = chunks
 
+            judge_started = time.perf_counter()
             verdict = self._evaluate_sufficiency(current_query, chunks)
+            judge_ms = (time.perf_counter() - judge_started) * 1000
             self.batch_stats.record_action(
                 original_query=query,
                 attempt=attempt_count,
                 judge_query=current_query,
                 chunks=chunks,
                 verdict=verdict,
+                retrieval_ms=retrieval_ms,
+                judge_ms=judge_ms,
             )
             if verdict.sufficient:
                 self.batch_stats.record(attempt_count)
                 # Never return fewer than `limit` just because an early attempt
                 # retrieved a smaller pool; top up so ranking metrics aren't capped.
                 if current_limit < limit:
+                    top_up_started = time.perf_counter()
                     chunks = self.base_retriever.retrieve(current_query, limit)
-                return chunks[:limit]
+                    self.batch_stats.record_top_up(
+                        (time.perf_counter() - top_up_started) * 1000
+                    )
+                # Preserve results beyond the requested benchmark cutoff when the
+                # agent expanded its search so that expansion can be scored.
+                return chunks
 
             reformulated = (verdict.reformulated_query or "").strip()
             if reformulated and reformulated != current_query:
@@ -119,7 +148,7 @@ class AgenticRetriever:
             break
 
         self.batch_stats.record(attempt_count)
-        return best_chunks[:limit]
+        return best_chunks
 
     def retrieve_batch(
         self,
@@ -148,15 +177,40 @@ class AgenticRetriever:
             )
 
         prompt = _sufficiency_prompt(query, chunks)
-        return _judge_with_azure(prompt, retries=self.judge_retries)
+        return _judge_locally(prompt, retries=self.judge_retries, judge=self.judge)
 
 
-def _judge_with_azure(prompt: str, retries: int) -> ChunkSufficiency:
-    return AzureFoundryStructuredLlm.from_env().structured_output(
-        prompt,
-        ChunkSufficiency,
-        retries=retries,
+def default_judge(config: dict | None = None) -> LocalOllamaStructuredLlm:
+    """Local Ollama judge used when a retriever does not inject its own."""
+    config = config or {}
+    return LocalOllamaStructuredLlm(
+        model_id=config.get("agentic_judge_model", DEFAULT_JUDGE_MODEL),
+        reasoning=config.get("agentic_judge_reasoning", DEFAULT_JUDGE_REASONING),
+        num_ctx=config.get("agentic_judge_num_ctx", DEFAULT_JUDGE_NUM_CTX),
+        num_predict=config.get("agentic_judge_num_predict", DEFAULT_JUDGE_NUM_PREDICT),
+        method=config.get("agentic_judge_structured_method", DEFAULT_JUDGE_METHOD),
     )
+
+
+def _judge_locally(
+    prompt: str,
+    retries: int,
+    judge: StructuredLlm | None = None,
+) -> ChunkSufficiency:
+    client = judge or default_judge()
+    try:
+        return client.structured_output(prompt, ChunkSufficiency, retries=retries)
+    except RuntimeError as exc:
+        # A question the judge cannot answer must not end a multi-hour run:
+        # resume would replay the same prompt and fail at the same place. Treat
+        # it as insufficient so the agent widens its search, and record why in
+        # the verdict so the action log and diagnostics show it.
+        print(f"agentic judge failed, treating as insufficient: {exc}", flush=True)
+        return ChunkSufficiency(
+            sufficient=False,
+            reason=f"judge unavailable: {exc}",
+            reformulated_query=None,
+        )
 
 
 def _sufficiency_prompt(query: str, chunks: list[RankedChunk]) -> str:

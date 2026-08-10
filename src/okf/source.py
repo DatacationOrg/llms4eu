@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import sqlite3
-from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -44,22 +43,3 @@ def load_source_pages(
             sql += " limit ?"
             params.append(limit)
         return [SourcePage(**dict(row)) for row in conn.execute(sql, params)]
-
-
-def load_source_markdown(
-    db_path: Path, page_ids: Iterable[str]
-) -> dict[str, str]:
-    """Return verbatim source Markdown keyed by page id, read-only."""
-    ids = [str(page_id) for page_id in page_ids]
-    if not ids:
-        return {}
-    uri = f"file:{db_path.resolve()}?mode=ro"
-    placeholders = ", ".join("?" for _ in ids)
-    with sqlite3.connect(uri, uri=True) as conn:
-        conn.row_factory = sqlite3.Row
-        rows = conn.execute(
-            f"select page_id, markdown from page_markdown_content "
-            f"where page_id in ({placeholders})",
-            ids,
-        )
-        return {row["page_id"]: row["markdown"] for row in rows}

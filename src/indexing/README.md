@@ -3,8 +3,9 @@
 Builds local vector indexes for document chunks.
 
 The indexer boundary is provider-shaped: English MiniLM, Qwen multilingual,
-Qwen 4B, and Azure embeddings all expose the same `embed_documents` /
-`embed_query` methods from `src.shared.indexers`.
+Qwen 4B, and Nemotron 3 Embed 1B all expose the same `embed_documents` /
+`embed_query` methods from `src.shared.indexers`. Every provider runs locally
+through sentence-transformers.
 
 Chunk vector collections are derived state in Chroma. SQLite remains the source
 of truth for page metadata, chunk text, and eval labels. `src.vector_store.chunks`
@@ -14,16 +15,22 @@ rebuilds.
 Current chunk collections are storage names, not public retrieval method names:
 
 ```text
-page_chunks_{english,qwen,qwen4b,azure}_chunk
+page_chunks_{english,qwen,qwen4b,nemotron}_chunk
 ```
 
-Chunk indexing embeds title, heading path, and chunk text via
-`TitleHeadingChunkText`.
+Two independently stored chunk-representation versions are available:
+
+- `v1` is the unchanged legacy `TitleHeadingChunkText` representation and keeps
+	the existing `page_chunks_{provider}_chunk` collection names.
+- `v2` uses `MetadataContextChunkText`: labeled title, heading, source language,
+	source collection, page kind, and chunk content. It writes separate
+	`page_chunks_v2_{provider}_chunk` collections. The retrieved evidence remains
+	the original chunk text.
+
+Both versions use the same chunk boundaries and IDs. The version changes only
+the text indexed for dense and sparse retrieval, allowing paired comparisons.
 
 Model and collection settings live in `config.yaml`.
-
-Azure embeddings are batched. Larger batches reduce request-per-minute pressure,
-but total token usage is unchanged.
 
 Rebuild one collection:
 
@@ -31,13 +38,26 @@ Rebuild one collection:
 uv run python -m src.indexing.chunks --method qwen
 ```
 
-Azure indexing prompts for typed confirmation before sending embedding requests.
-Use `--yes` only for deliberate non-interactive runs.
+Build the metadata-context collection without replacing v1:
+
+```bash
+uv run python -m src.indexing.chunks --method qwen --chunk-version v2
+```
+
+The Nemotron collection uses `nvidia/Nemotron-3-Embed-1B-BF16`, its saved
+query/document prompts, BF16 weights, SDPA attention, and a 4096-token indexing
+limit. It requires a CUDA-capable NVIDIA GPU for practical inference. Once the
+model is cached, rebuild the independent 2048-dimensional collection with:
+
+```bash
+uv run python -m src.indexing.chunks --method nemotron
+```
 
 Rebuild the default regenerable vector cache:
 
 ```bash
-just eval-index qwen
+just eval-index qwen v1
+just eval-index qwen v2
 ```
 
 Durable reference databases belong under `data/db/`. Regenerable Chroma cache

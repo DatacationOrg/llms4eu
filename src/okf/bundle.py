@@ -57,7 +57,7 @@ def load_concepts(bundle_root: Path) -> dict[str, OKFDocument]:
 
 def regenerate_indexes(bundle_root: Path) -> list[Path]:
     concepts = load_concepts(bundle_root)
-    entries: dict[Path, list[tuple[str, str, str, str, list[str]]]] = defaultdict(list)
+    entries: dict[Path, list[tuple[str, str, str, str]]] = defaultdict(list)
     for concept_id, document in concepts.items():
         path = concept_path(bundle_root, concept_id)
         fm = document.frontmatter
@@ -67,7 +67,6 @@ def regenerate_indexes(bundle_root: Path) -> list[Path]:
                 str(fm["title"]),
                 path.name,
                 str(fm["description"]),
-                _keywords(fm),
             )
         )
 
@@ -100,7 +99,6 @@ def regenerate_indexes(bundle_root: Path) -> list[Path]:
                     directory.name.replace("_", " ").title(),
                     f"{directory.name}/index.md",
                     _collection_description(direct_entries),
-                    _entry_keywords(direct_entries),
                 )
             )
     return written
@@ -137,7 +135,7 @@ def validate_bundle(bundle_root: Path) -> ValidationReport:
 
 def _directory_index(
     directory: Path,
-    entries: list[tuple[str, str, str, str, list[str]]],
+    entries: list[tuple[str, str, str, str]],
 ) -> tuple[str, list[Path]]:
     if len(entries) <= MAX_INDEX_ENTRIES:
         return _index_text(_sections(entries)), []
@@ -151,8 +149,8 @@ def _directory_index(
         browse_dir.mkdir(parents=True, exist_ok=True)
         browse_path = browse_dir / "index.md"
         relative_group = [
-            (type_name, title, f"../{link}", description, keywords)
-            for type_name, title, link, description, keywords in group
+            (type_name, title, f"../{link}", description)
+            for type_name, title, link, description in group
         ]
         browse_path.write_text(_index_text(_sections(relative_group)), encoding="utf-8")
         browse_paths.append(browse_path)
@@ -163,60 +161,36 @@ def _directory_index(
                 f"{titles[0]} – {titles[-1]}",
                 f"{browse_dir.name}/index.md",
                 f"Contains {len(group)} entries including {', '.join(titles[:4])}.",
-                _entry_keywords(group),
             )
         )
     return _index_text(_sections(browse_entries)), browse_paths
 
 
 def _sections(
-    entries: list[tuple[str, str, str, str, list[str]]],
-) -> dict[str, list[tuple[str, str, str, list[str]]]]:
+    entries: list[tuple[str, str, str, str]],
+) -> dict[str, list[tuple[str, str, str]]]:
     sections = defaultdict(list)
-    for type_name, title, link, description, keywords in entries:
-        sections[type_name].append((title, link, description, keywords))
+    for type_name, title, link, description in entries:
+        sections[type_name].append((title, link, description))
     return sections
 
 
 def _index_text(
-    sections: dict[str, list[tuple[str, str, str, list[str]]]],
+    sections: dict[str, list[tuple[str, str, str]]],
 ) -> str:
     lines = ["---", 'okf_version: "0.1"', "---", ""]
     for type_name in sorted(sections):
         lines.extend([f"# {type_name}", ""])
-        for title, link, description, keywords in sorted(sections[type_name]):
-            keyword_text = f" Keywords: {', '.join(keywords)}." if keywords else ""
-            lines.append(f"* [{title}]({link}) - {description}{keyword_text}")
+        for title, link, description in sorted(sections[type_name]):
+            lines.append(f"* [{title}]({link}) - {description}")
         lines.append("")
     return "\n".join(lines)
 
 
-def _keywords(frontmatter: dict) -> list[str]:
-    values = [
-        *frontmatter.get("aliases", [])[:4],
-        *frontmatter.get("search_terms", [])[:8],
-        *frontmatter.get("tags", [])[:4],
-        *frontmatter.get("retrieval_queries", [])[:4],
-    ]
-    return list(dict.fromkeys(str(value) for value in values if value))[:16]
-
-
-def _entry_keywords(
-    entries: list[tuple[str, str, str, str, list[str]]],
-) -> list[str]:
-    return list(
-        dict.fromkeys(
-            keyword
-            for _type, _title, _link, _description, keywords in entries
-            for keyword in keywords
-        )
-    )[:20]
-
-
 def _collection_description(
-    entries: list[tuple[str, str, str, str, list[str]]],
+    entries: list[tuple[str, str, str, str]],
 ) -> str:
-    titles = [title for _type, title, _link, _description, _keywords in entries]
+    titles = [title for _type, title, _link, _description in entries]
     examples = ", ".join(sorted(titles, key=str.casefold)[:8])
     return f"Contains {len(entries)} entries, including {examples}."
 
