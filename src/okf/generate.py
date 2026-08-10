@@ -24,7 +24,7 @@ from src.okf.document import OKFDocument
 from src.okf.paths import parse_concept_id
 from src.okf.source import SourcePage, load_source_pages
 from src.shared.env import ROOT, load_local_env, load_yaml
-from src.shared.llm import AzureFoundryStructuredLlm
+from src.shared.llm import LocalOllamaStructuredLlm, StructuredLlm
 
 CONFIG = load_yaml(Path(__file__).with_name("config.yaml"))
 MARKDOWN_HEADING_RE = re.compile(r"^(#{1,6})\s+(.+)$")
@@ -112,7 +112,7 @@ def generate_bundle(
     if clean and (source is not None or limit is not None):
         raise ValueError("Clean generation must rebuild the full corpus")
     load_local_env()
-    client = _azure_client()
+    client = _llm_client()
     bundle_root = ROOT / CONFIG["bundle_path"]
     checkpoint_path = ROOT / CONFIG["checkpoint_path"]
     inventory_path = ROOT / CONFIG["inventory_path"]
@@ -186,7 +186,7 @@ def generate_bundle(
         "failures": selected_failures,
         "concepts": len(set(selected_assignments.values())),
         "catalog_concepts": len(catalog.concepts),
-        "model": os.environ.get("AZURE_AI_MODEL", ""),
+        "model": CONFIG["model"],
         "validation_errors": report.errors,
         "validation_warnings": report.warnings,
     }
@@ -202,7 +202,7 @@ def generate_bundle(
 
 
 def _discover_pages(
-    client: AzureFoundryStructuredLlm,
+    client: StructuredLlm,
     pages: list[SourcePage],
     inventory: DiscoveryInventory,
     inventory_path: Path,
@@ -261,7 +261,7 @@ def _seed_catalog_from_bundle(bundle_root: Path, catalog: CanonicalCatalog) -> N
 
 
 def _resolve_inventory(
-    client: AzureFoundryStructuredLlm,
+    client: StructuredLlm,
     pages: list[SourcePage],
     inventory: DiscoveryInventory,
     catalog: CanonicalCatalog,
@@ -291,7 +291,7 @@ def _resolve_inventory(
 
 
 def _resolve_with_fallback(
-    client: AzureFoundryStructuredLlm,
+    client: StructuredLlm,
     proposals: list[PageProposal],
     catalog: CanonicalCatalog,
 ) -> None:
@@ -358,7 +358,7 @@ def _apply_resolution(
 
 
 def _enrich_catalog(
-    client: AzureFoundryStructuredLlm,
+    client: StructuredLlm,
     pages: list[SourcePage],
     catalog: CanonicalCatalog,
     checkpoint: GenerationCheckpoint,
@@ -442,17 +442,13 @@ def _enrich_catalog(
     return processed, skipped
 
 
-def _azure_client() -> AzureFoundryStructuredLlm:
-    missing = [
-        name
-        for name in ("AZURE_AI_ENDPOINT", "AZURE_AI_API_KEY", "AZURE_AI_MODEL")
-        if not os.environ.get(name)
-    ]
-    if missing:
-        raise RuntimeError("Missing Azure configuration: " + ", ".join(missing))
-    return AzureFoundryStructuredLlm.from_env(
-        timeout_seconds=CONFIG["request_timeout_seconds"],
-        max_tokens=CONFIG["max_output_tokens"],
+def _llm_client() -> LocalOllamaStructuredLlm:
+    return LocalOllamaStructuredLlm(
+        model_id=CONFIG["model"],
+        reasoning=CONFIG["model_reasoning"],
+        num_ctx=CONFIG["model_num_ctx"],
+        num_predict=CONFIG["model_num_predict"],
+        method=CONFIG["model_structured_method"],
     )
 
 
@@ -751,9 +747,7 @@ def _write_model(path: Path, model: BaseModel) -> None:
 
 
 def _safe_error(exc: Exception) -> str:
-    text = str(exc)
-    api_key = os.environ.get("AZURE_AI_API_KEY")
-    return text.replace(api_key, "<redacted>") if api_key else text
+    return str(exc)
 
 
 def main() -> None:

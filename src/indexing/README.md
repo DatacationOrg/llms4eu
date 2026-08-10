@@ -3,8 +3,9 @@
 Builds local vector indexes for document chunks.
 
 The indexer boundary is provider-shaped: English MiniLM, Qwen multilingual,
-Qwen 4B, Nemotron 3 Embed 1B, and Azure embeddings all expose the same `embed_documents` /
-`embed_query` methods from `src.shared.indexers`.
+Qwen 4B, and Nemotron 3 Embed 1B all expose the same `embed_documents` /
+`embed_query` methods from `src.shared.indexers`. Every provider runs locally
+through sentence-transformers.
 
 Chunk vector collections are derived state in Chroma. SQLite remains the source
 of truth for page metadata, chunk text, and eval labels. `src.vector_store.chunks`
@@ -14,7 +15,7 @@ rebuilds.
 Current chunk collections are storage names, not public retrieval method names:
 
 ```text
-page_chunks_{english,qwen,qwen4b,nemotron,azure}_chunk
+page_chunks_{english,qwen,qwen4b,nemotron}_chunk
 ```
 
 Two independently stored chunk-representation versions are available:
@@ -30,9 +31,6 @@ Both versions use the same chunk boundaries and IDs. The version changes only
 the text indexed for dense and sparse retrieval, allowing paired comparisons.
 
 Model and collection settings live in `config.yaml`.
-
-Azure embeddings are batched. Larger batches reduce request-per-minute pressure,
-but total token usage is unchanged.
 
 Rebuild one collection:
 
@@ -54,9 +52,6 @@ model is cached, rebuild the independent 2048-dimensional collection with:
 ```bash
 uv run python -m src.indexing.chunks --method nemotron
 ```
-
-Azure indexing prompts for typed confirmation before sending embedding requests.
-Use `--yes` only for deliberate non-interactive runs.
 
 Rebuild the default regenerable vector cache:
 

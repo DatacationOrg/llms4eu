@@ -3,7 +3,6 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import os
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -21,11 +20,11 @@ from src.okf.evidence import (
     project_pages_to_concepts,
 )
 from src.shared.env import ROOT, load_local_env
-from src.shared.llm import AzureFoundryStructuredLlm, LocalOllamaStructuredLlm
+from src.shared.llm import LocalOllamaStructuredLlm
 
 DEFAULT_CHECKPOINT = Path("docs/retrieval-results-chunks-okf.md.checkpoint.json")
 DEFAULT_OUTPUT = Path("docs/retrieval-equivalence-judge.md")
-DEFAULT_LOCAL_MODEL = "gemma4:26b"
+DEFAULT_LOCAL_MODEL = "gpt-oss:20b"
 
 
 @dataclass(frozen=True)
@@ -231,7 +230,7 @@ def main() -> None:
         else output_path.with_suffix(output_path.suffix + ".checkpoint.json")
     )
     state = _load_json(checkpoint_path)
-    client, model_id = _build_client(args.provider, args.model)
+    client, model_id = _build_client(args.model)
     judge = EvidenceEquivalenceJudge(
         client=client,
         retries=args.retries,
@@ -263,10 +262,9 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--checkpoint", default=str(DEFAULT_CHECKPOINT))
     parser.add_argument("--output", default=str(DEFAULT_OUTPUT))
     parser.add_argument("--cache")
-    parser.add_argument("--provider", choices=("azure", "local"), default="azure")
     parser.add_argument(
         "--model",
-        help="Local Ollama model. Azure always uses AZURE_AI_MODEL.",
+        help=f"Local Ollama model. Defaults to {DEFAULT_LOCAL_MODEL}.",
     )
     parser.add_argument("-k", type=int, default=5, help="Retrieval cutoff to audit.")
     parser.add_argument(
@@ -588,20 +586,15 @@ def _format_report(
     return "\n".join(lines)
 
 
-def _build_client(provider: str, model: str | None):
-    if provider == "azure":
-        client = AzureFoundryStructuredLlm.from_env(
-            timeout_seconds=180,
-            max_tokens=1024,
-        )
-        return client, f"azure:{os.environ['AZURE_AI_MODEL']}"
+def _build_client(model: str | None):
     model_id = model or DEFAULT_LOCAL_MODEL
     return (
         LocalOllamaStructuredLlm(
             model_id=model_id,
-            reasoning=False,
+            reasoning="low",
             num_ctx=32_768,
             num_predict=1024,
+            method="function_calling",
         ),
         f"ollama:{model_id}",
     )

@@ -6,7 +6,13 @@ import time
 from pydantic import BaseModel, Field
 
 from src.retrieval.base import RankedChunk, Retriever, retrieve_batch_default
-from src.shared.llm import AzureFoundryStructuredLlm
+from src.shared.llm import LocalOllamaStructuredLlm, StructuredLlm
+
+DEFAULT_JUDGE_MODEL = "gpt-oss:20b"
+DEFAULT_JUDGE_REASONING = "low"
+DEFAULT_JUDGE_NUM_CTX = 32_768
+DEFAULT_JUDGE_NUM_PREDICT = 1024
+DEFAULT_JUDGE_METHOD = "function_calling"
 
 
 class ChunkSufficiency(BaseModel):
@@ -82,6 +88,7 @@ class AgenticRetriever:
     initial_limit: int = 10
     limit_step: int = 5
     max_limit: int = 30
+    judge: StructuredLlm | None = None
     batch_stats: AgenticBatchStats = field(
         default_factory=AgenticBatchStats,
         init=False,
@@ -170,15 +177,40 @@ class AgenticRetriever:
             )
 
         prompt = _sufficiency_prompt(query, chunks)
-        return _judge_with_azure(prompt, retries=self.judge_retries)
+        return _judge_locally(prompt, retries=self.judge_retries, judge=self.judge)
 
 
-def _judge_with_azure(prompt: str, retries: int) -> ChunkSufficiency:
-    return AzureFoundryStructuredLlm.from_env().structured_output(
-        prompt,
-        ChunkSufficiency,
-        retries=retries,
+def default_judge(config: dict | None = None) -> LocalOllamaStructuredLlm:
+    """Local Ollama judge used when a retriever does not inject its own."""
+    config = config or {}
+    return LocalOllamaStructuredLlm(
+        model_id=config.get("agentic_judge_model", DEFAULT_JUDGE_MODEL),
+        reasoning=config.get("agentic_judge_reasoning", DEFAULT_JUDGE_REASONING),
+        num_ctx=config.get("agentic_judge_num_ctx", DEFAULT_JUDGE_NUM_CTX),
+        num_predict=config.get("agentic_judge_num_predict", DEFAULT_JUDGE_NUM_PREDICT),
+        method=config.get("agentic_judge_structured_method", DEFAULT_JUDGE_METHOD),
     )
+
+
+def _judge_locally(
+    prompt: str,
+    retries: int,
+    judge: StructuredLlm | None = None,
+) -> ChunkSufficiency:
+    client = judge or default_judge()
+    try:
+        return client.structured_output(prompt, ChunkSufficiency, retries=retries)
+    except RuntimeError as exc:
+        # A question the judge cannot answer must not end a multi-hour run:
+        # resume would replay the same prompt and fail at the same place. Treat
+        # it as insufficient so the agent widens its search, and record why in
+        # the verdict so the action log and diagnostics show it.
+        print(f"agentic judge failed, treating as insufficient: {exc}", flush=True)
+        return ChunkSufficiency(
+            sufficient=False,
+            reason=f"judge unavailable: {exc}",
+            reformulated_query=None,
+        )
 
 
 def _sufficiency_prompt(query: str, chunks: list[RankedChunk]) -> str:

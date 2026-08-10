@@ -2,7 +2,6 @@ import pytest
 
 from src.retrieval import methods
 from src.shared.indexers import (
-    AzureEmbeddingIndexer,
     Nemotron3EmbedIndexer,
     build_indexer,
     provider_names,
@@ -24,21 +23,21 @@ def test_retriever_catalog_generates_public_names():
     assert "nemotron_rerank" in names
     assert "nemotron_hybrid_rerank" in names
     assert "nemotron_hybrid_agentic" in names
-    assert "embed_v4_hybrid_agentic" in names
     assert "sparse_v2" in names
     assert "qwen4b_hybrid_rerank_v2" in names
     assert "nemotron_hybrid_agentic_v2" in names
-    assert "embed_v4_hybrid_agentic_v2" in names
-    assert "embed_v4_hybrid_rerank_cohere" in names
-    assert "embed_v4_hybrid_agentic_cohere" in names
-    assert "sparse_rerank_cohere" in names
-    assert "qwen4b_rerank_cohere" in names
-    assert "nemotron_hybrid_rerank_cohere" in names
-    assert "embed_v4_hybrid_rerank_cohere_v2" in names
-    assert not any(name.startswith("azure") for name in names)
-    assert not any(name.startswith("cohere_v4") for name in names)
     assert "qwen4b_chunk" not in names
     assert "sparse_hybrid" not in names
+
+
+def test_retriever_catalog_has_no_remote_methods():
+    """Every registered method must run offline."""
+    names = methods.list_retrievers()
+
+    assert not any("cohere" in name for name in names)
+    assert not any("embed_v4" in name for name in names)
+    assert not any(name.startswith("azure") for name in names)
+    assert "azure" not in provider_names()
 
 
 def test_build_retriever_rejects_unknown_name():
@@ -99,42 +98,6 @@ def test_reranker_uses_discovered_defaults(monkeypatch):
     assert retriever.prompt is None
 
 
-def test_cohere_reranker_uses_azure_deployment_id(monkeypatch):
-    monkeypatch.setattr(methods, "enabled_provider_names", lambda: ["stub"])
-    monkeypatch.setenv(
-        "AZURE_COHERE_RERANK_ENDPOINT",
-        "https://example.test/v2/rerank",
-    )
-    monkeypatch.setenv("AZURE_COHERE_RERANK_API_KEY", "key")
-
-    retriever = methods.build_retriever("stub_hybrid_rerank_cohere_v2")
-
-    assert retriever.name == "stub_hybrid_rerank_cohere_v2"
-    assert retriever.model_name == "Cohere-rerank-v4.0-pro"
-    assert retriever.endpoint == "https://example.test/v2/rerank"
-    assert retriever.base_retriever.name == "stub_hybrid_v2"
-
-
-def test_embed_v4_cohere_agent_is_an_alternative_not_a_second_reranker(
-    monkeypatch,
-):
-    monkeypatch.setenv(
-        "AZURE_COHERE_RERANK_ENDPOINT",
-        "https://example.test/v2/rerank",
-    )
-    monkeypatch.setenv("AZURE_COHERE_RERANK_API_KEY", "key")
-
-    retriever = methods.build_retriever("embed_v4_hybrid_agentic_cohere")
-
-    assert retriever.name == "embed_v4_hybrid_agentic_cohere"
-    assert retriever.initial_limit == 10
-    assert retriever.base_retriever.name == "embed_v4_hybrid_rerank_cohere"
-    assert retriever.base_retriever.model_name == "Cohere-rerank-v4.0-pro"
-    hybrid = retriever.base_retriever.base_retriever
-    assert hybrid.name == "embed_v4_hybrid"
-    assert hybrid.retrievers[0].provider == "azure"
-
-
 def test_nemotron_agent_uses_hybrid_reranked_nemotron_chunks(monkeypatch):
     monkeypatch.setattr(methods, "enabled_provider_names", lambda: ["nemotron"])
 
@@ -147,16 +110,26 @@ def test_nemotron_agent_uses_hybrid_reranked_nemotron_chunks(monkeypatch):
     assert retriever.base_retriever.base_retriever.name == "nemotron_hybrid"
 
 
-def test_embed_v4_agent_uses_internal_azure_embedding_index(monkeypatch):
-    monkeypatch.setattr(methods, "enabled_provider_names", lambda: ["azure"])
+def test_qwen_agent_uses_internal_qwen_embedding_index(monkeypatch):
+    monkeypatch.setattr(methods, "enabled_provider_names", lambda: ["qwen"])
 
-    retriever = methods.build_retriever("embed_v4_hybrid_agentic")
+    retriever = methods.build_retriever("qwen_hybrid_agentic")
 
-    assert retriever.name == "embed_v4_hybrid_agentic"
-    assert retriever.base_retriever.name == "embed_v4_hybrid_rerank"
+    assert retriever.name == "qwen_hybrid_agentic"
+    assert retriever.base_retriever.name == "qwen_hybrid_rerank"
     hybrid = retriever.base_retriever.base_retriever
-    assert hybrid.name == "embed_v4_hybrid"
-    assert hybrid.retrievers[0].provider == "azure"
+    assert hybrid.name == "qwen_hybrid"
+    assert hybrid.retrievers[0].provider == "qwen"
+
+
+def test_agentic_retrievers_use_the_configured_local_judge(monkeypatch):
+    monkeypatch.setattr(methods, "enabled_provider_names", lambda: ["nemotron"])
+
+    retriever = methods.build_retriever("nemotron_hybrid_agentic")
+
+    assert retriever.judge is not None
+    assert retriever.judge.model_id == methods.CONFIG["agentic_judge_model"]
+    assert retriever.judge.method == methods.CONFIG["agentic_judge_structured_method"]
 
 
 def test_v2_agent_uses_v2_dense_and_sparse_representations(monkeypatch):
@@ -170,15 +143,3 @@ def test_v2_agent_uses_v2_dense_and_sparse_representations(monkeypatch):
     assert hybrid.name == "nemotron_hybrid_v2"
     assert vector.chunk_version == "v2"
     assert sparse.chunk_version == "v2"
-
-
-def test_azure_embedding_batch_size_defaults_to_rpm_friendly_max(monkeypatch):
-    monkeypatch.setenv("AZURE_AI_ENDPOINT", "https://example.test")
-    monkeypatch.setenv("AZURE_AI_API_KEY", "key")
-    monkeypatch.setenv("AZURE_EMBEDDING_MODEL", "model")
-
-    assert AzureEmbeddingIndexer.from_env().batch_size == 96
-    assert (
-        AzureEmbeddingIndexer.from_env({"azure_embedding_batch_size": 128}).batch_size
-        == 96
-    )

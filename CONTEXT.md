@@ -23,7 +23,7 @@ experiment.
 
 **Indexer**
 A provider-specific embedding backend behind a common interface. Current
-indexers are English MiniLM, Qwen multilingual, Qwen 4B, and Azure embeddings.
+indexers are English MiniLM, Qwen multilingual, Qwen 4B, and Nemotron 3 Embed.
 
 **Ranking method**
 A named retrieval strategy used in experiments to return ranked chunk ids for a

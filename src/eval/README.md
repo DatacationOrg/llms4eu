@@ -27,8 +27,8 @@ Chunk summaries are historical retrieval experiments, not steady-state eval
 inputs. Current results live in
 [`docs/retrieval-results-agentic.md`](../../docs/retrieval-results-agentic.md).
 
-Embedding and reranker inference is local unless an Azure retriever or question
-generator is selected. Azure index builds pause for typed `yes`.
+All inference is local: embeddings, reranking, question generation, and the
+agentic sufficiency judge run through sentence-transformers and Ollama.
 Eval checks that requested vector indexes already exist and reports the build
 commands when they are missing; it does not build indexes while measuring.
 

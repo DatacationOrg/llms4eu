@@ -103,13 +103,9 @@ def test_agentic_diagnostics_reports_paired_retry_quality_and_latency():
 def test_agent_baseline_mapping_preserves_v2_suffix():
     assert baseline_for_agent("qwen_agentic") == "qwen_rerank"
     assert (
-        baseline_for_agent("embed_v4_hybrid_agentic_v2") == "embed_v4_hybrid_rerank_v2"
+        baseline_for_agent("nemotron_hybrid_agentic_v2") == "nemotron_hybrid_rerank_v2"
     )
-    assert baseline_for_agent("embed_v4_hybrid_rerank") is None
-    assert (
-        baseline_for_agent("embed_v4_hybrid_agentic_cohere")
-        == "embed_v4_hybrid_rerank_cohere"
-    )
+    assert baseline_for_agent("nemotron_hybrid_rerank") is None
 
 
 def _action(
@@ -131,3 +127,85 @@ def _action(
         "judge_ms": 20.0,
         "top_up_ms": 0.0,
     }
+
+
+def _tool_action(attempt, action, *, page_id=None, term=None, chunks=("c1",)):
+    return {
+        "attempt": attempt,
+        "judge_query": "q",
+        "chunks": [{"id": c, "score": 0.5, "text": "t"} for c in chunks],
+        "verdict": {
+            "sufficient": action == "sufficient",
+            "reason": "r",
+            "action": action,
+            "page_id": page_id,
+            "term": term,
+        },
+        "retrieval_ms": 1.0,
+        "judge_ms": 2.0,
+        "top_up_ms": 0.0,
+    }
+
+
+def _tool_diagnostics():
+    questions = [{"id": "q1", "question_type": "direct_short"}]
+    relevance = [{"question_id": "q1", "chunk_id": "gold"}]
+    rankings = {
+        "qwen_hybrid_rerank": {"q1": ["other"]},
+        "qwen_hybrid_agentic_tools": {"q1": ["other", "gold"]},
+    }
+    method_states = {
+        "qwen_hybrid_agentic_tools": {
+            "observations": {
+                "q1": {
+                    "elapsed_seconds": 0.3,
+                    "query_count": 2,
+                    "actions": [
+                        _tool_action(1, "search_in_page", page_id="p1", term="Mondays"),
+                        _tool_action(2, "sufficient", chunks=("c1", "gold")),
+                    ],
+                }
+            }
+        }
+    }
+    return build_agentic_diagnostics(
+        questions=questions,
+        relevance=relevance,
+        rankings=rankings,
+        method_states=method_states,
+        method_names=["qwen_hybrid_rerank", "qwen_hybrid_agentic_tools"],
+        cutoff=5,
+    )
+
+
+def test_diagnostics_expose_tool_use_per_question():
+    row = _tool_diagnostics()["details"]["qwen_hybrid_agentic_tools"][0]
+
+    assert row["action_sequence"] == ["search_in_page", "sufficient"]
+    assert row["tool_calls"] == 1
+    assert row["tools_used"] == ["search_in_page"]
+    assert row["tool_details"][0]["page_id"] == "p1"
+    assert row["tool_details"][0]["term"] == "Mondays"
+    assert row["recovered"] is True
+
+
+def test_diagnostics_summarize_whether_tools_paid_off():
+    summary = _tool_diagnostics()["summaries"]["qwen_hybrid_agentic_tools"]
+
+    assert summary["tool_calls"] == 1
+    assert summary["tool_questions"] == 1
+    assert summary["search_in_page_calls"] == 1
+    assert summary["list_sections_calls"] == 0
+    assert summary["tool_recovered"] == 1
+    assert summary["tool_precision"] == 1.0
+
+
+def test_tool_table_is_rendered_only_when_tools_ran():
+    report = format_agentic_diagnostics(_tool_diagnostics())
+    assert "Page tool usage" in report
+    assert "search_in_page" in report
+
+    plain = _tool_diagnostics()
+    for summary in plain["summaries"].values():
+        summary["tool_calls"] = 0
+    assert "Page tool usage" not in format_agentic_diagnostics(plain)

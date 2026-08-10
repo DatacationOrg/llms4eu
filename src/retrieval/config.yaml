@@ -11,12 +11,24 @@ reranker_max_length: 2048
 reranker_local_files_only: true
 reranker_prompt_name:
 reranker_prompt:
-cohere_reranker_model: Cohere-rerank-v4.0-pro
-cohere_reranker_timeout_seconds: 90
-cohere_reranker_retries: 3
+agentic_judge_model: gpt-oss:20b
+agentic_judge_num_ctx: 32768
+agentic_judge_num_predict: 1024
+agentic_judge_reasoning: low
+# Gemma 4 returns no tool call at all on Slovenian sufficiency prompts, and
+# answers json_schema prompts in prose; gpt-oss is reliable via tool calls.
+agentic_judge_structured_method: function_calling
 agentic_judge_retries: 3
 agentic_max_attempts: 3
 agentic_min_sufficient_chunks: 2
 agentic_initial_limit: 10
 agentic_limit_step: 5
 agentic_max_limit: 20
+# Tool-using agent: one extra attempt so a tool step does not eat a retrieval step.
+agentic_tools_max_attempts: 4
+agentic_tools_max_tool_calls: 3
+agentic_tools_section_limit: 40
+agentic_tools_search_limit: 5
+# The richer ToolAction schema is unreliable via tool calls (1/3) but solid via
+# json_schema (9/10); the plain sufficiency judge is the other way around.
+agentic_tools_structured_method: json_schema

@@ -5,8 +5,11 @@ inventory_path: .local/okf/inventory.json
 catalog_path: .local/okf/catalog.json
 max_page_chars: 30000
 page_part_chars: 30000
-request_timeout_seconds: 180
-max_output_tokens: 8192
+model: gpt-oss:20b
+model_num_ctx: 65536
+model_num_predict: 8192
+model_reasoning: low
+model_structured_method: function_calling
 retries: 3
 resolution_batch_size: 25
 navigation:

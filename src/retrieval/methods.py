@@ -1,18 +1,15 @@
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
 from src.indexing.chunk_text import CONTEXTUAL_CHUNK_VERSION, LEGACY_CHUNK_VERSION
 from src.retrieval.base import Retriever
-from src.retrieval.retrievers.agentic import AgenticRetriever
+from src.retrieval.retrievers.agentic import AgenticRetriever, default_judge
+from src.retrieval.retrievers.agentic_tools import AgenticToolRetriever
 from src.retrieval.retrievers.fusion import WeightedScoreFusionRetriever
-from src.retrieval.retrievers.rerank import (
-    AzureCohereRerankRetriever,
-    CrossEncoderRerankRetriever,
-)
+from src.retrieval.retrievers.rerank import CrossEncoderRerankRetriever
 from src.retrieval.retrievers.sparse import SparseRetriever
 from src.retrieval.retrievers.vector_chunks import VectorChunkRetriever
 from src.shared.env import load_yaml
@@ -94,10 +91,6 @@ def _specs() -> dict[str, RetrieverSpec]:
             "sparse_rerank",
             _build_sparse_rerank,
         ),
-        "sparse_rerank_cohere": RetrieverSpec(
-            "sparse_rerank_cohere",
-            _build_sparse_cohere_rerank,
-        ),
         "sparse_v2": RetrieverSpec(
             "sparse_v2",
             lambda: _sparse(CONTEXTUAL_CHUNK_VERSION),
@@ -108,73 +101,47 @@ def _specs() -> dict[str, RetrieverSpec]:
             lambda: _build_sparse_rerank(CONTEXTUAL_CHUNK_VERSION),
             chunk_version=CONTEXTUAL_CHUNK_VERSION,
         ),
-        "sparse_rerank_cohere_v2": RetrieverSpec(
-            "sparse_rerank_cohere_v2",
-            lambda: _build_sparse_cohere_rerank(CONTEXTUAL_CHUNK_VERSION),
-            chunk_version=CONTEXTUAL_CHUNK_VERSION,
-        ),
     }
     for provider_name in enabled_provider_names():
-        public_name = "embed_v4" if provider_name == "azure" else provider_name
-        specs.update(_provider_specs(provider_name, LEGACY_CHUNK_VERSION, public_name))
-        specs.update(
-            _provider_specs(provider_name, CONTEXTUAL_CHUNK_VERSION, public_name)
-        )
+        specs.update(_provider_specs(provider_name, LEGACY_CHUNK_VERSION))
+        specs.update(_provider_specs(provider_name, CONTEXTUAL_CHUNK_VERSION))
     return specs
 
 
 def _provider_specs(
     provider_name: str,
     chunk_version: str,
-    public_name: str | None = None,
 ) -> dict[str, RetrieverSpec]:
-    public_name = public_name or provider_name
     suffix = _version_suffix(chunk_version)
     specs = {
-        f"{public_name}{suffix}": RetrieverSpec(
-            f"{public_name}{suffix}",
-            lambda provider=provider_name, version=chunk_version, name=public_name: (
-                _vector(provider, version, name)
+        f"{provider_name}{suffix}": RetrieverSpec(
+            f"{provider_name}{suffix}",
+            lambda provider=provider_name, version=chunk_version: _vector(
+                provider, version
             ),
             provider=provider_name,
             chunk_version=chunk_version,
         ),
-        f"{public_name}_hybrid{suffix}": RetrieverSpec(
-            f"{public_name}_hybrid{suffix}",
-            lambda provider=provider_name, version=chunk_version, name=public_name: (
-                _hybrid(provider, version, name)
+        f"{provider_name}_hybrid{suffix}": RetrieverSpec(
+            f"{provider_name}_hybrid{suffix}",
+            lambda provider=provider_name, version=chunk_version: _hybrid(
+                provider, version
             ),
             provider=provider_name,
             chunk_version=chunk_version,
         ),
-        f"{public_name}_rerank{suffix}": RetrieverSpec(
-            f"{public_name}_rerank{suffix}",
-            lambda provider=provider_name, version=chunk_version, name=public_name: (
-                _vector_rerank(provider, version, name)
+        f"{provider_name}_rerank{suffix}": RetrieverSpec(
+            f"{provider_name}_rerank{suffix}",
+            lambda provider=provider_name, version=chunk_version: _vector_rerank(
+                provider, version
             ),
             provider=provider_name,
             chunk_version=chunk_version,
         ),
-        f"{public_name}_hybrid_rerank{suffix}": RetrieverSpec(
-            f"{public_name}_hybrid_rerank{suffix}",
-            lambda provider=provider_name, version=chunk_version, name=public_name: (
-                _hybrid_rerank(provider, version, name)
-            ),
-            provider=provider_name,
-            chunk_version=chunk_version,
-        ),
-        f"{public_name}_rerank_cohere{suffix}": RetrieverSpec(
-            f"{public_name}_rerank_cohere{suffix}",
-            lambda provider=provider_name, version=chunk_version, name=public_name: (
-                _vector_cohere_rerank(provider, version, name)
-            ),
-            provider=provider_name,
-            chunk_version=chunk_version,
-        ),
-        f"{public_name}_hybrid_rerank_cohere{suffix}": RetrieverSpec(
-            f"{public_name}_hybrid_rerank_cohere{suffix}",
-            lambda provider=provider_name, version=chunk_version, name=public_name: (
-                _hybrid_cohere_rerank(provider, version, name)
+        f"{provider_name}_hybrid_rerank{suffix}": RetrieverSpec(
+            f"{provider_name}_hybrid_rerank{suffix}",
+            lambda provider=provider_name, version=chunk_version: _hybrid_rerank(
+                provider, version
             ),
             provider=provider_name,
             chunk_version=chunk_version,
@@ -188,22 +155,21 @@ def _provider_specs(
             provider="qwen",
             chunk_version=chunk_version,
         )
-    if provider_name in {"qwen", "nemotron", "azure"}:
-        name = f"{public_name}_hybrid_agentic{suffix}"
+    if provider_name in {"qwen", "nemotron"}:
+        name = f"{provider_name}_hybrid_agentic{suffix}"
         specs[name] = RetrieverSpec(
             name,
-            lambda provider=provider_name, version=chunk_version, public=public_name: (
-                _hybrid_agentic(provider, version, public)
+            lambda provider=provider_name, version=chunk_version: _hybrid_agentic(
+                provider, version
             ),
             provider=provider_name,
             chunk_version=chunk_version,
         )
-    if provider_name == "azure":
-        name = f"{public_name}_hybrid_agentic_cohere{suffix}"
+        name = f"{provider_name}_hybrid_agentic_tools{suffix}"
         specs[name] = RetrieverSpec(
             name,
-            lambda provider=provider_name, version=chunk_version, public=public_name: (
-                _hybrid_cohere_agentic(provider, version, public)
+            lambda provider=provider_name, version=chunk_version: _hybrid_agentic_tools(
+                provider, version
             ),
             provider=provider_name,
             chunk_version=chunk_version,
@@ -227,24 +193,12 @@ def _build_sparse_rerank(
     return _reranker(f"sparse_rerank{suffix}", _sparse(chunk_version))
 
 
-def _build_sparse_cohere_rerank(
-    chunk_version: str = LEGACY_CHUNK_VERSION,
-) -> AzureCohereRerankRetriever:
-    suffix = _version_suffix(chunk_version)
-    return _cohere_reranker(
-        f"sparse_rerank_cohere{suffix}",
-        _sparse(chunk_version),
-    )
-
-
 def _vector(
     provider_name: str,
     chunk_version: str = LEGACY_CHUNK_VERSION,
-    public_name: str | None = None,
 ) -> Retriever:
-    public_name = public_name or provider_name
     return VectorChunkRetriever(
-        name=f"{public_name}{_version_suffix(chunk_version)}",
+        name=f"{provider_name}{_version_suffix(chunk_version)}",
         provider=provider_name,
         chunk_version=chunk_version,
     )
@@ -253,14 +207,12 @@ def _vector(
 def _hybrid(
     provider_name: str,
     chunk_version: str = LEGACY_CHUNK_VERSION,
-    public_name: str | None = None,
 ) -> WeightedScoreFusionRetriever:
-    public_name = public_name or provider_name
     suffix = _version_suffix(chunk_version)
     return WeightedScoreFusionRetriever(
-        name=f"{public_name}_hybrid{suffix}",
+        name=f"{provider_name}_hybrid{suffix}",
         retrievers=(
-            _vector(provider_name, chunk_version, public_name),
+            _vector(provider_name, chunk_version),
             _sparse(chunk_version),
         ),
         candidate_limit=CONFIG["rerank_candidate_limit"],
@@ -271,52 +223,22 @@ def _hybrid(
 def _vector_rerank(
     provider_name: str,
     chunk_version: str = LEGACY_CHUNK_VERSION,
-    public_name: str | None = None,
 ) -> CrossEncoderRerankRetriever:
-    public_name = public_name or provider_name
     suffix = _version_suffix(chunk_version)
     return _reranker(
-        f"{public_name}_rerank{suffix}",
-        _vector(provider_name, chunk_version, public_name),
+        f"{provider_name}_rerank{suffix}",
+        _vector(provider_name, chunk_version),
     )
 
 
 def _hybrid_rerank(
     provider_name: str,
     chunk_version: str = LEGACY_CHUNK_VERSION,
-    public_name: str | None = None,
 ) -> CrossEncoderRerankRetriever:
-    public_name = public_name or provider_name
     suffix = _version_suffix(chunk_version)
     return _reranker(
-        f"{public_name}_hybrid_rerank{suffix}",
-        _hybrid(provider_name, chunk_version, public_name),
-    )
-
-
-def _vector_cohere_rerank(
-    provider_name: str,
-    chunk_version: str = LEGACY_CHUNK_VERSION,
-    public_name: str | None = None,
-) -> AzureCohereRerankRetriever:
-    public_name = public_name or provider_name
-    suffix = _version_suffix(chunk_version)
-    return _cohere_reranker(
-        f"{public_name}_rerank_cohere{suffix}",
-        _vector(provider_name, chunk_version, public_name),
-    )
-
-
-def _hybrid_cohere_rerank(
-    provider_name: str,
-    chunk_version: str = LEGACY_CHUNK_VERSION,
-    public_name: str | None = None,
-) -> AzureCohereRerankRetriever:
-    public_name = public_name or provider_name
-    suffix = _version_suffix(chunk_version)
-    return _cohere_reranker(
-        f"{public_name}_hybrid_rerank_cohere{suffix}",
-        _hybrid(provider_name, chunk_version, public_name),
+        f"{provider_name}_hybrid_rerank{suffix}",
+        _hybrid(provider_name, chunk_version),
     )
 
 
@@ -333,48 +255,53 @@ def _qwen_agentic(
         initial_limit=CONFIG["agentic_initial_limit"],
         limit_step=CONFIG["agentic_limit_step"],
         max_limit=CONFIG["agentic_max_limit"],
+        judge=default_judge(CONFIG),
     )
 
 
 def _hybrid_agentic(
     provider_name: str,
     chunk_version: str = LEGACY_CHUNK_VERSION,
-    public_name: str | None = None,
 ) -> AgenticRetriever:
-    public_name = public_name or provider_name
     suffix = _version_suffix(chunk_version)
     return AgenticRetriever(
-        name=f"{public_name}_hybrid_agentic{suffix}",
-        base_retriever=_hybrid_rerank(provider_name, chunk_version, public_name),
+        name=f"{provider_name}_hybrid_agentic{suffix}",
+        base_retriever=_hybrid_rerank(provider_name, chunk_version),
         judge_retries=CONFIG["agentic_judge_retries"],
         max_attempts=CONFIG["agentic_max_attempts"],
         min_sufficient_chunks=CONFIG["agentic_min_sufficient_chunks"],
         initial_limit=CONFIG["agentic_initial_limit"],
         limit_step=CONFIG["agentic_limit_step"],
         max_limit=CONFIG["agentic_max_limit"],
+        judge=default_judge(CONFIG),
     )
 
 
-def _hybrid_cohere_agentic(
+def _hybrid_agentic_tools(
     provider_name: str,
     chunk_version: str = LEGACY_CHUNK_VERSION,
-    public_name: str | None = None,
-) -> AgenticRetriever:
-    public_name = public_name or provider_name
+) -> AgenticToolRetriever:
     suffix = _version_suffix(chunk_version)
-    return AgenticRetriever(
-        name=f"{public_name}_hybrid_agentic_cohere{suffix}",
-        base_retriever=_hybrid_cohere_rerank(
-            provider_name,
-            chunk_version,
-            public_name,
-        ),
+    return AgenticToolRetriever(
+        name=f"{provider_name}_hybrid_agentic_tools{suffix}",
+        base_retriever=_hybrid_rerank(provider_name, chunk_version),
         judge_retries=CONFIG["agentic_judge_retries"],
-        max_attempts=CONFIG["agentic_max_attempts"],
+        max_attempts=CONFIG["agentic_tools_max_attempts"],
         min_sufficient_chunks=CONFIG["agentic_min_sufficient_chunks"],
         initial_limit=CONFIG["agentic_initial_limit"],
         limit_step=CONFIG["agentic_limit_step"],
         max_limit=CONFIG["agentic_max_limit"],
+        max_tool_calls=CONFIG["agentic_tools_max_tool_calls"],
+        section_limit=CONFIG["agentic_tools_section_limit"],
+        search_limit=CONFIG["agentic_tools_search_limit"],
+        judge=default_judge(
+            {
+                **CONFIG,
+                "agentic_judge_structured_method": CONFIG[
+                    "agentic_tools_structured_method"
+                ],
+            }
+        ),
     )
 
 
@@ -414,23 +341,4 @@ def _reranker(name: str, base_retriever: Retriever) -> CrossEncoderRerankRetriev
         batch_size=CONFIG["reranker_batch_size"],
         prompt_name=CONFIG["reranker_prompt_name"],
         prompt=CONFIG["reranker_prompt"],
-    )
-
-
-def _cohere_reranker(
-    name: str,
-    base_retriever: Retriever,
-) -> AzureCohereRerankRetriever:
-    return AzureCohereRerankRetriever(
-        name=name,
-        model_name=os.getenv(
-            "AZURE_COHERE_RERANK_MODEL",
-            CONFIG["cohere_reranker_model"],
-        ),
-        endpoint=os.environ["AZURE_COHERE_RERANK_ENDPOINT"],
-        api_key=os.environ["AZURE_COHERE_RERANK_API_KEY"],
-        base_retriever=base_retriever,
-        candidate_limit=CONFIG["rerank_candidate_limit"],
-        timeout_seconds=CONFIG["cohere_reranker_timeout_seconds"],
-        retries=CONFIG["cohere_reranker_retries"],
     )

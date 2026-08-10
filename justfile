@@ -72,6 +72,3 @@ okf-ask *question:
 
 okf-benchmark LIMIT="19":
     uv run python experiments/indexing/compare_okf_rag.py --limit {{LIMIT}}
-
-okf-comprehensive:
-    uv run python experiments/indexing/compare_qwen_modes.py --methods comprehensive-okf --output docs/retrieval-results-comprehensive-2026-07-27.md --checkpoint docs/retrieval-results-comprehensive-2026-07-27.md.checkpoint.json --judge-equivalence --judge-k 15 --judge-cache docs/retrieval-results-comprehensive-2026-07-27.md.equivalence.json --keep-checkpoint

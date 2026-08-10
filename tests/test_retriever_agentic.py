@@ -115,7 +115,42 @@ def test_agentic_retriever_increases_limit_when_no_reformulation(monkeypatch):
     assert base.calls == [("query", 4), ("query", 8)]
 
 
-def test_agentic_retriever_uses_azure_judge_provider(monkeypatch):
+class StubJudge:
+    """Structured-output client standing in for the local Ollama judge."""
+
+    def __init__(self) -> None:
+        self.calls = []
+
+    def structured_output(self, prompt, output_schema, *, retries=3):
+        self.calls.append((prompt, retries))
+        return ChunkSufficiency(
+            sufficient=True,
+            reason="ok",
+            reformulated_query=None,
+        )
+
+
+def test_agentic_retriever_uses_its_injected_judge():
+    base = StubRetriever([[RankedChunk(id="c1", score=1.0, text="enough")]])
+    judge = StubJudge()
+    retriever = AgenticRetriever(
+        name="qwen_agentic",
+        base_retriever=base,
+        judge_retries=5,
+        max_attempts=1,
+        min_sufficient_chunks=1,
+        max_limit=10,
+        judge=judge,
+    )
+
+    chunks = retriever.retrieve("query", 3)
+
+    assert [chunk.id for chunk in chunks] == ["c1"]
+    assert len(judge.calls) == 1
+    assert judge.calls[0][1] == 5
+
+
+def test_agentic_retriever_falls_back_to_the_default_local_judge(monkeypatch):
     base = StubRetriever([[RankedChunk(id="c1", score=1.0, text="enough")]])
     retriever = AgenticRetriever(
         name="qwen_agentic",
@@ -128,21 +163,38 @@ def test_agentic_retriever_uses_azure_judge_provider(monkeypatch):
 
     calls = []
 
-    def fake_azure(prompt: str, retries: int) -> ChunkSufficiency:
-        calls.append((prompt, retries))
+    def fake_judge(prompt: str, retries: int, judge=None) -> ChunkSufficiency:
+        calls.append((prompt, retries, judge))
         return ChunkSufficiency(
             sufficient=True,
             reason="ok",
             reformulated_query=None,
         )
 
-    monkeypatch.setattr(agentic, "_judge_with_azure", fake_azure)
+    monkeypatch.setattr(agentic, "_judge_locally", fake_judge)
 
     chunks = retriever.retrieve("query", 3)
 
     assert [chunk.id for chunk in chunks] == ["c1"]
-    assert len(calls) == 1
-    assert calls[0][1] == 5
+    assert calls == [(calls[0][0], 5, None)]
+
+
+def test_default_judge_reads_the_retrieval_config():
+    judge = agentic.default_judge(
+        {
+            "agentic_judge_model": "gpt-oss:20b",
+            "agentic_judge_num_ctx": 32768,
+            "agentic_judge_num_predict": 1024,
+            "agentic_judge_reasoning": "low",
+            "agentic_judge_structured_method": "function_calling",
+        }
+    )
+
+    assert judge.model_id == "gpt-oss:20b"
+    assert judge.num_ctx == 32768
+    assert judge.num_predict == 1024
+    assert judge.reasoning == "low"
+    assert judge.method == "function_calling"
 
 
 def test_agentic_retriever_uses_10_15_20_limit_schedule(monkeypatch):
@@ -228,3 +280,37 @@ def test_agentic_retriever_tracks_queries_per_question(monkeypatch):
 
     assert retriever.total_queries() == 3
     assert retriever.average_queries_per_question() == 1.5
+
+
+class _FailingJudge:
+    """Judge whose structured call never succeeds."""
+
+    def structured_output(self, prompt, output_schema, *, retries=3):
+        raise RuntimeError(f"structured call failed after {retries} attempts")
+
+
+def test_judge_failure_is_insufficient_rather_than_fatal(capsys):
+    """One unjudgeable question must not end a long benchmark run."""
+    base = StubRetriever(
+        [
+            [RankedChunk(id="c1", score=0.4, text="weak")],
+            [RankedChunk(id="c2", score=0.5, text="still weak")],
+        ]
+    )
+    retriever = AgenticRetriever(
+        name="qwen_agentic",
+        base_retriever=base,
+        max_attempts=2,
+        min_sufficient_chunks=1,
+        max_limit=8,
+        judge=_FailingJudge(),
+    )
+
+    chunks = retriever.retrieve("query", 4)
+
+    assert [chunk.id for chunk in chunks] == ["c1"]
+    assert base.calls == [("query", 4), ("query", 8)]
+    verdict = retriever.batch_stats.action_log[0]["verdict"]
+    assert verdict["sufficient"] is False
+    assert "judge unavailable" in verdict["reason"]
+    assert "agentic judge failed" in capsys.readouterr().out

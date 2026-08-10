@@ -36,7 +36,6 @@ from src.retrieval.methods import (
     ensure_retrievers_ready,
     list_retrievers,
 )
-from src.retrieval.retrievers.agentic import AgenticRetriever
 from src.shared.env import ROOT, load_local_env, load_yaml
 
 DEFAULT_METHODS = (
@@ -44,9 +43,11 @@ DEFAULT_METHODS = (
     "qwen4b_hybrid_rerank",
     "nemotron",
     "nemotron_hybrid_rerank",
-    "embed_v4_hybrid_rerank",
-    "embed_v4_hybrid_agentic",
+    "qwen_hybrid_agentic",
     "nemotron_hybrid_agentic",
+    # Paired with qwen_hybrid_agentic so the page tools are measured against the
+    # same agent without them.
+    "qwen_hybrid_agentic_tools",
 )
 PHASE2_METHODS = {
     "phase2-nemotron": (
@@ -55,24 +56,9 @@ PHASE2_METHODS = {
         "nemotron_hybrid_agentic",
         "nemotron_hybrid_agentic_v2",
     ),
-    "phase2-embed-v4": (
-        "embed_v4_hybrid_rerank",
-        "embed_v4_hybrid_rerank_v2",
-        "embed_v4_hybrid_agentic",
-        "embed_v4_hybrid_agentic_v2",
-    ),
 }
 OKF_METHOD = "okf"
 OKF_METHODS = {OKF_METHOD}
-COMPREHENSIVE_OKF_METHODS = (
-    "sparse_rerank",
-    "qwen4b_hybrid_rerank",
-    "nemotron_hybrid_rerank",
-    "embed_v4_hybrid_rerank",
-    "embed_v4_hybrid_agentic",
-    "nemotron_hybrid_agentic",
-    OKF_METHOD,
-)
 DEFAULT_OUTPUT = Path("docs/retrieval-results-chunks-okf.md")
 CONFIG = load_yaml(ROOT / "experiments" / "indexing" / "config.yaml")
 
@@ -144,11 +130,10 @@ def _parse_args() -> argparse.Namespace:
         default=",".join(DEFAULT_METHODS),
         help=(
             "Comma-separated retriever names to compare. Defaults to the primary "
-            "sparse, Qwen4B, Nemotron, Azure, and agentic benchmark suite. Use "
-            "'all-agentic' to include every registered agentic method, or "
-            "'comprehensive-okf' for the full chunk+OKF benchmark, 'okf-only' "
+            "sparse, Qwen4B, Nemotron, and agentic benchmark suite. Use "
+            "'all-agentic' to include every registered agentic method, 'okf-only' "
             "for concept-level OKF scoring, or "
-            "'phase2', 'phase2-nemotron', or 'phase2-embed-v4' for v1/v2 comparisons."
+            "'phase2' / 'phase2-nemotron' for v1/v2 comparisons."
         ),
     )
     parser.add_argument(
@@ -216,7 +201,7 @@ def _parse_args() -> argparse.Namespace:
         "--judge-equivalence",
         action="store_true",
         help=(
-            "Use the Azure evidence-equivalence judge after each retrieved ranking "
+            "Use the local evidence-equivalence judge after each retrieved ranking "
             "and add judge_hit@K to the overall table. Judgments are cached for resume."
         ),
     )
@@ -263,8 +248,6 @@ def _resolve_methods(raw_methods: str) -> list[str]:
         return _agentic_retrievers()
     if group == "phase2":
         return list(dict.fromkeys(sum(PHASE2_METHODS.values(), ())))
-    if group == "comprehensive-okf":
-        return list(COMPREHENSIVE_OKF_METHODS)
     if group == "okf-only":
         return [OKF_METHOD]
     if group in PHASE2_METHODS:
@@ -380,7 +363,7 @@ def _add_equivalence_judgments(
         judge_checkpoint,
     )
 
-    client, model_id = _build_client("azure", None)
+    client, model_id = _build_client(None)
     judge = EvidenceEquivalenceJudge(client=client)
     judge_report, cache, summaries = judge_checkpoint(
         state=state,
@@ -771,7 +754,7 @@ def _build_incremental_equivalence_audit(
         _build_client,
     )
 
-    client, model_id = _build_client("azure", None)
+    client, model_id = _build_client(None)
     return IncrementalEquivalenceAudit(
         state=state,
         judge=EvidenceEquivalenceJudge(client=client),
@@ -1083,8 +1066,13 @@ def _read_total_queries(retriever: Retriever) -> float | None:
 
 
 def _retriever_action_log(retriever: Retriever) -> list | None:
-    if isinstance(retriever, AgenticRetriever):
-        return retriever.batch_stats.action_log
+    # Duck-typed on purpose: every agent that keeps an AgenticBatchStats reports
+    # here, including agents that are not AgenticRetriever subclasses.
+    batch_stats = getattr(retriever, "batch_stats", None)
+    if batch_stats is not None and isinstance(
+        getattr(batch_stats, "action_log", None), list
+    ):
+        return batch_stats.action_log
     action_log = getattr(retriever, "action_log", None)
     return action_log if isinstance(action_log, list) else None
 

@@ -21,6 +21,7 @@ cp .env.example .env  # set local paths (defaults work out of the box)
 ollama pull gemma4:e4b
 # Optional for eval question generation:
 ollama pull gemma4:26b-a4b-it-q4_K_M
+ollama pull gpt-oss:20b
 ```
 
 ## Usage

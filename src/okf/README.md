@@ -8,10 +8,10 @@ reads only the generated OKF hierarchy and complete concept files.
 
 The resumable pipeline has three phases:
 
-1. Azure proposes one primary concept for each complete source page.
-2. Exact matching and batched Azure resolution canonicalize proposals against a
+1. The model proposes one primary concept for each complete source page.
+2. Exact matching and batched model resolution canonicalize proposals against a
    persistent global catalog.
-3. Azure creates or augments coherent Markdown concepts from assigned pages.
+3. The model creates or augments coherent Markdown concepts from assigned pages.
 
 Private inventory, catalog, and enrichment checkpoints live under
 `.local/okf/`. Concept and checkpoint writes use temporary sibling files and
@@ -24,11 +24,13 @@ checkpointed. This remains necessary: the current source corpus contains a
 264,863-character page and another page above 60,000 characters. Splitting is a
 generation safeguard only; navigation reads complete OKF concepts.
 
-Required environment variables:
+Generation and navigation both use the local Ollama model named by `model` in
+`config.yaml` (`gpt-oss:20b`). Ollama must be running with that model pulled;
+no credentials or network access are required.
 
-- `AZURE_AI_ENDPOINT`
-- `AZURE_AI_API_KEY`
-- `AZURE_AI_MODEL`
+The bundle currently in `data/okf/tourism/` predates this switch and was
+generated with a hosted model, as its `manifest.json` records. It is still
+usable as-is; a clean rebuild regenerates it locally.
 
 Run generation and validation with:
 
@@ -38,13 +40,12 @@ just okf-generate
 just okf-rebuild
 just okf-validate
 just okf-ask What is Rajhenburg Castle?
-just okf-comprehensive
+just okf-benchmark
 ```
 
-`okf-comprehensive` resumes the existing comprehensive checkpoint, runs only
-the missing OKF method, and reports every method against concept-projected
-qrels. It also uses concept documents for the optional evidence-equivalence
-audit, so `judge_hit@15` remains representation-neutral.
+OKF is not part of the default retrieval benchmark. To score it against chunk
+RAG, use `just okf-benchmark`, or pass `--methods okf-only` to
+`experiments/indexing/compare_qwen_modes.py` for concept-level scoring.
 
 ### Resume and clean rebuilds
 
@@ -55,9 +56,8 @@ audit, so `judge_hit@15` remains representation-neutral.
    full bundle with a partial one.
 
 Use a clean rebuild after schema, taxonomy, or prompt changes. It is destructive
-and invokes Azure for the full corpus, so keep a Git commit or external copy if
-the previous bundle must remain recoverable. Azure configuration is checked
-before any generated files are deleted.
+and runs the local model over the full corpus, so keep a Git commit or external
+copy if the previous bundle must remain recoverable.
 
 ## Documents and indexes
 
@@ -80,8 +80,7 @@ required descriptive fields, and a non-empty body. Escaping links are errors;
 missing internal links are warnings.
 
 The generated manifest records source selection, resumability counts, failures,
-concept counts, model deployment, and validation findings. It never stores
-credentials.
+concept counts, the generating model, and validation findings.
 
 ## Navigation and evaluation
 

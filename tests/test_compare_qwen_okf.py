@@ -12,16 +12,41 @@ comparison = importlib.import_module("compare_qwen_modes")
 equivalence = importlib.import_module("judge_retrieval_equivalence")
 
 
-def test_comprehensive_okf_group_matches_existing_report_methods():
-    assert comparison._resolve_methods("comprehensive-okf") == [
-        "sparse_rerank",
-        "qwen4b_hybrid_rerank",
-        "nemotron_hybrid_rerank",
-        "embed_v4_hybrid_rerank",
-        "embed_v4_hybrid_agentic",
-        "nemotron_hybrid_agentic",
-        "okf",
-    ]
+def test_default_benchmark_methods_are_all_local():
+    """OKF and the Azure-embedded methods are no longer part of any bench group."""
+    grouped = set(comparison.DEFAULT_METHODS)
+    for group in comparison.PHASE2_METHODS.values():
+        grouped.update(group)
+
+    assert "okf" not in grouped
+    assert not any("embed_v4" in name for name in grouped)
+    assert not any("cohere" in name for name in grouped)
+
+
+def test_okf_stays_reachable_as_an_explicit_opt_in():
+    assert comparison._resolve_methods("okf-only") == ["okf"]
+
+
+def test_tool_agent_is_paired_with_the_plain_agent_by_default():
+    assert "qwen_hybrid_agentic" in comparison.DEFAULT_METHODS
+    assert "qwen_hybrid_agentic_tools" in comparison.DEFAULT_METHODS
+
+
+def test_action_log_is_read_from_any_agent_with_batch_stats():
+    """The tool agent is not an AgenticRetriever subclass; duck-typing must find it."""
+
+    class Stats:
+        action_log = [{"attempt": 1}]
+
+    class ToolAgent:
+        name = "qwen_hybrid_agentic_tools"
+        batch_stats = Stats()
+
+    class Plain:
+        name = "sparse_rerank"
+
+    assert comparison._retriever_action_log(ToolAgent()) == [{"attempt": 1}]
+    assert comparison._retriever_action_log(Plain()) is None
 
 
 def test_mixed_scoring_keeps_rag_chunks_and_scores_okf_concepts():

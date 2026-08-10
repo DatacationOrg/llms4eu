@@ -9,41 +9,41 @@ Reusable chunk retrieval methods.
 
 `retrievers/` contains concrete methods:
 
+Every method runs locally; no retrieval path calls a hosted API.
+
 - `sparse`: local lexical retrieval over page chunks.
-- `{english,qwen,qwen4b,nemotron,embed_v4}`: Chroma vector search over page
-  chunks. `embed_v4` uses the internal Azure index configured by
-  `AZURE_EMBEDDING_MODEL` (`embed-v-4-0` in the current benchmark).
+- `{english,qwen,qwen4b,nemotron}`: Chroma vector search over page chunks.
 - `*_hybrid`: normalized weighted score fusion over one vector provider plus
   sparse retrieval.
 - `*_rerank`: Qwen3 cross-encoder reranker over first-stage candidates.
 - `*_hybrid_rerank`: Qwen3 reranker over hybrid candidates.
-- `*_rerank_cohere` and `*_hybrid_rerank_cohere`: Azure-hosted
-  `Cohere-rerank-v4.0-pro` over the same first-stage candidates. Set
-  `AZURE_COHERE_RERANK_ENDPOINT` to the deployment's complete Cohere v2 rerank
-  URL and set `AZURE_COHERE_RERANK_API_KEY`. Override the deployment/model ID
-  with `AZURE_COHERE_RERANK_MODEL`; it defaults to
-  `Cohere-rerank-v4.0-pro`.
-- `embed_v4_hybrid_rerank_cohere` and
-  `embed_v4_hybrid_agentic_cohere` use `embed-v-4-0` hybrid candidates and
-  Cohere v4 reranking. The agentic variant uses Cohere directly as its
-  reranker, not after Qwen3.
-- `qwen_hybrid_agentic`, `nemotron_hybrid_agentic`, and
-  `embed_v4_hybrid_agentic`:
-  the agentic sufficiency
-  and query-reformulation loop over the provider's hybrid-reranked chunks.
+- `qwen_agentic`, `qwen_hybrid_agentic`, and `nemotron_hybrid_agentic`: the
+  agentic sufficiency and query-reformulation loop over the provider's
+  reranked chunks.
+- `qwen_hybrid_agentic_tools` and `nemotron_hybrid_agentic_tools`: the same
+  loop plus two page-navigation tools. Beyond `sufficient` / `reformulate` /
+  `expand` the agent may call `list_sections(page_id)` to read a page's table
+  of contents, and `search_in_page(page_id, term)` to pull sibling chunks the
+  first stage missed. Chunks it finds are inserted directly after the ranked
+  chunk from the same page, so the agent's choices are scored rather than
+  parked at the end of the list. Tool calls are capped by
+  `agentic_tools_max_tool_calls`.
 - Every dense, hybrid, reranked, and agentic method also has a `_v2` variant,
   such as `nemotron_hybrid_rerank_v2` and
   `nemotron_hybrid_agentic_v2`. These use isolated metadata-context dense and
   sparse indexes. Unsuffixed names retain the legacy v1 behavior.
 - `sparse_v2` and `sparse_rerank_v2` use the same metadata-context text as v2
   dense retrieval; v1 sparse methods continue to index raw chunk text.
-- Cohere methods also have isolated `_v2` variants, for example
-  `nemotron_hybrid_rerank_cohere_v2` and `sparse_rerank_cohere_v2`.
 
 Retrieval tuning lives in `config.yaml`. Enabled vector providers come from
 `src/indexing/config.yaml`; eval defaults come from `src/eval/config.yaml`.
 Agentic retrieval starts with 10 reranked chunks and expands in steps of 5 up
 to the configured maximum when the judge requests more context.
+
+The agentic sufficiency judge is a local Ollama model set by
+`agentic_judge_model` in `config.yaml` (`gpt-oss:20b`, low reasoning effort,
+structured output via tool calls). Ollama must be running and the model pulled
+before any `*_agentic*` method works.
 
 Sparse retrieval uses BM25. `sparse_k1` controls repeated-term saturation, and
 `sparse_b` controls length normalization.

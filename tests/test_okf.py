@@ -2,7 +2,6 @@ import json
 import sqlite3
 
 import pytest
-import httpx
 
 from src.okf import answer
 from src.okf.answer import (
@@ -17,7 +16,6 @@ from src.okf import evidence
 from src.okf.paths import concept_path, parse_concept_id
 from src.okf.source import load_source_pages
 from src.eval.metrics import score_rankings
-from src.shared.llm import AzureFoundryStructuredLlm
 
 
 def _document(title: str = "Castle") -> OKFDocument:
@@ -41,20 +39,6 @@ def test_document_roundtrip_and_validation():
 
     with pytest.raises(OKFDocumentError, match="Missing frontmatter"):
         OKFDocument(frontmatter={"type": "Reference"}, body="Fact").serialize()
-
-
-def test_azure_structured_error_includes_final_cause(monkeypatch):
-    client = AzureFoundryStructuredLlm("https://example.test", "secret", "model")
-    monkeypatch.setattr(
-        AzureFoundryStructuredLlm,
-        "_request",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(
-            httpx.ReadTimeout("request timed out")
-        ),
-    )
-
-    with pytest.raises(RuntimeError, match="ReadTimeout: request timed out"):
-        client.structured_output("prompt", generate.ConceptProposal, retries=2)
 
 
 def test_concept_proposal_normalizes_safe_punctuation():
@@ -125,7 +109,7 @@ def test_source_adapter_reads_only_eligible_complete_pages(tmp_path):
     assert pages[0].language == "sl"
 
 
-class _StubAzure:
+class _StubLlm:
     def structured_output(self, _prompt, schema, **_kwargs):
         if schema is generate.ConceptProposal:
             return generate.ConceptProposal(
@@ -185,7 +169,7 @@ def test_generation_writes_provenance_and_resumes(monkeypatch, tmp_path):
             "checkpoint_path": ".local/checkpoint.json",
         },
     )
-    monkeypatch.setattr(generate, "_azure_client", lambda: _StubAzure())
+    monkeypatch.setattr(generate, "_llm_client", lambda: _StubLlm())
 
     first = generate.generate_bundle()
     second = generate.generate_bundle()
@@ -444,7 +428,7 @@ def test_resolution_splits_failed_large_batch():
         for index in range(4)
     ]
 
-    class _SplittingAzure:
+    class _SplittingLlm:
         def structured_output(self, prompt, schema, **_kwargs):
             assert schema is generate.ResolutionBatch
             proposed = json.loads(prompt.split("PROPOSALS:\n", maxsplit=1)[1])
@@ -471,7 +455,7 @@ def test_resolution_splits_failed_large_batch():
             )
 
     catalog = generate.CanonicalCatalog()
-    generate._resolve_with_fallback(_SplittingAzure(), proposals, catalog)
+    generate._resolve_with_fallback(_SplittingLlm(), proposals, catalog)
 
     assert catalog.assignments == {
         f"p{index}": f"people/p{index}" for index in range(4)
@@ -490,7 +474,7 @@ def test_resolution_splits_batch_with_unknown_concepts():
         for index in range(2)
     ]
 
-    class _IncompleteAzure:
+    class _IncompleteLlm:
         def structured_output(self, prompt, schema, **_kwargs):
             assert schema is generate.ResolutionBatch
             proposed = json.loads(prompt.split("PROPOSALS:\n", maxsplit=1)[1])
@@ -517,7 +501,7 @@ def test_resolution_splits_batch_with_unknown_concepts():
             )
 
     catalog = generate.CanonicalCatalog()
-    generate._resolve_with_fallback(_IncompleteAzure(), proposals, catalog)
+    generate._resolve_with_fallback(_IncompleteLlm(), proposals, catalog)
 
     assert catalog.assignments == {"p0": "places/p0", "p1": "places/p1"}
 

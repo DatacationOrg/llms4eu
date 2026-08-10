@@ -58,7 +58,10 @@ def build_agentic_diagnostics(
 def baseline_for_agent(method_name: str) -> str | None:
     if "_agentic" not in method_name:
         return None
-    return method_name.replace("_agentic", "_rerank", 1)
+    # The tool-using agent pairs with the same reranked baseline as the plain
+    # agent, so `_tools` must come off before the `_agentic` swap.
+    base = method_name.replace("_agentic_tools", "_agentic", 1)
+    return base.replace("_agentic", "_rerank", 1)
 
 
 def format_agentic_diagnostics(diagnostics: dict[str, Any]) -> str:
@@ -98,14 +101,66 @@ def format_agentic_diagnostics(diagnostics: dict[str, Any]) -> str:
                 _number(summary["no_retry_ms"]),
             ]
         )
+    sections = [
+        f"Agentic diagnostics (paired at hit@{cutoff})",
+        "",
+        _markdown_table(headers, rows),
+        "",
+        "Retry precision is the fraction of retried queries whose first relevant rank improved. "
+        "Retry recall is the fraction of baseline misses that were retried.",
+    ]
+    tools = _format_tool_diagnostics(diagnostics)
+    if tools:
+        sections.extend(["", tools])
+    return "\n".join(sections)
+
+
+def _format_tool_diagnostics(diagnostics: dict[str, Any]) -> str:
+    """Page-tool usage per agent, omitted entirely when no agent has tools."""
+    summaries = diagnostics.get("summaries", {})
+    cutoff = diagnostics["cutoff"]
+    active = {
+        name: summary
+        for name, summary in summaries.items()
+        if summary.get("tool_calls")
+    }
+    if not active:
+        return ""
+
+    headers = [
+        "agent",
+        "questions",
+        "tool questions",
+        "tool calls",
+        "list_sections",
+        "search_in_page",
+        f"recovered@{cutoff}",
+        f"lost@{cutoff}",
+        "tool precision",
+    ]
+    rows = [
+        [
+            name,
+            str(summary["questions"]),
+            _rate_count(summary["tool_questions"], summary["questions"]),
+            str(summary["tool_calls"]),
+            str(summary["list_sections_calls"]),
+            str(summary["search_in_page_calls"]),
+            str(summary["tool_recovered"]),
+            str(summary["tool_lost"]),
+            _rate(summary["tool_precision"]),
+        ]
+        for name, summary in active.items()
+    ]
     return "\n".join(
         [
-            f"Agentic diagnostics (paired at hit@{cutoff})",
+            "Page tool usage",
             "",
             _markdown_table(headers, rows),
             "",
-            "Retry precision is the fraction of retried queries whose first relevant rank improved. "
-            "Retry recall is the fraction of baseline misses that were retried.",
+            "Tool questions are questions where the agent called a page tool. "
+            f"Tool precision is recovered@{cutoff} over those questions; per-question "
+            "action sequences and search terms are in the diagnostics JSON.",
         ]
     )
 
@@ -156,6 +211,7 @@ def _diagnostic_row(
         "initial_score_spread": scores[0] - scores[-1] if len(scores) > 1 else None,
         "final_sufficient": final_verdict.get("sufficient"),
         "final_reason": final_verdict.get("reason"),
+        **_tool_usage(actions),
         "retrieval_ms": sum(
             float(action.get("retrieval_ms", 0.0)) for action in actions
         ),
@@ -172,6 +228,50 @@ def _action_types(actions: list[dict[str, Any]]) -> tuple[bool, bool]:
         rewritten |= current.get("judge_query") != previous.get("judge_query")
         expanded |= len(current.get("chunks", [])) > len(previous.get("chunks", []))
     return rewritten, expanded
+
+
+TOOL_NAMES = ("list_sections", "search_in_page")
+
+
+def _tool_usage(actions: list[dict[str, Any]]) -> dict[str, Any]:
+    """Per-question tool trace, empty for agents without tools."""
+    steps = [action.get("verdict", {}) for action in actions]
+    sequence = [str(step.get("action")) for step in steps if step.get("action")]
+    calls = [step for step in steps if step.get("action") in TOOL_NAMES]
+    return {
+        "action_sequence": sequence,
+        "tool_calls": len(calls),
+        "tools_used": sorted({str(step["action"]) for step in calls}),
+        "tool_details": [
+            {
+                "tool": step.get("action"),
+                "page_id": step.get("page_id"),
+                "term": step.get("term"),
+                "reason": step.get("reason"),
+            }
+            for step in calls
+        ],
+    }
+
+
+def _summarize_tools(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    """Did page tools get used, and did using them pay off?"""
+    used = [row for row in rows if row.get("tool_calls")]
+    return {
+        "tool_calls": sum(row.get("tool_calls", 0) for row in rows),
+        "tool_questions": len(used),
+        "list_sections_calls": sum(
+            row.get("action_sequence", []).count("list_sections") for row in rows
+        ),
+        "search_in_page_calls": sum(
+            row.get("action_sequence", []).count("search_in_page") for row in rows
+        ),
+        # Recoveries on questions where a tool ran: the payoff signal that says
+        # whether the extra latency bought anything.
+        "tool_recovered": sum(row["recovered"] for row in used),
+        "tool_lost": sum(row["lost"] for row in used),
+        "tool_precision": _divide(sum(row["recovered"] for row in used), len(used)),
+    }
 
 
 def _summarize(
@@ -208,6 +308,7 @@ def _summarize(
             for row in rows
             if row["final_sufficient"] is not None
         ),
+        **_summarize_tools(rows),
     }
     if include_categories:
         categories = sorted({row["category"] for row in rows if row["category"]})

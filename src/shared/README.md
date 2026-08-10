@@ -20,8 +20,10 @@ from src.shared.indexers import build_indexer
 from src.shared.cli import confirm
 ```
 
-The OKF generator reuses the Azure structured-output client from `llm.py`; it
-does not introduce a second credential path. Future benchmark instrumentation
-shared by RAG and OKF should record timings, usage, and failures without logging
-API keys or full credential-bearing requests. The benchmark contract is in
+`llm.py` exposes one structured-output client, `LocalOllamaStructuredLlm`,
+behind the `StructuredLlm` protocol. Every agent in the repo — the retrieval
+sufficiency judge, the OKF navigator and generator, the evidence-equivalence
+judge, and question generation — goes through it, so there is no hosted-model
+or credential path anywhere. Future benchmark instrumentation shared by RAG and
+OKF should record timings, usage, and failures. The benchmark contract is in
 [`experiments/indexing/README.md`](../../experiments/indexing/README.md).

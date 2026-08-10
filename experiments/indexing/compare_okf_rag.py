@@ -220,7 +220,7 @@ def build_report(
             ),
             (
                 "This pilot compares evidence acquisition, not final answer quality. "
-                "RAG queries count retrieval attempts; OKF queries count Azure "
+                "RAG queries count retrieval attempts; OKF queries count "
                 "navigation actions."
             ),
             plain_table(

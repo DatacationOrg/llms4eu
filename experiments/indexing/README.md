@@ -43,15 +43,17 @@ per-query latency fields are available only for newly measured questions.
 
 `evaluate_embedding_models.py` compares the embedding providers listed in
 `src/indexing/config.yaml`. Missing vector collections are built through the
-normal indexing path. Azure requires `.env` values and asks for typed approval
-before building embeddings.
+normal indexing path. Every provider is local.
 
 `config.yaml` sets the default warmup count. Warmup queries are excluded from
 timing.
 
 By default, `compare_qwen_modes.py` runs the primary chunk benchmark: sparse
-rerank, Qwen4B hybrid rerank, Nemotron vector and hybrid rerank, Azure hybrid
-rerank, and the Azure and Nemotron hybrid agentic methods. It retains the
+rerank, Qwen4B hybrid rerank, Nemotron vector and hybrid rerank, the Qwen and
+Nemotron hybrid agentic methods, and the tool-using `qwen_hybrid_agentic_tools`
+paired against `qwen_hybrid_agentic`. When any agent calls a page tool the
+report adds a `Page tool usage` table, and per-question action sequences and
+search terms land in the `-agentic-diagnostics.json` sidecar. It retains the
 historical `docs/retrieval-results-chunks-okf.md` output name so existing chunk
 checkpoints continue to resume:
 
@@ -95,8 +97,8 @@ The speed table also reports `chunk expansions`: the number of times an agentic
 retriever increased its requested chunk count between attempts. Query
 reformulations at the same chunk limit are not counted as expansions.
 
-The judge defaults to Azure Foundry through `AZURE_AI_*`. Use
-`--provider local --model <ollama-model>` for local inference. Results are
+The judge runs on the local Ollama model from `--model` (default
+`gpt-oss:20b`). Results are
 checkpointed after every judgment next to the output report, so interrupted
 runs resume without repeating model calls. `--limit` provides an inexpensive
 calibration sample per method. Manually review a stratified sample before using
@@ -122,9 +124,8 @@ but RAG methods are never evaluated with OKF concept matching.
 Use `--methods okf-only` when you want concept-level scoring. In that mode,
 qrels and rankings are projected onto the shared OKF concept ontology.
 
-The `comprehensive-okf` group includes the sparse, Qwen4B, Nemotron, and
-`embed-v-4-0` Qwen3-reranked baselines, the `embed-v-4-0` and Nemotron
-agentic methods, and OKF. Cohere reranking is not part of this group.
+OKF is not part of any default benchmark group. Score it with
+`--methods okf-only`, or with `compare_okf_rag.py` for the page-level pilot.
 
 ## OKF versus chunk-RAG benchmark protocol
 
@@ -204,11 +205,11 @@ human pairwise preference for material conclusions.
 Every published run records the Git commit and dirty state, database hash,
 hardware and operating system, Python lock, model deployment identifiers,
 configuration and command line, UTC timestamps, concurrency, retries, timeout,
-cold/warm state, Azure region, pricing date, seeds, and query order. Avoid
-unrelated machine load and repeat remote runs at comparable times.
+cold/warm state, GPU state, seeds, and query order. Avoid unrelated machine
+load.
 
 Use at least five repetitions for inexpensive local timing and three for costly
-full Azure builds when budget permits; label fewer runs exploratory. Report
+full index builds when budget permits; label fewer runs exploratory. Report
 median and p95 latency, mean throughput and run-to-run variation, and paired
 bootstrap 95% confidence intervals over question-level quality differences.
 Publish win/tie/loss judgments and every tested configuration, highlighting the

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import argparse
-import os
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -10,7 +9,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from src.shared.env import ROOT, load_local_env, load_yaml
-from src.shared.llm import AzureFoundryStructuredLlm
+from src.shared.llm import LocalOllamaStructuredLlm, StructuredLlm
 
 CONFIG = load_yaml(Path(__file__).with_name("config.yaml"))
 LINK_RE = re.compile(r"\[[^]]+\]\(([^)]+\.md)(?:#[^)]+)?\)")
@@ -46,11 +45,11 @@ def answer_question(
     question: str,
     *,
     bundle_root: Path | None = None,
-    client: AzureFoundryStructuredLlm | None = None,
+    client: StructuredLlm | None = None,
 ) -> OKFAnswer:
     load_local_env()
     root = (bundle_root or ROOT / CONFIG["bundle_path"]).resolve()
-    model = client or _azure_client()
+    model = client or _llm_client()
     navigation = CONFIG["navigation"]
     current = (root / "index.md").resolve()
     if not current.exists():
@@ -169,17 +168,13 @@ def answer_question(
     )
 
 
-def _azure_client() -> AzureFoundryStructuredLlm:
-    missing = [
-        name
-        for name in ("AZURE_AI_ENDPOINT", "AZURE_AI_API_KEY", "AZURE_AI_MODEL")
-        if not os.environ.get(name)
-    ]
-    if missing:
-        raise RuntimeError("Missing Azure configuration: " + ", ".join(missing))
-    return AzureFoundryStructuredLlm.from_env(
-        timeout_seconds=CONFIG["request_timeout_seconds"],
-        max_tokens=CONFIG["max_output_tokens"],
+def _llm_client() -> LocalOllamaStructuredLlm:
+    return LocalOllamaStructuredLlm(
+        model_id=CONFIG["model"],
+        reasoning=CONFIG["model_reasoning"],
+        num_ctx=CONFIG["model_num_ctx"],
+        num_predict=CONFIG["model_num_predict"],
+        method=CONFIG["model_structured_method"],
     )
 
 
