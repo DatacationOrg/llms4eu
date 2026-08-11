@@ -8,11 +8,6 @@ LEGACY_CHUNK_VERSION = "v1"
 CONTEXTUAL_CHUNK_VERSION = "v2"
 CHUNK_VERSIONS = (LEGACY_CHUNK_VERSION, CONTEXTUAL_CHUNK_VERSION)
 
-# A chunk *variant* is a way of cutting pages into chunks (sizes, overlap, unit).
-# A chunk *version* is how one chunk is turned into text for embedding. They are
-# independent: any variant can be indexed with any version.
-BASE_CHUNK_VARIANT = "base"
-
 
 @dataclass(frozen=True)
 class PageChunk:
@@ -27,7 +22,6 @@ class PageChunk:
     source: str | None = None
     language: str | None = None
     page_kind: str | None = None
-    variant: str = BASE_CHUNK_VARIANT
 
 
 class ChunkTextRepresentation(Protocol):

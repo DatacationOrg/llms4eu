@@ -81,7 +81,6 @@ def test_mixed_scoring_keeps_rag_chunks_and_scores_okf_concepts():
         "hit@10",
         "recall@10",
         "mrr@10",
-        "ndcg@10",
     ]
     assert scores["rag"]["hit@1"] == 1.0
     assert scores["okf"]["hit@1"] == 0.0

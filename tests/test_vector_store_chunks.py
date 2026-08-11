@@ -99,7 +99,6 @@ def test_v2_chunk_collection_is_isolated_and_contains_metadata(monkeypatch, tmp_
         "page_kind": "prose",
         "source": "fixture",
         "title": "Castle Page",
-        "variant": "base",
     }
 
 
@@ -144,13 +143,10 @@ def _write_chunk_fixture(path):
               id text primary key,
               page_id text not null references page_metadata(id) on delete cascade,
               chunk_index integer not null,
-              variant text not null default 'base',
               heading_path text,
               text text not null,
               char_count integer not null,
-              start_char integer,
-              end_char integer,
-              unique(page_id, variant, chunk_index)
+              unique(page_id, chunk_index)
             );
                  insert into page_sources (source, language) values ('fixture', 'en');
                  insert into page_metadata (id, title, source, page_kind)

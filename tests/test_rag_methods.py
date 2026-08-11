@@ -57,14 +57,14 @@ def test_nemotron_embedding_provider_uses_retrieval_defaults():
 
 
 def test_ensure_retriever_ready_accepts_ready_vector_provider(monkeypatch):
-    monkeypatch.setattr(methods, "collection_ready", lambda *_: True)
+    monkeypatch.setattr(methods, "collection_ready", lambda name: True)
     monkeypatch.setattr(methods, "enabled_provider_names", lambda: ["stub"])
 
     methods.ensure_retriever_ready("stub")
 
 
 def test_ensure_retriever_ready_reports_missing_index(monkeypatch):
-    monkeypatch.setattr(methods, "collection_ready", lambda *_: False)
+    monkeypatch.setattr(methods, "collection_ready", lambda name: False)
     monkeypatch.setattr(methods, "enabled_provider_names", lambda: ["stub"])
 
     with pytest.raises(methods.MissingRetrieverIndexes) as exc:
@@ -72,29 +72,6 @@ def test_ensure_retriever_ready_reports_missing_index(monkeypatch):
 
     assert exc.value.missing == {"stub": "stub"}
     assert "uv run python -m src.indexing.chunks --method stub" in str(exc.value)
-
-
-def test_variant_retriever_reports_variant_index_command(monkeypatch):
-    monkeypatch.setattr(methods, "collection_ready", lambda *_: False)
-    monkeypatch.setattr(methods, "enabled_provider_names", lambda: ["stub"])
-
-    with pytest.raises(methods.MissingRetrieverIndexes) as exc:
-        methods.ensure_retriever_ready("stub_hybrid_rerank", variant="tok512")
-
-    assert exc.value.missing == {"stub_hybrid_rerank": "stub#tok512"}
-    assert "--method stub --chunk-variant tok512" in str(exc.value)
-
-
-def test_variant_retriever_keeps_base_names_and_suffixes_others(monkeypatch):
-    monkeypatch.setattr(methods, "collection_ready", lambda *_: True)
-    monkeypatch.setattr(methods, "enabled_provider_names", lambda: ["stub"])
-
-    base = methods.build_retriever("sparse_rerank")
-    variant = methods.build_retriever("sparse_rerank", variant="tok512")
-
-    assert base.name == "sparse_rerank"
-    assert variant.name == "sparse_rerank_tok512"
-    assert variant.base_retriever.chunk_variant == "tok512"
 
 
 def test_v2_retriever_reports_versioned_index_command(monkeypatch):

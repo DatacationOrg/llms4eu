@@ -1,5 +1,3 @@
-import math
-
 from src.eval.metrics import bold_best_table, score_rankings
 from src.eval.evaluate import (
     EvalRun,
@@ -42,33 +40,7 @@ def test_score_rankings_handles_missing_relevance():
         "hit@5": 0.0,
         "recall@5": 0.0,
         "mrr@10": 0.0,
-        "ndcg@10": 0.0,
     }
-
-
-def test_ndcg_separates_ranks_that_hit_at_10_cannot():
-    relevance = [{"question_id": "q1", "chunk_id": "gold"}]
-
-    top = score_rankings(relevance, {"q1": ["gold", *["x"] * 9]}, ks=(10,))
-    last = score_rankings(relevance, {"q1": [*["x"] * 9, "gold"]}, ks=(10,))
-
-    assert top["hit@10"] == last["hit@10"] == 1.0
-    assert top["ndcg@10"] == 1.0
-    assert last["ndcg@10"] == 1 / math.log2(11)
-    assert last["ndcg@10"] < top["ndcg@10"]
-
-
-def test_ndcg_normalizes_over_all_relevant_chunks():
-    relevance = [
-        {"question_id": "q1", "chunk_id": "a"},
-        {"question_id": "q1", "chunk_id": "b"},
-    ]
-
-    both = score_rankings(relevance, {"q1": ["a", "b"]}, ks=(10,))
-    one = score_rankings(relevance, {"q1": ["a", "x"]}, ks=(10,))
-
-    assert both["ndcg@10"] == 1.0
-    assert one["ndcg@10"] == 1 / (1 + 1 / math.log2(3))
 
 
 def test_bold_best_table_highlights_column_winners():
@@ -100,7 +72,7 @@ def test_expanded_metrics_only_show_values_for_agentic_methods():
         ["sparse_rerank", "qwen_hybrid_agentic"],
     )
 
-    assert score_names[-4:] == ["hit@15", "recall@15", "mrr@15", "ndcg@15"]
+    assert score_names[-3:] == ["hit@15", "recall@15", "mrr@15"]
     assert "hit@15" not in scores["sparse_rerank"]
     assert scores["qwen_hybrid_agentic"]["hit@15"] == 1.0
     assert scores["qwen_hybrid_agentic"]["mrr@15"] == 1 / 15

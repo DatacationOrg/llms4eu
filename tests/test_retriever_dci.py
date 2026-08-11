@@ -26,15 +26,12 @@ def corpus(monkeypatch, tmp_path):
         );
         create table page_chunks (
           id text primary key, page_id text, chunk_index integer,
-          variant text not null default 'base',
           heading_path text, text text
         );
         insert into page_metadata values
           ('p1', 'castle', 'https://x.test/castle', 'Rajhenburg Castle'),
           ('p2', 'town', 'https://x.test/town', 'Brestanica');
-        insert into page_chunks
-          (id, page_id, chunk_index, heading_path, text)
-        values
+        insert into page_chunks values
           ('p1-0', 'p1', 0, 'Intro', 'The castle stands above Brestanica.'),
           ('p1-1', 'p1', 1, 'Hours', 'Open Tuesday to Sunday.'),
           ('p1-2', 'p1', 2, 'Hours', 'Closed on Mondays in winter.'),
@@ -115,7 +112,7 @@ def test_workspace_drops_pages_that_disappear(corpus, monkeypatch, tmp_path):
     monkeypatch.setattr(
         workspace_module,
         "_pages",
-        lambda *_: iter([{"page_id": "p1", "chunks": rows}]),
+        lambda: iter([{"page_id": "p1", "chunks": rows}]),
     )
     rebuilt = build_workspace(corpus.root)
 

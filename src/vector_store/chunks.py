@@ -11,7 +11,6 @@ from tqdm import tqdm
 from src.db.pages import connect_pages as connect
 from src.db.pages import initialize_page_artifacts_db
 from src.indexing.chunk_text import (
-    BASE_CHUNK_VARIANT,
     CHUNK_VERSIONS,
     LEGACY_CHUNK_VERSION,
     PageChunk,
@@ -39,13 +38,12 @@ def query_chunk_vectors(
     query: str,
     limit: int,
     version: str = DEFAULT_CHUNK_VERSION,
-    variant: str = BASE_CHUNK_VARIANT,
 ) -> list[ScoredChunk]:
     _validate_provider(provider)
     _validate_version(version)
     load_local_env()
     vector = build_indexer(provider, CONFIG).embed_query(query)
-    result = _existing_collection(provider, version, variant).query(
+    result = _existing_collection(provider, version).query(
         query_embeddings=[vector],
         n_results=limit,
         include=["metadatas", "distances"],
@@ -64,14 +62,13 @@ def query_chunk_vectors_batch(
     queries: list[str],
     limit: int,
     version: str = DEFAULT_CHUNK_VERSION,
-    variant: str = BASE_CHUNK_VARIANT,
 ) -> dict[int, list[ScoredChunk]]:
     _validate_provider(provider)
     _validate_version(version)
     load_local_env()
     vectors = build_indexer(provider, CONFIG).embed_queries(queries)
     rankings: dict[int, list[ScoredChunk]] = {}
-    collection = _existing_collection(provider, version, variant)
+    collection = _existing_collection(provider, version)
     batch_size = CONFIG.get("query_batch_size", 128)
 
     for start in range(0, len(vectors), batch_size):
@@ -93,13 +90,12 @@ def query_chunk_vectors_batch(
 def collection_exists(
     provider: str,
     version: str = DEFAULT_CHUNK_VERSION,
-    variant: str = BASE_CHUNK_VARIANT,
 ) -> bool:
     _validate_provider(provider)
     _validate_version(version)
     load_local_env()
     client = _client()
-    return _collection_name(provider, version, variant) in {
+    return _collection_name(provider, version) in {
         collection.name for collection in client.list_collections()
     }
 
@@ -107,15 +103,14 @@ def collection_exists(
 def collection_ready(
     provider: str,
     version: str = DEFAULT_CHUNK_VERSION,
-    variant: str = BASE_CHUNK_VARIANT,
 ) -> bool:
     _validate_provider(provider)
     _validate_version(version)
     load_local_env()
-    if not collection_exists(provider, version, variant):
+    if not collection_exists(provider, version):
         return False
-    collection = _client().get_collection(_collection_name(provider, version, variant))
-    if collection.count() != _chunk_count(variant):
+    collection = _client().get_collection(_collection_name(provider, version))
+    if collection.count() != _chunk_count():
         return False
     if version == LEGACY_CHUNK_VERSION:
         return True
@@ -126,21 +121,15 @@ def collection_ready(
 def rebuild_chunk_collection(
     provider: str,
     version: str = DEFAULT_CHUNK_VERSION,
-    variant: str = BASE_CHUNK_VARIANT,
 ) -> None:
     _validate_provider(provider)
     _validate_version(version)
     load_local_env()
     initialize_page_artifacts_db()
-    chunks = _load_chunks(variant)
-    if not chunks:
-        raise RuntimeError(
-            f"No chunks stored for variant {variant!r}. Build them first with "
-            f"`uv run python -m src.preprocess.chunks --variant {variant} ...`."
-        )
+    chunks = _load_chunks()
 
     client = _client()
-    collection_name = _collection_name(provider, version, variant)
+    collection_name = _collection_name(provider, version)
     with suppress(Exception):
         client.delete_collection(collection_name)
     collection = client.create_collection(
@@ -148,7 +137,6 @@ def rebuild_chunk_collection(
         metadata={
             "hnsw:space": "cosine",
             "chunk_version": version,
-            "chunk_variant": variant,
             "representation": CONFIG["chunk_versions"][version],
         },
     )
@@ -175,7 +163,7 @@ def rebuild_chunk_collection(
     print(f"indexed {collection.count()} chunks into {collection_name}")
 
 
-def _load_chunks(variant: str = BASE_CHUNK_VARIANT) -> list[PageChunk]:
+def _load_chunks() -> list[PageChunk]:
     with connect() as conn:
         return [
             PageChunk(
@@ -188,19 +176,16 @@ def _load_chunks(variant: str = BASE_CHUNK_VARIANT) -> list[PageChunk]:
                 source=row["source"],
                 language=row["language"],
                 page_kind=row["page_kind"],
-                variant=row["variant"],
             )
             for row in conn.execute(
                 """
-                select c.id, c.page_id, c.chunk_index, c.variant, c.heading_path,
-                       c.text, m.title, m.source, s.language, m.page_kind
+                select c.id, c.page_id, c.chunk_index, c.heading_path, c.text,
+                       m.title, m.source, s.language, m.page_kind
                 from page_chunks c
                 join page_metadata m on m.id = c.page_id
                 left join page_sources s on s.source = m.source
-                where c.variant = ?
                 order by c.id
-                """,
-                (variant,),
+                """
             )
         ]
 
@@ -210,7 +195,6 @@ def _metadata(chunk: PageChunk) -> dict:
         "id": chunk.id,
         "page_id": chunk.page_id,
         "chunk_index": chunk.chunk_index,
-        "variant": chunk.variant,
         "title": chunk.title or "",
         "source": chunk.source or "",
         "language": chunk.language or "",
@@ -218,14 +202,9 @@ def _metadata(chunk: PageChunk) -> dict:
     }
 
 
-def _chunk_count(variant: str = BASE_CHUNK_VARIANT) -> int:
+def _chunk_count() -> int:
     with connect() as conn:
-        return int(
-            conn.execute(
-                "select count(*) from page_chunks where variant = ?",
-                (variant,),
-            ).fetchone()[0]
-        )
+        return int(conn.execute("select count(*) from page_chunks").fetchone()[0])
 
 
 def _chunk_texts(ids: list[str]) -> dict[str, str]:
@@ -282,33 +261,19 @@ def _client() -> chromadb.PersistentClient:
     return chromadb.PersistentClient(path=str(chroma_path()))
 
 
-def _existing_collection(
-    provider: str,
-    version: str,
-    variant: str = BASE_CHUNK_VARIANT,
-):
-    if not collection_ready(provider, version, variant):
-        variant_flag = (
-            "" if variant == BASE_CHUNK_VARIANT else f" --chunk-variant {variant}"
-        )
+def _existing_collection(provider: str, version: str):
+    if not collection_ready(provider, version):
         raise RuntimeError(
-            f"Chunk vector collection for {provider}/{version}/{variant} is "
-            "missing or stale. Run `uv run python -m src.indexing.chunks "
-            f"--method {provider} --chunk-version {version}{variant_flag}`."
+            f"Chunk vector collection for {provider}/{version} is missing or stale. "
+            "Run `uv run python -m src.indexing.chunks "
+            f"--method {provider} --chunk-version {version}`."
         )
-    return _client().get_collection(_collection_name(provider, version, variant))
+    return _client().get_collection(_collection_name(provider, version))
 
 
-def _collection_name(
-    provider: str,
-    version: str,
-    variant: str = BASE_CHUNK_VARIANT,
-) -> str:
-    # The base variant keeps the historical name so existing collections, reports
-    # and checkpoints stay valid.
+def _collection_name(provider: str, version: str) -> str:
     suffix = "" if version == LEGACY_CHUNK_VERSION else f"_{version}"
-    variant_suffix = "" if variant == BASE_CHUNK_VARIANT else f"_{variant}"
-    return f"{CONFIG['collection_name']}{suffix}_{provider}_chunk{variant_suffix}"
+    return f"{CONFIG['collection_name']}{suffix}_{provider}_chunk"
 
 
 def _validate_provider(provider: str) -> None:

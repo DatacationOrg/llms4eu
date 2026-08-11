@@ -26,23 +26,11 @@ from functools import lru_cache
 from pathlib import Path
 
 from src.db.pages import connect_pages as connect
-from src.indexing.chunk_text import BASE_CHUNK_VARIANT
 from src.shared.env import ROOT
 
 CHUNK_MARKER = "<!-- chunk:"
 DEFAULT_WORKSPACE = Path(".local/dci_workspace")
 INDEX_VERSION = 1
-
-
-def workspace_root(variant: str = BASE_CHUNK_VARIANT) -> Path:
-    """Directory holding one chunking variant's materialized corpus.
-
-    Each variant needs its own directory: the files carry chunk-id markers, so
-    two variants sharing a directory would overwrite each other's markers.
-    """
-    if variant == BASE_CHUNK_VARIANT:
-        return ROOT / DEFAULT_WORKSPACE
-    return ROOT / DEFAULT_WORKSPACE.with_name(f"{DEFAULT_WORKSPACE.name}-{variant}")
 
 
 @dataclass(frozen=True)
@@ -124,14 +112,9 @@ class CorpusWorkspace:
         return self.by_chunk_id.get(chunk_id)
 
 
-def build_workspace(
-    root: Path | None = None,
-    *,
-    rebuild: bool = False,
-    variant: str = BASE_CHUNK_VARIANT,
-):
+def build_workspace(root: Path | None = None, *, rebuild: bool = False):
     """Write the corpus to disk, rewriting only what changed."""
-    root = (root or workspace_root(variant)).resolve()
+    root = (root or ROOT / DEFAULT_WORKSPACE).resolve()
     index_path = root / "index.json"
     stored: dict[str, dict] = {}
     if index_path.exists() and not rebuild:
@@ -141,7 +124,7 @@ def build_workspace(
 
     documents: list[PageDocument] = []
     written = 0
-    for page in _pages(variant):
+    for page in _pages():
         path = _page_path(page)
         previous = stored.get(path)
         content_hash = _page_hash(page["chunks"])
@@ -172,20 +155,13 @@ def build_workspace(
 
 
 @lru_cache(maxsize=4)
-def load_workspace(
-    root: str | None = None,
-    variant: str = BASE_CHUNK_VARIANT,
-) -> CorpusWorkspace:
+def load_workspace(root: str | None = None) -> CorpusWorkspace:
     """Process-wide cached workspace; a benchmark loads it once, not per query."""
-    return build_workspace(Path(root) if root else None, variant=variant)
+    return build_workspace(Path(root) if root else None)
 
 
-def _pages(variant: str = BASE_CHUNK_VARIANT) -> Iterator[dict]:
-    """Stream pages in page order so the corpus never lands in memory at once.
-
-    Filtered to one variant: page grouping relies on consecutive rows sharing a
-    page, which several variants of the same page would break.
-    """
+def _pages() -> Iterator[dict]:
+    """Stream pages in page order so the corpus never lands in memory at once."""
     with connect() as conn:
         cursor = conn.execute(
             """
@@ -193,10 +169,8 @@ def _pages(variant: str = BASE_CHUNK_VARIANT) -> Iterator[dict]:
                    coalesce(m.title, '') as title, m.source, m.url
             from page_chunks c
             join page_metadata m on m.id = c.page_id
-            where c.variant = ?
             order by c.page_id, c.chunk_index
-            """,
-            (variant,),
+            """
         )
         current: list[dict] = []
         for row in cursor:

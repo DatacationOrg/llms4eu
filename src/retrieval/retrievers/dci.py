@@ -22,7 +22,6 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from src.indexing.chunk_text import BASE_CHUNK_VARIANT
 from src.retrieval.base import RankedChunk, Retriever, retrieve_batch_default
 from src.retrieval.retrievers.agentic import AgenticBatchStats
 from src.retrieval.workspace import CorpusWorkspace, PageDocument, load_workspace
@@ -65,7 +64,6 @@ class DirectCorpusRetriever:
     search_limit: int = 30
     read_limit: int = 120
     judge_retries: int = 3
-    chunk_variant: str = BASE_CHUNK_VARIANT
     workspace: CorpusWorkspace | None = None
     batch_stats: AgenticBatchStats = field(
         default_factory=AgenticBatchStats,
@@ -75,7 +73,7 @@ class DirectCorpusRetriever:
     )
 
     def retrieve(self, query: str, limit: int) -> list[RankedChunk]:
-        workspace = self.workspace or load_workspace(variant=self.chunk_variant)
+        workspace = self.workspace or load_workspace()
         fallback = self.shortlist_retriever.retrieve(query, self.shortlist_k)
         documents = _shortlist_documents(workspace, fallback, self.max_documents)
         if not documents:

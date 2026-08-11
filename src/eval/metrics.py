@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import math
 from collections import defaultdict
 
 
@@ -20,7 +19,6 @@ def score_rankings(
     scores = {f"hit@{k}": 0.0 for k in ks}
     scores[f"recall@{recall_k}"] = 0.0
     scores[f"mrr@{mrr_k}"] = 0.0
-    scores[f"ndcg@{mrr_k}"] = 0.0
 
     for question_id in question_ids:
         relevant = relevant_by_question[question_id]
@@ -34,30 +32,11 @@ def score_rankings(
         first_rank = _first_relevant_rank(ranked[:mrr_k], relevant)
         if first_rank:
             scores[f"mrr@{mrr_k}"] += 1 / first_rank
-        scores[f"ndcg@{mrr_k}"] += _ndcg(ranked[:mrr_k], relevant, mrr_k)
 
     total = len(question_ids)
     if total == 0:
         return scores
     return {name: value / total for name, value in scores.items()}
-
-
-def _ndcg(ranked: list[str], relevant: set[str], k: int) -> float:
-    """Binary nDCG@k.
-
-    `hit@k` cannot tell rank 1 from rank 10 and `mrr` ignores every relevant
-    chunk after the first. nDCG is the benchmark protocol's primary retrieval
-    metric because it reads both.
-    """
-    if not relevant:
-        return 0.0
-    gain = sum(
-        1 / math.log2(rank + 1)
-        for rank, chunk_id in enumerate(ranked, start=1)
-        if chunk_id in relevant
-    )
-    ideal = sum(1 / math.log2(rank + 1) for rank in range(1, min(len(relevant), k) + 1))
-    return gain / ideal if ideal else 0.0
 
 
 def _first_relevant_rank(ranked: list[str], relevant: set[str]) -> int | None:
