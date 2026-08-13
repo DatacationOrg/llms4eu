@@ -11,8 +11,6 @@ class Place(BaseModel):
     id: str
     place_description: str
     summary: str
-    latitude: float | None = None
-    longitude: float | None = None
 
     @classmethod
     def db_columns(cls) -> list[str]:

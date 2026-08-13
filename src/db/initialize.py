@@ -17,7 +17,6 @@ def initialize_db() -> None:
 
     with _connect() as conn:
         conn.executescript(schema)
-        _add_missing_columns(conn)
         _truncate_places(conn)
         _insert_places(conn, places)
 
@@ -25,13 +24,6 @@ def initialize_db() -> None:
 
 
 # ---------- PRIVATE FUNCTIONS ----------
-
-
-def _add_missing_columns(conn: sqlite3.Connection) -> None:
-    existing = {row[1] for row in conn.execute("pragma table_info(places)")}
-    for column in ("latitude", "longitude"):
-        if column not in existing:
-            conn.execute(f"alter table places add column {column} real")
 
 
 def _read_seed_places(path: Path) -> list[Place]:

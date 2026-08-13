@@ -3,12 +3,6 @@ search:
   default_limit: 10
   embedding_model: sentence-transformers/all-MiniLM-L6-v2
 
-geo:
-  enabled: false
-  model: gemma4:e4b
-  weight: 0.25
-  decay_km: 50
-
 answer:
   default_limit: 3
   model: gemma4:e4b

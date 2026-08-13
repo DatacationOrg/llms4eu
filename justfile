@@ -7,9 +7,6 @@ init:
 index:
     uv run python -m src.preprocess.index
 
-geocode *FLAGS:
-    uv run python -m src.preprocess.geocode {{FLAGS}}
-
 ask *question:
     uv run python -m src.rag.answer "{{question}}"
 

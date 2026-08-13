@@ -4,16 +4,14 @@ from src.shared.schema import Place
 from src.shared.env import sqlite_path
 
 
-__all__ = ["load_places", "load_places_by_id", "update_place_location"]
-
-_PLACE_COLUMNS = "id, place_description, summary, latitude, longitude"
+__all__ = ["load_places", "load_places_by_id"]
 
 
 def load_places() -> list[Place]:
     """Load all place rows in stable order for indexing and inspection."""
     with _connect() as conn:
         rows = conn.execute(
-            f"select {_PLACE_COLUMNS} from places order by id"
+            "select id, place_description, summary from places order by id"
         ).fetchall()
     return [Place.model_validate(dict(row)) for row in rows]
 
@@ -26,18 +24,10 @@ def load_places_by_id(ids: list[str]) -> dict[str, Place]:
     placeholders = ", ".join("?" for _ in ids)
     with _connect() as conn:
         rows = conn.execute(
-            f"select {_PLACE_COLUMNS} from places where id in ({placeholders})",
+            f"select id, place_description, summary from places where id in ({placeholders})",
             ids,
         ).fetchall()
     return {row["id"]: Place.model_validate(dict(row)) for row in rows}
-
-
-def update_place_location(place_id: str, latitude: float, longitude: float) -> None:
-    with _connect() as conn:
-        conn.execute(
-            "update places set latitude = ?, longitude = ? where id = ?",
-            (latitude, longitude, place_id),
-        )
 
 
 def _connect() -> sqlite3.Connection:

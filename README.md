@@ -29,19 +29,12 @@ ollama pull gpt-oss:20b
 ```bash
 just init        # load seed data into SQLite
 just index       # embed places and rebuild Chroma
-just geocode     # look up and store coordinates for each place
 just ask What place is best for a quiet forest walk near water?  # retrieve + LLM answer
 just scrape https://example.com  # crawl a site, ingest into SQLite, reindex
 just scrape-web  # start the local scraping UI
 just eval-index qwen  # rebuild the default qwen chunk vector index
 just test        # run the non-LLM test suite
 ```
-
-`just geocode` names each place via a local LLM and looks up coordinates via
-OpenStreetMap Nominatim, skipping places that already have them unless run
-with `--force`. Once populated, `geo.enabled: true` in `src/rag/config.yaml`
-lets search nudge ranking toward places nearer the question's location (see
-"Geo-Aware Ranking" in [docs/architecture-decisions.md](docs/architecture-decisions.md)).
 
 Search defaults to top 10 final results. Override per query:
 
@@ -59,6 +52,10 @@ just eval-generate 10
 just eval qwen,sparse
 just eval qwen4b_rerank,qwen4b_hybrid,qwen4b_hybrid_rerank
 ```
+
+`just geocode-pages` geocodes each page once, enabling `qwen_hybrid_geo` — a
+chunk retrieval method that nudges ranking by distance to the question's
+location (see "Geo-Aware Ranking" in [docs/architecture-decisions.md](docs/architecture-decisions.md)).
 
 ## Shape
 
