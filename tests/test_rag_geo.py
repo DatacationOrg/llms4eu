@@ -31,9 +31,9 @@ def test_apply_geo_boost_returns_places_unchanged_without_question_coords():
 
 
 def test_apply_geo_boost_favors_the_closer_place_over_a_higher_semantic_score():
-    question_coords = Coordinates(46.0569, 14.5058)  # Ljubljana
+    question_coords = Coordinates(46.0569, 14.5058)
     near = _place("near", score=0.70, latitude=46.05, longitude=14.51)
-    far = _place("far", score=0.75, latitude=40.71, longitude=-74.01)  # New York
+    far = _place("far", score=0.75, latitude=40.71, longitude=-74.01)
 
     ranked = apply_geo_boost([far, near], question_coords, weight=0.5, decay_km=50)
 
@@ -50,8 +50,6 @@ def test_apply_geo_boost_leaves_places_without_coordinates_unboosted():
 
 
 def test_apply_geo_boost_never_drops_below_the_weight_floor():
-    # A world away, the decay term underflows to 0: score settles at the
-    # (1 - weight) floor instead of being driven all the way to zero.
     question_coords = Coordinates(46.0569, 14.5058)
     far = _place("far", score=0.9, latitude=40.71, longitude=-74.01)
 
@@ -62,11 +60,11 @@ def test_apply_geo_boost_never_drops_below_the_weight_floor():
 
 
 def test_apply_geo_boost_is_stronger_when_nearby_than_moderately_far():
-    question_coords = Coordinates(46.0569, 14.5058)  # Ljubljana
+    question_coords = Coordinates(46.0569, 14.5058)
     nearby = _place("nearby", score=0.9, latitude=46.05, longitude=14.51)
     moderately_far = _place(
         "moderately_far", score=0.9, latitude=45.8150, longitude=15.9819
-    )  # Zagreb, ~117 km away
+    )
 
     ranked = {
         place.id: place.score

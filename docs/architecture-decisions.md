@@ -55,46 +55,45 @@ prompt, and input formatting are diagnosed.
 Places can carry a `latitude`/`longitude` pair. `just geocode` derives them
 once per place: a local LLM names the one real-world place the text
 describes, and that name is geocoded via OpenStreetMap Nominatim
-(`src.shared.geocode`). Coordinates are stored on the `places` row itself the
-same way Chroma vectors are a derived cache — `just init` does not generate
-them, `just geocode` does, and existing coordinates are left alone on rerun
-unless `--force` is passed.
+(`src.shared.geocode`). Coordinates live on the `places` row; `just geocode`
+populates them the way `just index` populates Chroma, and a rerun leaves
+existing coordinates alone unless `--force` is passed.
 
-At query time, `geo.enabled` in `src/rag/config.yaml` gates a second local
-LLM call that asks whether the question names a place; if so, that name is
-geocoded the same way and every retrieved place's score is rescaled by
-distance (`src.rag.geo.apply_geo_boost`):
+At query time, `geo.enabled` in `src/rag/config.yaml` gates a second local LLM
+call that asks whether the question names a place; if so, every retrieved
+place's score is rescaled by distance to it (`src.rag.geo.apply_geo_boost`):
 
 ```text
 final_score = semantic_score * ((1 - weight) + weight * exp(-distance_km / decay_km))
 ```
 
-A place with no coordinates, or a question with no detected location, is
-left at its plain semantic score rather than penalized — missing geocoding
-data should never push an otherwise relevant place out of the answer. The
-multiplicative form also means distance can only pull a place's rank down
-toward `(1 - weight)` of its semantic score, never to zero, so a strong text
-match still beats a mediocre one that merely happens to be closer. This
-mirrors the weighted-fusion shape already used for hybrid vector+sparse
-scoring (see "Hybrid History" above) rather than a hard radius filter, which
-risks dropping the correct place on a wrong or missing geocode.
+A place with no coordinates, or a question naming no place, keeps its plain
+semantic score — missing geo data should never push a relevant place out of
+the answer. The multiplicative form also floors the penalty at `(1 - weight)`
+of the semantic score rather than zero, so a strong text match still beats a
+closer but weaker one. This mirrors the weighted-fusion shape already used for
+hybrid vector+sparse scoring (see "Hybrid History") rather than a hard radius
+filter, which risks dropping the correct place on a bad geocode.
 
-Distinct from the unused `geo_filter` on `AgentSearchState`
-(`src/rag/retry.py`): that scaffold widens a discrete NUTS2-region/
-country-code filter during agentic retries and is never currently populated.
-This feature is a continuous per-query distance signal computed from
-coordinates, not a categorical filter; the two can be unified later if a real
-regional-filter need appears, but there was no reason to force them together
-now.
+`geo.enabled` defaults to `false`: it adds a local LLM call and a Nominatim
+lookup to every query, and only helps once `just geocode` has real
+coordinates — the tracked dummy fixture text never names a real place, so it
+can't produce any. Nominatim over the Google Maps Geocoding API: no API key,
+account, or billing risk, at the cost of an external network dependency.
 
-Reason `geo.enabled` defaults to `false`: enabling it adds a local LLM call
-and an external Nominatim lookup to every query. Turning it on is only
-useful once `just geocode` has populated real coordinates, which the tracked
-dummy fixture data cannot produce (its place text never names a real place).
+## Geo-Aware Chunk Retrieval
 
-Reason for choosing Nominatim over the Google Maps Geocoding API: no API key,
-account, or billing risk, at the cost of being a new external network
-dependency either waay
+The same boost also exists as a chunk retrieval method
+(`src.retrieval.retrievers.geo.GeoBoostRetriever`), so `src.eval` can score it
+against other `src.retrieval.methods` on the shared `data/db/pages.db` corpus.
+
+- `just geocode-pages` geocodes once per page into `page_locations`
+  (`sql/eval.sql`), keyed by `page_id` rather than adding columns to
+  `page_metadata`.
+- Registered as `qwen_hybrid_geo`, wrapping `qwen_hybrid` only for now.
+- Shares haversine/decay math with the places version via `src.shared.geo_boost`.
+- Uses `gpt-oss:20b`: `gemma4` drops tool calls on this corpus's Slovenian-heavy
+  text.
 
 ## Chunk Storage
 
@@ -240,9 +239,9 @@ the query: the first version burned its whole budget re-searching one term.
 ## Local-Only Inference
 
 Every model call in the repo runs on local hardware. There is no hosted-model
-or credential path in the tree. Geo-aware ranking's Nominatim lookup (see
-"Geo-Aware Ranking" above) is the one exception, and it is a plain geocoding
-HTTP call, not a model call or credential — no API key involved.
+or credential path in the tree, except geo-aware ranking's Nominatim lookup
+(see "Geo-Aware Ranking"), which is a plain geocoding HTTP call, not a model
+call or credential.
 
 - Embeddings and reranking run through sentence-transformers; the agentic
   sufficiency judge, the OKF navigator and generator, the evidence-equivalence

@@ -28,6 +28,12 @@ create table if not exists eval_relevant_chunks (
   primary key (question_id, chunk_id)
 );
 
+create table if not exists page_locations (
+  page_id text primary key references page_metadata(id) on delete cascade,
+  latitude real not null,
+  longitude real not null
+);
+
 create index if not exists idx_page_chunks_page_id
   on page_chunks(page_id);
 

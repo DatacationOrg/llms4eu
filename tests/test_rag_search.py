@@ -56,8 +56,8 @@ def test_search_reorders_by_distance_when_geo_is_enabled(monkeypatch, tmp_path):
 
     places = load_places()
     ljubljana = Coordinates(46.0569, 14.5058)
-    update_place_location(places[0].id, *ljubljana)  # near the question
-    update_place_location(places[1].id, 40.7128, -74.0060)  # New York, far away
+    update_place_location(places[0].id, *ljubljana)
+    update_place_location(places[1].id, 40.7128, -74.0060)
 
     monkeypatch.setitem(search_module.GEO_CONFIG, "enabled", True)
     monkeypatch.setitem(search_module.GEO_CONFIG, "weight", 0.5)

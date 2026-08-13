@@ -37,6 +37,9 @@ eval-phase2 METHODS="phase2-nemotron" OUTPUT="docs/retrieval-results-phase2.md":
 eval-generate LIMIT="10":
     uv run python -m src.eval.generate_dataset --limit {{LIMIT}}
 
+geocode-pages *FLAGS:
+    uv run python -m src.eval.geocode_pages {{FLAGS}}
+
 eval METHODS="qwen":
     uv run python -m src.eval.evaluate --methods {{METHODS}}
 

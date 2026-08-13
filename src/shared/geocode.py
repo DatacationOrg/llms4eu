@@ -47,8 +47,6 @@ class GeocodeProvider(Protocol):
 
 @dataclass
 class NominatimGeocoder:
-    """Free OpenStreetMap geocoder. Self-throttles to its 1 request/second policy."""
-
     user_agent: str = "llms4eu-tourism-rag"
     base_url: str = "https://nominatim.openstreetmap.org/search"
     min_interval_seconds: float = 1.0
@@ -90,7 +88,6 @@ def extract_location_query(llm: StructuredLlm, text: str) -> str | None:
 def locate_text(
     llm: StructuredLlm, geocoder: GeocodeProvider, text: str
 ) -> Coordinates | None:
-    """Extract a place name from text with an LLM, then geocode it to coordinates."""
     query = extract_location_query(llm, text)
     if query is None:
         return None

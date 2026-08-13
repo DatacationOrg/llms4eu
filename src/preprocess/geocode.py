@@ -13,17 +13,7 @@ CONFIG = load_yaml(Path(__file__).with_name("config.yaml"))
 
 
 def geocode_places(*, force: bool = False) -> None:
-    """Look up and store coordinates for every place missing them.
-
-    Each place's text is sent to a local LLM to name the one real-world place
-    it describes, then that name is geocoded to coordinates via Nominatim.
-    Places where no specific place can be identified are left without
-    coordinates and simply skipped at query time.
-    """
     load_local_env()
-    # function_calling, not the json_schema default: gemma4 answers this
-    # schema in plain prose under json_schema (see architecture-decisions.md,
-    # "Local-Only Inference").
     llm = LocalOllamaStructuredLlm(CONFIG["geocode_model"], method="function_calling")
     geocoder = NominatimGeocoder()
 

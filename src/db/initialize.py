@@ -24,10 +24,10 @@ def initialize_db() -> None:
     print(f"loaded {len(places)} places")
 
 
+# ---------- PRIVATE FUNCTIONS ----------
+
 
 def _add_missing_columns(conn: sqlite3.Connection) -> None:
-    # `create table if not exists` skips existing databases, so a places.db
-    # created before a column was added needs an explicit alter.
     existing = {row[1] for row in conn.execute("pragma table_info(places)")}
     for column in ("latitude", "longitude"):
         if column not in existing:

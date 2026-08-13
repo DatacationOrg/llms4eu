@@ -14,3 +14,5 @@ model_aliases:
 question_model_num_ctx: 8192
 question_model_num_predict: 4096
 question_model_reasoning: false
+geocode_model: gpt-oss:20b
+geocode_max_chars: 4000

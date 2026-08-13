@@ -33,7 +33,6 @@ def load_places_by_id(ids: list[str]) -> dict[str, Place]:
 
 
 def update_place_location(place_id: str, latitude: float, longitude: float) -> None:
-    """Persist geocoded coordinates for one place."""
     with _connect() as conn:
         conn.execute(
             "update places set latitude = ?, longitude = ? where id = ?",
