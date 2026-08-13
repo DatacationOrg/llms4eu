@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mkdir -p /tmp/claude-1011/-home-pepe-llms4eu/3b80ae65-276d-4a35-889b-7383d28ecbbc/scratchpad)",
+      "Bash(git worktree *)",
+      "Bash(git -C /home/pepe/llms4eu log --oneline -40)"
+    ]
+  }
+}

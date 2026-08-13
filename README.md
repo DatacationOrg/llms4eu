@@ -29,12 +29,24 @@ ollama pull gpt-oss:20b
 ```bash
 just init        # load seed data into SQLite
 just index       # embed places and rebuild Chroma
+just geocode     # look up and store coordinates for each place (needs a location to find)
 just ask What place is best for a quiet forest walk near water?  # retrieve + LLM answer
 just scrape https://example.com  # crawl a site, ingest into SQLite, reindex
 just scrape-web  # start the local scraping UI
 just eval-index qwen  # rebuild the default qwen chunk vector index
 just test        # run the non-LLM test suite
 ```
+
+`just geocode` asks a local LLM to name the one real place each place's text
+describes, then looks up that name via OpenStreetMap Nominatim and stores the
+resulting coordinates. It skips places that already have coordinates unless
+run with `--force`, and it is a no-op for text that never names a specific
+place — the tracked dummy fixture mostly falls in that bucket, so try it
+against scraped data for a real result. Coordinates only affect answers once
+`geo.enabled: true` is set in `src/rag/config.yaml`; when enabled, search also
+asks a local LLM whether the question names a place and, if so, nudges
+ranking toward places nearer to it (see "Geo-Aware Ranking" in
+[docs/architecture-decisions.md](docs/architecture-decisions.md)).
 
 Search defaults to top 10 final results. Override per query:
 

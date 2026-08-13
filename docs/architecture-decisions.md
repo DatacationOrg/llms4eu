@@ -50,6 +50,52 @@ Measured Qwen3 reranking was harmful and slow in our setup. Keep rerank methods
 available for experiments, but do not treat rerank as default until model usage,
 prompt, and input formatting are diagnosed.
 
+## Geo-Aware Ranking
+
+Places can carry a `latitude`/`longitude` pair. `just geocode` derives them
+once per place: a local LLM names the one real-world place the text
+describes, and that name is geocoded via OpenStreetMap Nominatim
+(`src.shared.geocode`). Coordinates are stored on the `places` row itself the
+same way Chroma vectors are a derived cache — `just init` does not generate
+them, `just geocode` does, and existing coordinates are left alone on rerun
+unless `--force` is passed.
+
+At query time, `geo.enabled` in `src/rag/config.yaml` gates a second local
+LLM call that asks whether the question names a place; if so, that name is
+geocoded the same way and every retrieved place's score is rescaled by
+distance (`src.rag.geo.apply_geo_boost`):
+
+```text
+final_score = semantic_score * ((1 - weight) + weight * exp(-distance_km / decay_km))
+```
+
+A place with no coordinates, or a question with no detected location, is
+left at its plain semantic score rather than penalized — missing geocoding
+data should never push an otherwise relevant place out of the answer. The
+multiplicative form also means distance can only pull a place's rank down
+toward `(1 - weight)` of its semantic score, never to zero, so a strong text
+match still beats a mediocre one that merely happens to be closer. This
+mirrors the weighted-fusion shape already used for hybrid vector+sparse
+scoring (see "Hybrid History" above) rather than a hard radius filter, which
+risks dropping the correct place on a wrong or missing geocode.
+
+Distinct from the unused `geo_filter` on `AgentSearchState`
+(`src/rag/retry.py`): that scaffold widens a discrete NUTS2-region/
+country-code filter during agentic retries and is never currently populated.
+This feature is a continuous per-query distance signal computed from
+coordinates, not a categorical filter; the two can be unified later if a real
+regional-filter need appears, but there was no reason to force them together
+now.
+
+Reason `geo.enabled` defaults to `false`: enabling it adds a local LLM call
+and an external Nominatim lookup to every query. Turning it on is only
+useful once `just geocode` has populated real coordinates, which the tracked
+dummy fixture data cannot produce (its place text never names a real place).
+
+Reason for choosing Nominatim over the Google Maps Geocoding API: no API key,
+account, or billing risk, at the cost of being a new external network
+dependency either waay
+
 ## Chunk Storage
 
 SQLite is source of truth for page chunks. Chroma is derived vector cache.
@@ -194,7 +240,9 @@ the query: the first version burned its whole budget re-searching one term.
 ## Local-Only Inference
 
 Every model call in the repo runs on local hardware. There is no hosted-model
-or credential path in the tree.
+or credential path in the tree. Geo-aware ranking's Nominatim lookup (see
+"Geo-Aware Ranking" above) is the one exception, and it is a plain geocoding
+HTTP call, not a model call or credential — no API key involved.
 
 - Embeddings and reranking run through sentence-transformers; the agentic
   sufficiency judge, the OKF navigator and generator, the evidence-equivalence
