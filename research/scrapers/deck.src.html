@@ -1,0 +1,908 @@
+<title>Scraper Arena</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link
+  href="https://fonts.googleapis.com/css2?family=Karla:wght@400;500;700&family=Newsreader:opsz,wght@6..72,400;6..72,600&family=JetBrains+Mono:wght@400;500&display=swap"
+  rel="stylesheet"
+/>
+<style>
+/* Light is the base palette; the two blocks below re-map it for dark. Both are
+   needed: the media query covers a viewer left on "system", and the [data-theme]
+   selector covers an explicit choice, which outranks the media query in either
+   direction. */
+:root{
+  --paper:#faf8f4; --raise:#ffffff; --ink:#1a2229; --slate:#5b6a75;
+  --line:#e3ded5; --teal:#0f7f7c; --rust:#b8542f; --pencil:#ff5a4d;
+  /* Text sitting on a saturated heatmap cell or a section divider, so it flips
+     with the fill rather than with the page. */
+  --hm-on:#f6f8f8;
+  --shadow:0 1px 2px rgba(24,32,38,.05),0 8px 24px rgba(24,32,38,.07);
+}
+
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --paper:#12191f; --raise:#1a242c; --ink:#eceae4; --slate:#9aa8b2;
+    --line:#2c3941; --teal:#5fc2c0; --rust:#e08a6b; --pencil:#ff5a4d;
+    --hm-on:#0d1418;
+    --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 24px rgba(0,0,0,.35);
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#12191f; --raise:#1a242c; --ink:#eceae4; --slate:#9aa8b2;
+  --line:#2c3941; --teal:#5fc2c0; --rust:#e08a6b; --pencil:#ff5a4d;
+  --hm-on:#0d1418;
+  --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 24px rgba(0,0,0,.35);
+}
+*{box-sizing:border-box}
+html,body{height:100%;overflow:hidden}
+body{margin:0;background:var(--paper);color:var(--ink);
+  font-family:Karla,"Noto Color Emoji","Helvetica Neue",Arial,sans-serif;-webkit-font-smoothing:antialiased}
+.deck{height:100%;overflow-y:auto;scroll-snap-type:y mandatory;scroll-behavior:smooth}
+.deck::-webkit-scrollbar{width:0}
+section{height:100%;scroll-snap-align:start;container-type:size;
+  display:flex;align-items:center;justify-content:center}
+
+/* Every slide is a real 16:9 frame, letterboxed inside whatever window it is
+   viewed in, and it is a size container -- so every measurement below is a
+   fraction of the *slide*, not of the browser. Same layout at any size, and it
+   exports to 16:9 slides without reflowing. */
+.f{width:min(95cqw,calc(92cqh * 16 / 9));aspect-ratio:16/9;container-type:size;position:relative}
+.c{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;
+  gap:2.1cqw;padding:0 5.4cqw}
+
+h1,h2{font-family:Newsreader,"Noto Color Emoji",Georgia,serif;font-weight:500;
+  text-wrap:balance;margin:0;letter-spacing:-.015em}
+h1{font-size:6.4cqw;line-height:1.02}
+h2{font-size:4.7cqw;line-height:1.05}
+p{margin:0;font-size:1.95cqw;line-height:1.5;max-width:46cqw;color:var(--slate)}
+p.lead{font-size:2.4cqw;max-width:52cqw}
+p strong,li strong{color:var(--ink);font-weight:700}
+.eyebrow{font-size:1.1cqw;font-weight:700;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--teal);display:flex;align-items:center;gap:.7cqw}
+.eyebrow::before{content:"";width:2cqw;height:.15cqw;background:var(--teal);display:block}
+ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:1.3cqw}
+li{font-size:1.95cqw;line-height:1.4;color:var(--slate);padding-left:2cqw;position:relative;max-width:50cqw}
+li::before{content:"";position:absolute;left:.4cqw;top:.6em;width:.5cqw;height:.5cqw;
+  border-radius:50%;background:var(--teal)}
+li.no::before{background:var(--rust)}
+li.yes{color:var(--ink);font-weight:700}
+.mono{font-family:"JetBrains Mono",ui-monospace,Menlo,monospace}
+.foot{font-size:1.3cqw;color:var(--slate);max-width:74cqw;line-height:1.45}
+.foot b{color:var(--ink)}
+
+/* progress rail */
+.rail{position:fixed;left:0;top:0;bottom:0;width:44px;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:12px;z-index:20;pointer-events:none}
+.rail b{width:2px;height:18px;background:var(--line);border-radius:2px;transition:background .3s,height .3s}
+.rail b.on{background:var(--teal);height:30px}
+@media(max-width:900px){.rail{display:none}}
+.hint{position:fixed;right:14px;bottom:12px;font-size:10px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--slate);opacity:.45;z-index:20;pointer-events:none}
+
+/* flow diagram */
+.flow{display:flex;align-items:stretch;gap:1.2cqw;flex-wrap:wrap}
+.node{border:.12cqw solid var(--line);background:var(--raise);border-radius:.25cqw;
+  padding:1.2cqw 1.8cqw;box-shadow:var(--shadow);
+  display:flex;flex-direction:column;justify-content:center}
+.node .t{font-family:"JetBrains Mono",monospace;font-weight:500;font-size:1.9cqw;color:var(--ink)}
+.node .s{font-size:1.15cqw;color:var(--slate);margin-top:.25cqw}
+.seam{color:var(--line);font-size:2.4cqw;font-family:Newsreader,serif;align-self:center}
+
+/* bars */
+.bars{display:flex;flex-direction:column;gap:.65cqw;width:100%}
+.brow{display:grid;grid-template-columns:13cqw 1fr 8cqw;align-items:center;gap:1.4cqw}
+.blab{font-size:1.55cqw;color:var(--slate)}
+.btrack{height:2cqw;background:color-mix(in srgb,var(--line) 50%,var(--paper));
+  border-radius:.15cqw;overflow:hidden}
+.bfill{height:100%;background:var(--teal);border-radius:.15cqw;opacity:.5}
+.bval{font-family:"JetBrains Mono",monospace;font-size:1.45cqw;
+  font-variant-numeric:tabular-nums;color:var(--slate);text-align:right}
+.brow.hi .blab,.brow.hi .bval{color:var(--ink);font-weight:700}
+.brow.hi .bfill{opacity:1}
+.bgroup{font-size:1.1cqw;letter-spacing:.14em;text-transform:uppercase;font-weight:700;
+  color:var(--teal);margin-top:1cqw;padding-left:0}
+.bgroup:first-child{margin-top:0}
+
+/* similarity heatmap */
+.hm{display:grid;gap:.2cqw;font-family:"JetBrains Mono",monospace;
+  font-variant-numeric:tabular-nums;width:100%}
+.hm .clab{writing-mode:vertical-rl;transform:rotate(180deg);font-size:1.05cqw;
+  color:var(--slate);padding-bottom:.5cqw;justify-self:center;align-self:end;white-space:nowrap}
+.hm .rlab{font-size:1.05cqw;color:var(--slate);text-align:right;
+  padding-right:.7cqw;align-self:center;white-space:nowrap}
+/* Cells are built by heatmap() below, which sets only background and text colour --
+   everything geometric belongs here. */
+.hm .cell{display:flex;align-items:center;justify-content:center;
+  padding:.5cqw 0;font-size:1.2cqw;line-height:1;border-radius:.12cqw}
+/* The diagonal is a tool against itself: always 100, so it carries no information.
+   Dimmed rather than blanked, which keeps the grid's rows and columns readable. */
+.hm .cell.dg{opacity:.45}
+/* The 4x4 fetcher matrix has room for larger type than the 12x12 converter one. */
+.hm.small .clab,.hm.small .rlab,.hm.small .cell{font-size:1.6cqw}
+
+/* a chart beside a short takeaway */
+.duo{display:grid;grid-template-columns:minmax(0,46cqw) minmax(0,1fr);
+  gap:5cqw;align-items:center}
+.duo.narrow{grid-template-columns:minmax(0,28cqw) minmax(0,1fr)}
+.duo>div{min-width:0}
+.ci{position:relative;height:.7cqw;background:var(--line);border-radius:.4cqw;opacity:.45}
+.ci i{position:absolute;top:0;height:100%;background:var(--teal);border-radius:.4cqw;opacity:.9}
+
+/* the rating board: rank, name, record, confidence bar, rating */
+.board{display:flex;flex-direction:column;gap:.2cqw;width:100%}
+.brow2{display:grid;grid-template-columns:2.6cqw 15cqw 9cqw 1fr 6.5cqw;align-items:center;
+  gap:1.6cqw;padding:.9cqw 0;border-bottom:.08cqw solid var(--line)}
+.board.tight .brow2{padding:.65cqw 0}
+.board.tight .brow2 .val{font-size:2.2cqw}
+.brow2 .rk{font-family:"JetBrains Mono",monospace;font-size:1.3cqw;color:var(--slate)}
+.brow2 .nm{font-family:"JetBrains Mono",monospace;font-size:1.7cqw;color:var(--ink)}
+.brow2 .rec{font-size:1.35cqw;color:var(--slate);font-variant-numeric:tabular-nums}
+.brow2 .val{font-family:Newsreader,serif;font-size:2.5cqw;text-align:right;color:var(--ink);
+  font-variant-numeric:tabular-nums}
+.brow2 .ci{position:relative;height:.9cqw;background:color-mix(in srgb,var(--line) 55%,var(--paper));
+  border-radius:.5cqw;opacity:1}
+.brow2 .ci i{position:absolute;top:0;height:100%;background:var(--teal);border-radius:.5cqw}
+.brow2.lead .nm,.brow2.lead .val{font-weight:700}
+.brow2.last .ci i{background:var(--rust)}
+.brow2.last .nm,.brow2.last .val{color:var(--rust)}
+.scaleline{display:grid;grid-template-columns:2.6cqw 15cqw 9cqw 1fr 6.5cqw;gap:1.6cqw;
+  font-size:1.05cqw;letter-spacing:.1em;text-transform:uppercase;color:var(--slate);
+  font-weight:700;padding-bottom:.5cqw}
+.scaleline .ends{display:flex;justify-content:space-between}
+
+/* side-by-side example */
+.split{display:grid;grid-template-columns:1fr 1fr;border:.08cqw solid var(--line);
+  border-radius:.3cqw;overflow:hidden;box-shadow:var(--shadow);background:var(--raise);
+  flex:1;min-height:0;max-height:70cqh}
+.pane{display:flex;flex-direction:column;min-width:0;min-height:0}
+.pane+.pane{border-left:.08cqw solid var(--line)}
+.ptag{font-size:1.05cqw;letter-spacing:.13em;text-transform:uppercase;font-weight:700;
+  color:var(--slate);padding:.9cqw 1.2cqw;border-bottom:.08cqw solid var(--line);
+  display:flex;justify-content:space-between;gap:1cqw;flex:none}
+.ptag em{font-style:normal;color:var(--teal);font-family:"JetBrains Mono",monospace;
+  letter-spacing:0;text-transform:none}
+.shot{flex:1;overflow:hidden;background:#fff;display:flex;align-items:flex-start;justify-content:center}
+.shot img{width:100%;height:auto;display:block}
+.md{flex:1;overflow:hidden;margin:0;padding:1.3cqw;font-family:"JetBrains Mono",monospace;
+  font-size:1.25cqw;line-height:1.6;white-space:pre;color:var(--ink)}
+.md .h{color:var(--teal);font-weight:500}
+.md .p{color:var(--slate)}
+.md .b{font-weight:500}
+.md .a{color:var(--rust)}
+
+.legend{display:flex;gap:1.6cqw;font-size:1.2cqw;color:var(--slate)}
+.legend span{display:flex;align-items:center;gap:.5cqw}
+.legend i{width:1cqw;height:1cqw;border-radius:.15cqw;display:block}
+
+@media (prefers-reduced-motion:reduce){.deck{scroll-behavior:auto}.rail b{transition:none}}
+/* explanation pair */
+.why{display:grid;grid-template-columns:1fr 1fr;gap:2.4cqw;width:100%}
+.why>div{border:.1cqw solid var(--line);border-radius:.3cqw;padding:2cqw;background:var(--raise);
+  box-shadow:var(--shadow);display:flex;flex-direction:column;gap:.9cqw}
+.why .t{font-family:Newsreader,serif;font-size:2.5cqw;line-height:1.1;color:var(--ink)}
+.why p{font-size:1.55cqw;max-width:none}
+.why .who{font-family:"JetBrains Mono",monospace;font-size:1.2cqw;color:var(--teal);
+  line-height:1.6;margin-top:auto}
+.why>div.b{border-color:var(--rust)}
+.why>div.b .who{color:var(--rust)}
+/* what each tool is for */
+.roles{display:flex;flex-direction:column;gap:1.2cqw}
+.roles div{font-size:1.6cqw;color:var(--slate);line-height:1.3}
+.roles b{font-family:"JetBrains Mono",monospace;color:var(--ink);font-weight:500}
+
+/* full-pipeline chain, with the stage this project owns ringed */
+.flow.chain{gap:.8cqw}
+.chain .node{padding:2cqw 1.6cqw}
+.chain .node .t{font-size:1.9cqw}
+.chain .seam{font-size:2cqw}
+.ring{position:relative;display:flex;align-items:stretch;gap:.8cqw;padding:0 1.9cqw}
+/* Hand-drawn, not a CSS oval: a rounded rectangle reads as chrome, a pencil loop that
+   overshoots where it closes reads as someone circling the important bit. */
+.ring svg{position:absolute;left:-1.3cqw;top:-1.6cqw;width:calc(100% + 2.6cqw);
+  height:calc(100% + 3.2cqw);overflow:visible;pointer-events:none;
+  transform:scale(1.25);transform-origin:center}
+.ring svg path{fill:none;stroke:var(--pencil);stroke-width:2.2;stroke-linecap:round;
+  vector-effect:non-scaling-stroke;opacity:.92}
+.ringlab{position:absolute;left:50%;transform:translateX(-50%);top:calc(100% + 4.2cqw);
+  font-size:1.3cqw;font-weight:700;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--pencil);white-space:nowrap;display:flex;flex-direction:column;
+  align-items:center;gap:.2cqw}
+.ringlab i{font-style:normal;font-size:1.8cqw;line-height:1}
+
+/* the two-steps slide: an objective chip and a tight list inside each panel */
+.why .step{font-size:1.15cqw;font-weight:700;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--slate)}
+.why .goal{font-size:1.35cqw;font-weight:700;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--teal);border:.1cqw solid var(--teal);border-radius:10cqw;
+  padding:.5cqw 1.2cqw;align-self:flex-start}
+.why>div.b .goal{color:var(--rust);border-color:var(--rust)}
+.why>div.b li::before{background:var(--rust)}
+.why ul{gap:.7cqw}
+.why li{font-size:1.55cqw;max-width:none;padding-left:1.6cqw}
+.why li::before{width:.4cqw;height:.4cqw;left:.3cqw}
+
+/* chart caption + a compact data table */
+.pcap{font-size:1.3cqw;color:var(--slate);margin-bottom:1.2cqw;max-width:30cqw;line-height:1.45}
+table{border-collapse:collapse;width:100%;font-size:1.7cqw}
+th,td{text-align:left;padding:1cqw 1.4cqw 1cqw 0;border-bottom:.08cqw solid var(--line)}
+th{font-size:1.1cqw;letter-spacing:.13em;text-transform:uppercase;color:var(--slate);font-weight:700}
+td.n{text-align:right;font-family:"JetBrains Mono",monospace;font-variant-numeric:tabular-nums}
+th.end,td.end{padding-right:0}
+table.fixed{table-layout:fixed}
+td.m{font-family:"JetBrains Mono",monospace}
+tr.hi td{color:var(--ink);font-weight:700}
+tr.dim td{color:var(--slate)}
+
+/* section break: a filled panel so the audience feels the change of subject */
+.f.sec{background:var(--teal)}
+.f.sec h1{color:var(--hm-on)}
+.f.sec .eyebrow{color:var(--hm-on);opacity:.8}
+.f.sec .eyebrow::before{background:var(--hm-on)}
+/* the job slide carries no headline, so the diagram is the slide */
+.flow.big{gap:1.5cqw}
+.flow.big .node{padding:2cqw 2.6cqw;border-width:.16cqw}
+.flow.big .node .t{font-size:2.7cqw}
+.flow.big .node .s{font-size:1.4cqw;margin-top:.5cqw}
+.flow.big .seam{font-size:3.4cqw}
+
+/* the current-method slide: the two tools, then the settings we pass */
+.tools{display:flex;flex-direction:column;gap:2.4cqw}
+.tool .box{border:.14cqw solid var(--line);background:var(--raise);border-radius:.3cqw;
+  box-shadow:var(--shadow);padding:2.2cqw 2.6cqw;text-align:center;
+  font-family:"JetBrains Mono",monospace;font-weight:500;font-size:2.6cqw;color:var(--ink)}
+.tool .cap{margin-top:.9cqw;text-align:center;font-size:1.5cqw;color:var(--slate)}
+.setlist{gap:1.9cqw}
+.setlist li{font-family:Newsreader,serif;font-size:2.9cqw;line-height:1.15;color:var(--ink);
+  padding-left:3cqw;max-width:none}
+.setlist li::before{width:.7cqw;height:.7cqw;left:.6cqw;top:.55em}
+
+/* now/proposed: unequal bullet counts, so align the tops instead of centring */
+.why.pair.top>div{justify-content:flex-start}
+
+/* the two-targets slide: two statements, nothing else */
+.why.pair>div{padding:3.2cqw;gap:1.6cqw;justify-content:center}
+.why.pair .t{font-size:4.4cqw}
+.why.pair .goal{font-size:2.3cqw;padding:.9cqw 1.8cqw;letter-spacing:.04em;text-transform:none;
+  border-radius:1.2cqw;text-wrap:balance;line-height:1.25}
+
+/* the four criteria as four squares -- one word each, in priority order */
+.quad{display:grid;grid-template-columns:1fr 1fr;gap:1.8cqw;width:46cqw}
+.tile{aspect-ratio:1;border:.1cqw solid var(--line);border-radius:.4cqw;background:var(--raise);
+  box-shadow:var(--shadow);display:flex;flex-direction:column;justify-content:center;
+  align-items:center;gap:.8cqw}
+.tile .n{font-family:"JetBrains Mono",monospace;font-size:1.3cqw;color:var(--teal);
+  letter-spacing:.1em}
+.tile .w{font-family:Newsreader,serif;font-size:4cqw;line-height:1;color:var(--ink)}
+
+/* full-bleed tool screenshot: a 16:9 window, same shape as the slide */
+.screen{border:.1cqw solid var(--line);border-radius:.3cqw;overflow:hidden;background:#fff;
+  box-shadow:var(--shadow);width:100%;aspect-ratio:16/9}
+.screen img{width:100%;height:100%;object-fit:cover;object-position:top left;display:block}
+
+/* plain, larger list: no accents, no bold -- used where the words are the slide */
+ul.plain li{color:var(--ink);font-weight:400;font-size:2.4cqw;line-height:1.35;max-width:none}
+ul.plain{gap:1.8cqw}
+
+/* before/after table of settings */
+table.ba{font-size:1.55cqw}
+table.ba td,table.ba th{padding-right:0}
+table.ba td+td,table.ba th+th{padding-left:1.4cqw}
+table.ba td.was{color:var(--slate)}
+table.ba td.now{color:var(--ink);font-weight:700}
+table.ba td.why{color:var(--slate);font-size:1.45cqw}
+</style>
+
+<div class="rail" id="rail"></div>
+<div class="hint">↓ / → to advance</div>
+
+<div class="deck" id="deck">
+<section><div class="f"><div class="c">
+  <div class="eyebrow">Corpus &amp; RAG pipeline · August 2026</div>
+  <h1>Choosing a scraper<br>and a markdown converter</h1>
+  <p class="lead">4 scrapers · 11 converters · 100 pages · one blind A/B arena</p>
+</div></div></section>
+
+<section><div class="f"><div class="c">
+  <div class="eyebrow">🧩 Context</div>
+  <h2>Where this fits</h2>
+  <div class="flow chain" style="margin-top:3cqw">
+    <div class="ring">
+      <svg viewBox="0 0 400 150" preserveAspectRatio="none" aria-hidden="true">
+        <path d="M34 88 C26 44 112 16 206 13 C308 10 382 40 379 82 C376 124 296 146 196 147
+                 C96 148 27 126 26 84 C25 57 68 30 132 19"/>
+        <path d="M132 19 C150 15 172 13 190 12" opacity=".55"/>
+      </svg>
+      <div class="node"><div class="t">URL</div></div>
+      <div class="seam">→</div>
+      <div class="node"><div class="t">markdown</div></div>
+      <div class="ringlab"><i>↑</i>Our focus now</div>
+    </div>
+    <div class="seam">→</div>
+    <div class="node"><div class="t">chunks</div></div>
+    <div class="seam">→</div>
+    <div class="node"><div class="t">indices</div></div>
+    <div class="seam">→</div>
+    <div class="node"><div class="t">search</div></div>
+    <div class="seam">→</div>
+    <div class="node"><div class="t">answer</div></div>
+  </div>
+</div></div></section>
+
+<section><div class="f"><div class="c">
+  <div class="eyebrow">🎯 The job</div>
+  <div class="flow big" style="margin-top:1cqw">
+    <div class="node"><div class="t">URL</div></div>
+    <div class="seam">→</div>
+    <div class="node"><div class="t">scrape</div><div class="s">get the HTML</div></div>
+    <div class="seam">→</div>
+    <div class="node"><div class="t">convert</div><div class="s">find the content</div></div>
+    <div class="seam">→</div>
+    <div class="node"><div class="t">markdown</div><div class="s">what we index</div></div>
+  </div>
+  <p class="lead" style="margin-top:2cqw"><strong>Our premise:</strong> cleaner markdown,
+  better retrieval. Assumed, not tested.</p>
+</div></div></section>
+
+<section><div class="f"><div class="c">
+  <div class="eyebrow">🎯 Two steps, two targets</div>
+  <div class="why pair" style="margin-top:1cqw">
+    <div>
+      <div class="step">Step 1</div>
+      <div class="t">Scrape</div>
+      <div class="goal">find all the data</div>
+    </div>
+    <div>
+      <div class="step">Step 2</div>
+      <div class="t">Convert</div>
+      <div class="goal">keep the data, drop the noise</div>
+    </div>
+  </div>
+</div></div></section>
+
+<section><div class="f sec"><div class="c">
+  <div class="eyebrow">Part 1 of 2</div>
+  <h1>Scraping</h1>
+</div></div></section>
+
+<section><div class="f"><div class="c">
+  <div class="eyebrow">The field</div>
+  <h2>Four scrapers.<br>Same amount of text.</h2>
+  <div class="bars" id="fb"></div>
+  <p class="foot">Average markdown per page, over the 89 pages all four returned.
+  <b>Within 0.2% of each other.</b></p>
+</div></div></section>
+
+<section><div class="f"><div class="c">
+  <div class="duo narrow">
+    <div>
+      <div class="pcap">Each cell: share of words the two returned in common, averaged over 89 pages</div>
+      <div class="hm small" id="fhm"></div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:1.6cqw">
+      <div class="eyebrow">Do they agree?</div>
+      <h2>Same HTML.<br>Different machinery.</h2>
+      <div class="roles">
+        <div><b>httpx</b> — one plain HTTP request</div>
+        <div><b>Scrapy</b> — a crawl framework: queues, retries, concurrency</div>
+        <div><b>Scrapling</b> — anti-bot fetching, its own parser</div>
+        <div><b>Stealthy</b> — a real browser, for pages that block you</div>
+      </div>
+    </div>
+  </div>
+  <p class="foot">They differ in <b>how they get the page</b>, not in what comes back — our pages
+  don't block us and don't need JavaScript, so this is an <b>operations</b> choice, not a content one.
+  <span style="opacity:.75">(Scrapling also mangles citation markers, 299 times — ruled out.)</span></p>
+</div></div></section>
+
+<section><div class="f"><div class="c">
+  <div class="eyebrow">Reliability</div>
+  <h2>Nobody gets all 100</h2>
+  <table class="fixed">
+    <colgroup><col style="width:27%"><col style="width:17%"><col style="width:32%"><col style="width:24%"></colgroup>
+    <tr><th>Scraper</th><th class="n">Pages fetched</th><th style="padding-left:1.4cqw">How the other 2 failed</th><th class="n end">100 pages took</th></tr>
+    <tr class="hi"><td class="m">httpx</td><td class="n">98 / 100</td><td style="padding-left:1.4cqw">the site refused us</td><td class="n end">26 s</td></tr>
+    <tr class="dim"><td class="m">Scrapy</td><td class="n">98 / 100</td><td style="padding-left:1.4cqw">transport error</td><td class="n end">not measurable *</td></tr>
+    <tr class="dim"><td class="m">Scrapling</td><td class="n">98 / 100</td><td style="padding-left:1.4cqw">transport error</td><td class="n end">32 s</td></tr>
+    <tr class="dim"><td class="m">Scrapling · Stealthy</td><td class="n">98 / 100</td><td style="padding-left:1.4cqw">the site refused us</td><td class="n end">192 s</td></tr>
+  </table>
+  <p class="foot">A tie on coverage, and <b>a real browser does not rescue the last two</b> — it just
+  costs <b>7×</b> as long. So httpx wins on being the cheapest of four tools that all reach the same
+  ceiling. <span style="opacity:.75">* our harness starts Scrapy's clock when a URL is queued, not
+  when it is sent, so that number would be queue wait, not speed.</span></p>
+</div></div></section>
+
+<section><div class="f"><div class="c">
+  <div class="eyebrow">Part 1 · conclusion</div>
+  <h2>The scraper barely matters</h2>
+  <ul>
+    <li><strong>Same words.</strong> 100% between the three HTTP clients, 98% for the browser.</li>
+    <li><strong>Same coverage.</strong> 98 of 100 pages, all four.</li>
+    <li class="yes">→ so the scraper is an <strong>operations</strong> choice: throughput,
+    retries, bot walls.</li>
+  </ul>
+  <p class="lead" style="margin-top:1cqw">The <strong>converter</strong> is where the content
+  actually gets decided.</p>
+  <p class="foot">Why it comes out this way: three of the four are the same HTTP GET with the same
+  user agent, so the server hands back the same bytes — the libraries differ in scheduling and
+  retries, not in content. Only the browser <em>can</em> differ, and this corpus does not need one:
+  rendering changes the text on <b>1 page in 97</b>. <b>On a JavaScript-heavy corpus this result
+  would not hold.</b></p>
+</div></div></section>
+
+<section><div class="f sec"><div class="c">
+  <div class="eyebrow">Part 2 of 2</div>
+  <h1>HTML → markdown</h1>
+</div></div></section>
+
+<section><div class="f"><div class="c">
+  <div class="eyebrow">The two tools · not changing</div>
+  <h2>Our current method</h2>
+  <div class="duo" style="grid-template-columns:minmax(0,30cqw) minmax(0,1fr);gap:6cqw">
+    <div class="tools">
+      <div class="tool"><div class="box">httpx</div><div class="cap">scraper</div></div>
+      <div class="tool"><div class="box">trafilatura</div><div class="cap">HTML → markdown</div></div>
+    </div>
+    <div><div class="pcap" style="max-width:none;margin-bottom:1.6cqw">The settings we propose</div>
+    <ul class="setlist">
+      <li>Output markdown</li>
+      <li>Keep tables</li>
+      <li>Keep headings, bold, lists</li>
+      <li>Drop links</li>
+    </ul></div>
+  </div>
+</div></div></section>
+
+<section><div class="f"><div class="c">
+  <div class="duo">
+    <div>
+      <div class="hm" id="ehm"></div>
+      <div class="legend" style="margin-top:1cqw">
+        <span><i style="background:var(--teal)"></i> same words</span>
+        <span><i style="background:var(--paper);border:.08cqw solid var(--line)"></i> different words</span>
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:1.8cqw">
+      <div class="eyebrow">Do they agree?</div>
+      <h2>Two families</h2>
+      <ul>
+        <li>Inside a family: <strong>73–99%</strong> the same words</li>
+        <li>Across the divide: <strong>44–71%</strong></li>
+        <li class="yes">Not a ranking. A different document.</li>
+        <li class="no"><strong>ours · now</strong> sits in neither: 63% to trafilatura,
+        82% to crawl4ai</li>
+      </ul>
+    </div>
+  </div>
+</div></div></section>
+
+<section><div class="f"><div class="c">
+  <div class="eyebrow">What they are</div>
+  <h2>Two different jobs</h2>
+  <div class="why">
+    <div>
+      <div class="t">Content models</div>
+      <div class="goal">built for web pages</div>
+      <ul>
+        <li>Score every block</li>
+        <li>Keep the article</li>
+        <li>Drop nav, sidebar, footer</li>
+      </ul>
+      <div class="who">trafilatura · resiliparse · justext<br>goose3 · html-text · ours&#8239;·&#8239;proposed</div>
+    </div>
+    <div>
+      <div class="t">Document converters</div>
+      <div class="goal">built for whole files</div>
+      <ul>
+        <li>docx, pdf, html</li>
+        <li>No “main article” to find</li>
+        <li>Keep everything — menus too</li>
+      </ul>
+      <div class="who">markitdown · docling · crawl4ai · scrapling-md</div>
+    </div>
+  </div>
+  <p class="foot">A category mismatch, not a quality gap.</p>
+</div></div></section>
+
+<section><div class="f"><div class="c">
+  <div class="eyebrow">How much each keeps</div>
+  <h2>You can see it in the word count</h2>
+  <div class="bars" id="eb"></div>
+  <p class="foot">Identical HTML in, <b>13× the spread</b> out — same page every time, so the extra
+  is furniture. Neither <span class="mono">ours</span> is a rival tool: both are trafilatura,
+  one with the settings we <b>propose</b> and one with the settings we run <b>now</b>. Same
+  library, <b>29 000 characters</b> apart.</p>
+</div></div></section>
+
+<section><div class="f"><div class="c">
+  <div class="eyebrow">⚖️ The vote</div>
+  <h2>What we judged on</h2>
+  <div class="duo" style="grid-template-columns:minmax(0,46cqw) minmax(0,1fr);gap:5cqw">
+    <div class="quad">
+      <div class="tile"><div class="w">Data</div></div>
+      <div class="tile"><div class="w">Structure</div></div>
+      <div class="tile"><div class="w">Markdown</div></div>
+      <div class="tile"><div class="w">Noise</div></div>
+    </div>
+    <div>
+      <ul class="plain">
+        <li>Two pages side by side</li>
+        <li>Blind: A vs B, sides randomised</li>
+        <li>The live page next to them</li>
+        <li>Never length</li>
+      </ul>
+    </div>
+  </div>
+</div></div></section>
+
+<section><div class="f"><div class="c">
+  <div class="eyebrow">The tool</div>
+  <h2>What a vote looked like</h2>
+  <div class="screen"><img src="__ARENA__" alt="The scraper arena: a pinned Wikipedia page on the left, two anonymised markdown outputs on the right"></div>
+</div></div></section>
+
+
+<section><div class="f"><div class="c">
+  <div class="eyebrow">🏆 The result · your votes, opponent-adjusted · 137 votes on pinned wiki</div>
+  <h2>Rating</h2>
+  <div class="board tight">
+    <div class="scaleline"><div></div><div></div><div>w–l–d · votes</div>
+      <div class="ends"><span>1150</span><span>95% range</span><span>2050</span></div>
+      <div style="text-align:right">rating</div></div>
+    <div class="brow2 lead">
+      <div class="rk">1</div><div class="nm">trafilatura</div>
+      <div class="rec">39–2–3 · 44</div>
+      <div class="ci"><i style="left:76.1%;width:22.7%"></i></div>
+      <div class="val">1919</div>
+    </div>
+    <div class="brow2 ">
+      <div class="rk">2</div><div class="nm">resiliparse</div>
+      <div class="rec">11–11–3 · 25</div>
+      <div class="ci"><i style="left:49.3%;width:23.3%"></i></div>
+      <div class="val">1698</div>
+    </div>
+    <div class="brow2 ">
+      <div class="rk">3</div><div class="nm">crawl4ai</div>
+      <div class="rec">5–3–6 · 14</div>
+      <div class="ci"><i style="left:23.8%;width:23.8%"></i></div>
+      <div class="val">1464</div>
+    </div>
+    <div class="brow2 ">
+      <div class="rk">4</div><div class="nm">scrapling-md</div>
+      <div class="rec">1–18–5 · 24</div>
+      <div class="ci"><i style="left:11.7%;width:25.1%"></i></div>
+      <div class="val">1377</div>
+    </div>
+    <div class="brow2 last">
+      <div class="rk">5</div><div class="nm">ours · now</div>
+      <div class="rec">6–19–6 · 31</div>
+      <div class="ci"><i style="left:13.9%;width:19.9%"></i></div>
+      <div class="val">1370</div>
+    </div>
+    <div class="brow2 ">
+      <div class="rk">6</div><div class="nm">markitdown</div>
+      <div class="rec">3–7–4 · 14</div>
+      <div class="ci"><i style="left:5.3%;width:30.9%"></i></div>
+      <div class="val">1346</div>
+    </div>
+    <div class="brow2 ">
+      <div class="rk">7</div><div class="nm">docling</div>
+      <div class="rec">3–8–3 · 14</div>
+      <div class="ci"><i style="left:3.2%;width:31.0%"></i></div>
+      <div class="val">1327</div>
+    </div>
+  </div>
+  <ul class="plain" style="margin-top:1.2cqw">
+    <li>Bottom four are <b>one cluster</b> — 50 points apart, ranges on top of each other</li>
+    <li><b>ours · now</b> belongs to that cluster, not to trafilatura's</li>
+  </ul>
+</div></div></section>
+
+
+<section><div class="f"><div class="c">
+  <div class="eyebrow">The same page, twice</div>
+  <h2>Best vs average</h2>
+  <div class="split">
+    <div class="pane">
+      <div class="ptag"><span>trafilatura · our pick</span><em>60 363 chars</em></div>
+<pre class="md"><span class="h"># List of countries and dependencies by population</span>
+
+<span class="p">- India (17.3%)
+- China (17.0%)
+- United States (4.10%)
+- Indonesia (3.50%)</span>
+
+| Location | Population | % of world |
+|---|---|---|
+| India | 1,429,404,000 | 17.3% |</pre>
+    </div>
+    <div class="pane">
+      <div class="ptag"><span>scrapling-md · the other family</span><em>214 754 chars · 3.6×</em></div>
+<pre class="md"><span class="a">[Jump to content](#bodyContent)
+
+Main menu
+
+move to sidebar
+hide
+
+Navigation
+
+* [Main page](/wiki/Main_Page "Visit the main…")
+* [Contents](/wiki/Wikipedia:Contents "Guides…")
+* [Random article](/wiki/Special:Random…)</span></pre>
+    </div>
+  </div>
+</div></div></section>
+
+<section><div class="f"><div class="c">
+  <div class="eyebrow">Example 1 of 3 · Wikipedia</div>
+  <h2>The infobox stays a table</h2>
+  <div class="split">
+    <div class="pane">
+      <div class="ptag"><span>Rendered page</span><em>wikipedia.org/wiki/Amsterdam</em></div>
+      <div class="shot"><img src="__INFOBOX__" alt="Amsterdam infobox as rendered on Wikipedia"></div>
+    </div>
+    <div class="pane">
+      <div class="ptag"><span>Our markdown</span><em>84 rows</em></div>
+<pre class="md"><span class="h">| Country | Netherlands |</span>
+| Province | North Holland |
+| Region | Metropolitan Region Amsterdam |
+| Founded | c. 1275 |
+| City Hall | Stopera |
+| Government | |
+| • Body | Municipal council |
+| • Mayor | Femke Halsema (GL) |
+| Area | |
+| • Land | 165.76 km2 (64.00 sq mi) |
+| • Water | 53.56 km2 (20.68 sq mi) |
+| • Metro region | 2,580.26 km2 |
+| Elevation | −2 m (−6.6 ft) |</pre>
+    </div>
+  </div>
+  <p class="foot">The hardest thing on a wiki page: a table pretending to be a card.
+  <b>Not perfect</b> — a few rows lose their label.</p>
+</div></div></section>
+
+<section><div class="f"><div class="c">
+  <div class="eyebrow">Example 2 of 3 · Wikipedia</div>
+  <h2>243 rows stay 243 rows</h2>
+  <div class="split">
+    <div class="pane">
+      <div class="ptag"><span>Rendered page</span><em>countries by population</em></div>
+      <div class="shot"><img src="__WIKITABLE__" alt="Wikipedia population table as rendered"></div>
+    </div>
+    <div class="pane">
+      <div class="ptag"><span>Our markdown</span><em>243 rows</em></div>
+<pre class="md"><span class="h"># List of countries and dependencies by population</span>
+
+<span class="p">This is a </span><span class="b">**list of countries and
+dependencies by population**</span><span class="p">. It includes
+sovereign states and dependent territories…</span>
+
+<span class="h">## Method</span>
+
+| Location | Population | % of world | Date |
+|---|---|---|---|
+| India | 1,429,404,000 | 17.3% | 1 Jul 2026 |
+| China | 1,404,890,000 | 17.0% | 31 Dec 2025 |
+| United States | 341,784,857 | 4.1% | 1 Jul 2025 |
+| Indonesia | 288,315,089 | 3.5% | 31 Dec 2025 |</pre>
+    </div>
+  </div>
+  <p class="foot">A plain-text extractor flattens this into prose — <b>same characters, lost
+  information</b>.</p>
+</div></div></section>
+
+<section><div class="f"><div class="c">
+  <div class="eyebrow">Example 3 of 3 · Not Wikipedia</div>
+  <h2>Headings, prose and code</h2>
+  <div class="split">
+    <div class="pane">
+      <div class="ptag"><span>Rendered page</span><em>docs.python.org/3/tutorial</em></div>
+      <div class="shot"><img src="__PYDOCS__" alt="Python tutorial page as rendered"></div>
+    </div>
+    <div class="pane">
+      <div class="ptag"><span>Our markdown</span><em>16 970 chars</em></div>
+<pre class="md"><span class="h"># 3. An Informal Introduction to Python</span>
+
+<span class="p">In the following examples, input and output are
+distinguished by the presence or absence of
+prompts (&gt;&gt;&gt; and …).</span>
+
+<span class="p">Comments in Python start with the hash
+character, </span><span class="a">`#`</span><span class="p">, and extend to the end
+of the physical line.</span>
+
+Some examples:
+
+<span class="a">    # this is the first comment
+    spam = 1  # and this is the second comment
+    # ... and now a third!</span></pre>
+    </div>
+  </div>
+  <p class="foot">No navigation, no sidebar, no footer. 🧹</p>
+</div></div></section>
+
+<section><div class="f"><div class="c">
+  <div class="eyebrow">⚡ Speed</div>
+  <h2>Fetching is<br>the slow part</h2>
+  <div class="bars">
+    <div class="brow hi"><div class="blab">fetch the page</div><div class="btrack"><div class="bfill" style="width:100%"></div></div><div class="bval">1 058 ms</div></div>
+    <div class="brow"><div class="blab">ours</div><div class="btrack"><div class="bfill" style="width:25.4%"></div></div><div class="bval">269 ms</div></div>
+    <div class="brow"><div class="blab">trafilatura</div><div class="btrack"><div class="bfill" style="width:16.4%"></div></div><div class="bval">174 ms</div></div>
+    <div class="brow"><div class="blab">readability</div><div class="btrack"><div class="bfill" style="width:15%"></div></div><div class="bval">159 ms</div></div>
+    <div class="brow"><div class="blab">resiliparse</div><div class="btrack"><div class="bfill" style="width:.9%"></div></div><div class="bval">9 ms</div></div>
+  </div>
+  <p class="foot">The whole converter field spans 594 ms, so the converter is a <b>quality</b> choice.
+  A real browser costs <b>3 178 ms/page</b> and never won a vote — so we don't render.</p>
+</div></div></section>
+
+<section><div class="f"><div class="c">
+  <div class="eyebrow">📐 What we learnt · same saved HTML · 97 pages</div>
+  <h2>Now vs proposed</h2>
+  <table class="ba fixed">
+    <colgroup><col style="width:44%"><col style="width:28%"><col style="width:28%"></colgroup>
+    <tr><th>Measured</th><th>Now · dev branch</th><th class="end">Proposed</th></tr>
+    <tr><td>Judged against trafilatura</td><td class="was">0 – 9</td><td class="now end">15 draws</td></tr>
+    <tr><td>Word match to trafilatura · wiki</td><td class="was">54.7%</td><td class="now end">100%</td></tr>
+    <tr><td>Table rows kept · 50 wiki pages</td><td class="was">1 215</td><td class="now end">3 182</td></tr>
+    <tr><td>Empty image markers</td><td class="was">2 716</td><td class="now end">0</td></tr>
+    <tr><td>Fused words</td><td class="was">6 436</td><td class="now end">0</td></tr>
+    <tr><td>Index pages collapsed</td><td class="was">11 of 47</td><td class="now end">0</td></tr>
+  </table>
+  <ul class="plain" style="margin-top:1.2cqw">
+    <li>What we run now is <b>bigger</b> on 48 of 50 wiki pages — and keeps <b>38%</b> of the tables</li>
+  </ul>
+</div></div></section>
+
+<section><div class="f"><div class="c">
+  <div class="eyebrow">✅ Proposed change</div>
+  <h2>Use trafilatura's defaults</h2>
+  <div class="why pair top">
+    <div>
+      <div class="t">Now</div>
+      <div class="goal">dev branch</div>
+      <ul>
+        <li>Images on</li>
+        <li>Links on</li>
+        <li>Favour precision on</li>
+        <li>Deduplicate on</li>
+        <li>HTML pre-clean</li>
+      </ul>
+    </div>
+    <div>
+      <div class="t">Proposed</div>
+      <div class="goal">trafilatura defaults</div>
+      <ul>
+        <li>None of them</li>
+        <li>Markdown out</li>
+        <li>Headings, bold, lists</li>
+      </ul>
+    </div>
+  </div>
+</div></div></section>
+
+</div>
+
+<script>
+/* Every number here comes from research/scrapers/similarity.py and the arena
+   report; nothing is computed in the browser except layout. */
+
+// ---- step 1: four scrapers, one converter, 89 shared pages --------------
+const FETCH_CHARS = [
+  ["httpx",      61454, true],
+  ["Scrapy",     61454, false],
+  ["Scrapling",  61432, false],
+  ["…Stealthy",  61538, false],
+];
+const FETCH_LABELS = ["httpx","Scrapy","Scrapling","Stealthy"];
+const FETCH_SIM = [
+  [100.0, 100.0, 100.0,  98.2],
+  [100.0, 100.0, 100.0,  98.2],
+  [100.0, 100.0, 100.0,  98.2],
+  [ 98.2,  98.2,  98.2, 100.0],
+];
+
+// ---- step 2: eleven converters, identical HTML -------------------------
+// Ordered shortest output to longest, which is also what the matrix's two
+// blocks turn out to line up with -- so one axis carries both readings.
+const EXT_CHARS = [
+  ["finds the article",        null, false],
+  ["goose3",                     13024, false],
+  ["justext",                    43217, false],
+  ["ours · proposed",            55033, false],
+  ["trafilatura",                56641, false],
+  ["resiliparse",                60278, false],
+  ["html-text",                  69629, false],
+  ["in between",                null, false],
+  ["ours · now",                 84198, true],
+  ["readability",                86901, false],
+  ["keeps everything",          null, false],
+  ["crawl4ai",                  111846, false],
+  ["scrapling-md",              164009, false],
+  ["markitdown",                171543, false],
+  ["docling",                   180027, false],
+];
+const EXT_LABELS = ["goose3","justext","ours · proposed","trafilatura","resiliparse","html-text","ours · now","readability","crawl4ai","scrapling-md","markitdown","docling"];
+const EXT_SIM = [
+  [100.0,  85.6,  74.5,  76.8,  75.8,  72.6,  50.4,  52.4,  52.0,  38.9,  38.1,  43.9],
+  [ 85.6, 100.0,  87.7,  89.0,  88.2,  85.2,  58.7,  57.0,  59.4,  44.9,  44.3,  50.6],
+  [ 74.5,  87.7, 100.0,  96.7,  88.8,  85.7,  66.9,  54.0,  65.4,  49.0,  48.4,  55.3],
+  [ 76.8,  89.0,  96.7, 100.0,  88.9,  88.5,  63.4,  55.3,  64.9,  48.4,  47.7,  55.1],
+  [ 75.8,  88.2,  88.8,  88.9, 100.0,  89.8,  61.7,  55.5,  67.2,  50.0,  49.2,  57.0],
+  [ 72.6,  85.2,  85.7,  88.5,  89.8, 100.0,  61.3,  54.7,  70.8,  57.0,  56.6,  62.0],
+  [ 50.4,  58.7,  66.9,  63.4,  61.7,  61.3, 100.0,  75.3,  81.5,  73.1,  73.3,  75.6],
+  [ 52.4,  57.0,  54.0,  55.3,  55.5,  54.7,  75.3, 100.0,  75.0,  69.7,  69.5,  73.0],
+  [ 52.0,  59.4,  65.4,  64.9,  67.2,  70.8,  81.5,  75.0, 100.0,  84.0,  83.0,  88.6],
+  [ 38.9,  44.9,  49.0,  48.4,  50.0,  57.0,  73.1,  69.7,  84.0, 100.0,  98.6,  90.5],
+  [ 38.1,  44.3,  48.4,  47.7,  49.2,  56.6,  73.3,  69.5,  83.0,  98.6, 100.0,  89.3],
+  [ 43.9,  50.6,  55.3,  55.1,  57.0,  62.0,  75.6,  73.0,  88.6,  90.5,  89.3, 100.0],
+];
+
+const spaced = n => n.toLocaleString("en-US").replace(/,/g, " ");
+
+function bars(id, rows){
+  const max = Math.max(...rows.map(r => r[1]).filter(Boolean));
+  document.getElementById(id).innerHTML = rows.map(([label, value, hi]) =>
+    // A null value is a group heading, not a bar. Grouping the converters by
+    // behaviour is the only way the tool names mean anything to an audience
+    // that has never heard of any of them.
+    value === null ? `<div class="bgroup">${label}</div>` : `
+    <div class="brow${hi ? " hi" : ""}">
+      <div class="blab">${label}</div>
+      <div class="btrack"><div class="bfill" style="width:${(value / max * 100).toFixed(1)}%"></div></div>
+      <div class="bval">${spaced(value)}</div>
+    </div>`).join("");
+}
+
+function heatmap(id, labels, grid){
+  const n = labels.length;
+  const el = document.getElementById(id);
+  el.style.gridTemplateColumns = `auto repeat(${n}, minmax(0, 1fr))`;
+  const cells = ['<div></div>'];
+  labels.forEach(l => cells.push(`<div class="clab">${l}</div>`));
+  grid.forEach((row, i) => {
+    cells.push(`<div class="rlab">${labels[i]}</div>`);
+    row.forEach((v, j) => {
+      // One absolute scale across both heatmaps so the two slides compare
+      // directly. The floor is 40, not 0: nothing in either matrix goes below
+      // 38, and stretching from zero washes the low end into a single shade --
+      // hiding exactly the block structure the slide is about.
+      const mix = Math.pow(Math.max(0, Math.min(1, (v - 40) / 60)), 1.35) * 100;
+      const ink = mix >= 52 ? "var(--hm-on)" : "var(--slate)";
+      cells.push(`<div class="cell${i === j ? " dg" : ""}" style="background:color-mix(in srgb, var(--teal) ${mix.toFixed(0)}%, var(--paper));color:${ink}">${Math.round(v)}</div>`);
+    });
+  });
+  el.innerHTML = cells.join("");
+}
+
+bars("fb", FETCH_CHARS);
+bars("eb", EXT_CHARS);
+heatmap("fhm", FETCH_LABELS, FETCH_SIM);
+heatmap("ehm", EXT_LABELS, EXT_SIM);
+
+// ---- navigation --------------------------------------------------------
+const deck = document.getElementById("deck");
+const slides = [...deck.querySelectorAll("section")];
+const rail = document.getElementById("rail");
+rail.innerHTML = slides.map(()=>"<b></b>").join("");
+const dots = [...rail.children];
+let idx = 0;
+function mark(){
+  const mid = deck.scrollTop + window.innerHeight / 2;
+  let i = 0;
+  slides.forEach((s, j) => { if (s.offsetTop < mid) i = j; });
+  if (i !== idx){ idx = i; dots.forEach((d,j)=>d.classList.toggle("on", j===idx)); }
+}
+mark(); dots[0].classList.add("on");
+deck.addEventListener("scroll", mark, {passive:true});
+function go(n){
+  idx = Math.max(0, Math.min(slides.length-1, n));
+  slides[idx].scrollIntoView({behavior:"smooth", block:"start"});
+}
+addEventListener("keydown", e=>{
+  if (["ArrowDown","ArrowRight","PageDown"," "].includes(e.key)){ e.preventDefault(); go(idx+1); }
+  if (["ArrowUp","ArrowLeft","PageUp"].includes(e.key)){ e.preventDefault(); go(idx-1); }
+  if (e.key === "Home") go(0);
+  if (e.key === "End") go(slides.length-1);
+});
+</script>

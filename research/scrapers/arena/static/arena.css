@@ -1,0 +1,253 @@
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+/* The page itself never scrolls: the header, meta and vote bars take their natural
+   height and the workspace absorbs whatever is left, so both panes are always in
+   view and voting never requires scrolling back up. */
+body {
+  background: var(--bg); color: var(--ink); font-family: var(--sans);
+  font-size: 14px; line-height: 1.45;
+  display: flex; flex-direction: column; height: 100vh; overflow: hidden;
+}
+.bar, .meta, .votebar { flex: 0 0 auto; }
+.grow { flex: 1 1 auto; }
+kbd {
+  font-family: var(--mono); font-size: 10px; border: 1px solid var(--line);
+  border-radius: 3px; padding: 0 3px; margin-left: 6px; color: var(--muted);
+}
+
+.bar {
+  display: flex; align-items: center; gap: 12px; padding: 8px 14px;
+  background: var(--panel); border-bottom: 1px solid var(--line);
+  position: sticky; top: 0; z-index: 30;
+}
+.brand { letter-spacing: .2px; }
+.counter { color: var(--muted); font-family: var(--mono); font-size: 12px; }
+.toggle { color: var(--muted); font-size: 12px; user-select: none; }
+.ghost {
+  font: inherit; color: var(--ink); background: transparent; cursor: pointer;
+  border: 1px solid var(--line); border-radius: 6px; padding: 4px 10px;
+  text-decoration: none;
+}
+.ghost:hover { border-color: var(--accent); color: var(--accent); }
+
+.meta {
+  display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: baseline;
+  padding: 7px 14px; border-bottom: 1px solid var(--line);
+  font-size: 12px; color: var(--muted);
+}
+.meta .tag {
+  font-family: var(--mono); border: 1px solid var(--line); border-radius: 4px;
+  padding: 0 6px;
+}
+.meta .url { font-family: var(--mono); overflow-wrap: anywhere; }
+/* Calibration matchups are re-judgements of cells the automated panel already saw.
+   Marking them keeps it obvious which mode is running, without hinting at the
+   panel's verdict. */
+.meta .tag.calib { border-color: var(--accent); color: var(--accent); }
+
+.votebar {
+  display: flex; gap: 8px; padding: 9px 14px; background: var(--panel);
+  border-bottom: 1px solid var(--line); position: sticky; top: 41px; z-index: 20;
+}
+.vote {
+  font: inherit; cursor: pointer; border: 1px solid var(--line);
+  background: var(--bg); color: var(--ink);
+  border-radius: 7px; padding: 8px 14px; flex: 1 1 auto;
+}
+.vote:hover { border-color: var(--accent); }
+.vote.left:hover, .vote.right:hover { background: color-mix(in srgb, var(--accent) 12%, var(--bg)); }
+.vote.skip { flex: 0 0 auto; color: var(--muted); }
+.vote.bad { flex: 0 0 auto; }
+.vote.undo { flex: 0 0 auto; color: var(--muted); }
+.out:focus-visible, .refscroll:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: -2px;
+}
+.vote:disabled { opacity: .45; cursor: default; }
+
+/* Reference on the left half, the two outputs stacked on the right half. The 1px
+   grid gaps show the --line background through as the dividers. */
+.workspace {
+  flex: 1 1 auto; min-height: 0;
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 1px; background: var(--line);
+}
+
+.reference {
+  background: var(--panel);
+  display: flex; flex-direction: column; min-height: 0; min-width: 0;
+}
+.refhead {
+  display: flex; align-items: center; gap: 10px; padding: 6px 14px;
+  font-size: 12px; color: var(--muted); border-bottom: 1px solid var(--line);
+}
+.refhead a { color: var(--accent); margin-left: 12px; white-space: nowrap; }
+/* Fills the column rather than taking a fixed slice of the viewport, so the
+   reference gets every pixel the header bars do not use. The iframe scrolls itself,
+   so this container must not also scroll. */
+.refscroll {
+  flex: 1 1 auto; min-height: 0; overflow: hidden;
+  background: #fff;
+}
+#ref { display: block; width: 100%; height: 100%; border: 0; background: #fff; }
+
+/* Shown when the reference cannot be the live page (site refuses framing) or when
+   the saved bytes and the reference are from different fetches. */
+.stale {
+  font-size: 11.5px; color: var(--warn);
+  border: 1px solid var(--warn); border-radius: 4px; padding: 1px 7px;
+}
+.stale[hidden] { display: none; }
+
+/* A over B, split evenly down the right half. */
+.columns {
+  display: grid; grid-template-columns: 1fr; grid-template-rows: 1fr 1fr;
+  gap: 1px; background: var(--line); min-height: 0; min-width: 0;
+}
+.col {
+  background: var(--panel); display: flex; flex-direction: column;
+  min-width: 0; min-height: 0;
+}
+.col h2 {
+  margin: 0; padding: 6px 14px; font-size: 12px; font-weight: 600;
+  letter-spacing: .08em; color: var(--muted); border-bottom: 1px solid var(--line);
+}
+.out { flex: 1 1 auto; min-height: 0; overflow: auto; }
+.out pre {
+  margin: 0; padding: 12px 14px; font-family: var(--mono); font-size: 12.5px;
+  line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere;
+  background: var(--pre-bg);
+}
+.out .md { padding: 12px 16px; }
+.out .md h1, .out .md h2, .out .md h3 { line-height: 1.25; margin: .8em 0 .3em; }
+.out .md h1 { font-size: 1.35em; } .out .md h2 { font-size: 1.18em; }
+.out .md h3 { font-size: 1.05em; }
+.out .md code { font-family: var(--mono); background: var(--pre-bg); padding: 0 3px; }
+.out .md table { border-collapse: collapse; }
+.out .md td, .out .md th { border: 1px solid var(--line); padding: 2px 6px; }
+.out .md img { max-width: 100%; height: auto; }
+
+/* Too narrow for side-by-side: fall back to one stacked column and let the page
+   scroll again, since three panes cannot each hold a usable height here. */
+@media (max-width: 860px) {
+  body { height: auto; min-height: 100vh; overflow: visible; }
+  .workspace { grid-template-columns: 1fr; }
+  .refscroll { height: 40vh; }
+  .columns { grid-template-rows: none; }
+  .out { height: 40vh; }
+  .votebar { flex-wrap: wrap; }
+}
+
+.toast {
+  position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%);
+  background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+  padding: 9px 14px; font-size: 12.5px; z-index: 50; max-width: min(94vw, 900px);
+  box-shadow: 0 6px 24px rgba(0,0,0,.16);
+}
+.toast .a { color: var(--accent); font-weight: 600; }
+.toast .b { color: var(--warn); font-weight: 600; }
+.toast .picked { color: var(--good); font-weight: 600; }
+
+.modal {
+  position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 60;
+  display: flex; align-items: flex-start; justify-content: center; padding: 4vh 2vw;
+}
+/* `display:flex` above outranks the UA stylesheet's `[hidden]{display:none}`, so
+   without this the closed overlay stays laid out and silently swallows every
+   click on the page -- the vote buttons become unclickable. */
+.modal[hidden] { display: none; }
+.toast[hidden] { display: none; }
+.sheet {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+  width: min(1100px, 96vw); max-height: 90vh; overflow: auto;
+}
+.sheet header { display: flex; align-items: center; gap: 10px; padding: 10px 14px;
+  border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--panel); }
+table.board { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+table.board th, table.board td {
+  border-bottom: 1px solid var(--line); padding: 6px 10px; text-align: right;
+  white-space: nowrap;
+}
+table.board th:first-child, table.board td:first-child { text-align: left; }
+table.board th { color: var(--muted); font-weight: 600; }
+table.board tbody tr:hover { background: color-mix(in srgb, var(--accent) 7%, transparent); }
+.pill { font-family: var(--mono); font-size: 10.5px; border: 1px solid var(--line);
+  border-radius: 999px; padding: 0 6px; color: var(--muted); }
+.note { padding: 10px 14px; color: var(--muted); font-size: 12px; }
+/* Prose cells opt out of the board's right-aligned, nowrap numeric default. */
+table.board td.why { text-align: left; white-space: normal; color: var(--muted); }
+
+/* Leaderboard pool selector. Human and automated votes are separate ratings; the
+   selector switches between them rather than merging them. */
+.pool {
+  display: inline-flex; gap: 6px; align-items: center;
+  margin-right: 10px; font-size: 12px; color: var(--muted);
+}
+.pool select {
+  font: inherit; padding: 2px 4px; border-radius: 4px;
+  color: var(--ink); background: var(--panel); border: 1px solid var(--line);
+}
+
+/* Section headings inside the leaderboard sheet: the wiki slice and the
+   fetch-layer table are separate populations, so they need visible separation
+   from the main board rather than reading as more rows of it. */
+.sheet h3.section {
+  margin: 18px 0 2px; padding: 0 14px; font-size: 12.5px;
+  color: var(--ink); border-top: 1px solid var(--line); padding-top: 14px;
+}
+.sheet h3.section .pill { margin-left: 6px; }
+
+/* --- diff marks -------------------------------------------------------------
+   The columns are blind, so the two sides are coloured by *position* (left/right),
+   never by entrant. Both hues have to survive light and dark, and to stay legible
+   under the monospace output text rather than drowning it. */
+mark.d {
+  background: var(--mark-a); color: inherit;
+  border-radius: 2px; padding: 0 1px;
+  box-decoration-break: clone; -webkit-box-decoration-break: clone;
+}
+#out-b mark.d { background: var(--mark-b); }
+
+/* A whitespace-only difference is the fused-citation defect: the entire change is
+   one absent space. Unmarked it is invisible, and it is the most common real defect
+   in this corpus, so it gets a glyph and a solid block instead of a tint. */
+mark.d.ws {
+  background: var(--mark-ws); outline: 1px solid var(--warn);
+  min-width: 0.5em; display: inline-block;
+}
+mark.d.ws::before { content: "␣"; opacity: 0.75; }
+
+/* The region the reviewer has stepped to with j/k. */
+mark.d.at { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* Collapsed shared run, in "collapse unchanged" mode. Deliberately quiet: it is a
+   placeholder for text the reviewer decided not to read, so it must not compete with
+   the differences for attention. */
+.collapsed {
+  display: block; cursor: pointer; opacity: 0.5;
+  font-style: italic; font-size: 11px; letter-spacing: 0.04em;
+  padding: 2px 0; margin: 3px 0; text-align: center;
+  border-top: 1px dashed var(--line); border-bottom: 1px dashed var(--line);
+}
+.collapsed:hover { opacity: 0.95; background: var(--mark-ws); }
+
+/* Region label. Carries the heading path so the reviewer knows where in the document
+   the difference sits, and doubles as the control that points the source pane at it. */
+.chip {
+  display: block; margin: 10px 0 2px; padding: 2px 7px;
+  font: 600 11px/1.6 system-ui, sans-serif; letter-spacing: 0.02em;
+  color: var(--accent); border-left: 3px solid var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  border-radius: 0 3px 3px 0;
+}
+.chip.linked { cursor: pointer; }
+.chip.linked:hover { background: color-mix(in srgb, var(--accent) 20%, transparent); }
+/* The region j/k has stepped to. */
+.chip.at { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* A region the other column has content for and this one does not. Reads as an
+   absence rather than as the column having ended. */
+.nothing {
+  display: block; font: italic 11.5px/1.7 system-ui, sans-serif;
+  color: var(--warn); opacity: 0.85; padding-left: 10px;
+}
+.nothing.at { outline: 2px solid var(--accent); outline-offset: 1px; }

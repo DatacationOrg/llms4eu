@@ -1,0 +1,176 @@
+# Candidate pool for the scraper arena.
+#
+# Deliberately larger than the 100 pages needed: snapshot.py validates every
+# candidate and keeps the first `target_per_bucket` that produce a usable
+# snapshot, dropping 403s, robots-disallowed URLs and dead links. `shape` is the
+# page archetype being probed -- extractors diverge on shape far more than on
+# topic, so the pool spreads across shapes on purpose rather than collecting
+# 25 lookalike prose articles.
+
+target_per_bucket: 25
+
+buckets:
+  en-wiki:
+    lang: en
+    is_wiki: true
+    urls:
+      - {url: "https://en.wikipedia.org/wiki/Ada_Lovelace?oldid=1370153024", shape: biography}
+      - {url: "https://en.wikipedia.org/wiki/Ludwig_van_Beethoven?oldid=1369741077", shape: biography}
+      - {url: "https://en.wikipedia.org/wiki/Marie_Curie?oldid=1367437547", shape: biography}
+      - {url: "https://en.wikipedia.org/wiki/Slovenia?oldid=1369632490", shape: country-infobox}
+      - {url: "https://en.wikipedia.org/wiki/European_Union?oldid=1370018219", shape: country-infobox}
+      - {url: "https://en.wikipedia.org/wiki/Ljubljana?oldid=1369842068", shape: city-infobox}
+      - {url: "https://en.wikipedia.org/wiki/Amsterdam?oldid=1369903064", shape: city-infobox}
+      - {url: "https://en.wikipedia.org/wiki/Bled?oldid=1368348475", shape: city-infobox}
+      - {url: "https://en.wikipedia.org/wiki/List_of_countries_and_dependencies_by_population?oldid=1369967345", shape: table-heavy}
+      - {url: "https://en.wikipedia.org/wiki/Comparison_of_web_browsers?oldid=1369419153", shape: table-heavy}
+      - {url: "https://en.wikipedia.org/wiki/List_of_Nobel_laureates?oldid=1333925860", shape: table-heavy}
+      - {url: "https://en.wikipedia.org/wiki/Timeline_of_the_far_future?oldid=1369270893", shape: list}
+      - {url: "https://en.wikipedia.org/wiki/Glossary_of_architecture?oldid=1369576907", shape: glossary}
+      - {url: "https://en.wikipedia.org/wiki/Photosynthesis?oldid=1370135795", shape: science}
+      - {url: "https://en.wikipedia.org/wiki/Quantum_entanglement?oldid=1368850287", shape: science-math}
+      - {url: "https://en.wikipedia.org/wiki/Transformer_(deep_learning_architecture)?oldid=1369059476", shape: science-math}
+      - {url: "https://en.wikipedia.org/wiki/Python_(programming_language)?oldid=1370099868", shape: tech-code}
+      - {url: "https://en.wikipedia.org/wiki/Danube?oldid=1370139182", shape: geography}
+      - {url: "https://en.wikipedia.org/wiki/Triglav?oldid=1369730286", shape: geography}
+      - {url: "https://en.wikipedia.org/wiki/Tourism_in_Slovenia?oldid=1333118378", shape: thematic-prose}
+      - {url: "https://en.wikipedia.org/wiki/Baroque?oldid=1365570930", shape: art-history}
+      - {url: "https://en.wikipedia.org/wiki/Hallstatt_culture?oldid=1365857457", shape: archaeology}
+      - {url: "https://en.wikipedia.org/wiki/Euro?oldid=1369092287", shape: economics}
+      - {url: "https://en.wikipedia.org/wiki/Coffee?oldid=1369018534", shape: general}
+      - {url: "https://en.wikipedia.org/wiki/Cheese?oldid=1369417258", shape: general}
+      - {url: "https://en.wikipedia.org/wiki/Aardvark?oldid=1367470768", shape: short}
+      - {url: "https://en.wikipedia.org/wiki/Kranj?oldid=1366348659", shape: short}
+      - {url: "https://en.wikipedia.org/wiki/Postojna_Cave?oldid=1361757715", shape: short}
+      - {url: "https://en.wikipedia.org/wiki/Rembrandt?oldid=1369298427", shape: biography}
+      - {url: "https://en.wikipedia.org/wiki/Fryderyk_Chopin?oldid=1369072530", shape: biography}
+      - {url: "https://en.wikipedia.org/wiki/Lake_Balaton?oldid=1366151847", shape: geography}
+      - {url: "https://en.wikipedia.org/wiki/Sagrada_Fam%C3%ADlia?oldid=1370117337", shape: architecture}
+
+  en-other:
+    lang: en
+    is_wiki: false
+    urls:
+      - {url: "https://docs.python.org/3/tutorial/introduction.html", shape: docs-code}
+      - {url: "https://developer.mozilla.org/en-US/docs/Web/HTML/Element/table", shape: docs-table}
+      - {url: "https://react.dev/learn", shape: spa-docs, note: "JS-heavy SPA"}
+      - {url: "https://www.rfc-editor.org/rfc/rfc2616.html", shape: plain-spec}
+      - {url: "https://blog.rust-lang.org/2015/05/15/Rust-1.0.html", shape: blog}
+      - {url: "https://arxiv.org/abs/1706.03762", shape: academic-abstract}
+      - {url: "https://news.ycombinator.com/", shape: listing}
+      - {url: "https://stackoverflow.com/questions/11227809/why-is-processing-a-sorted-array-faster-than-processing-an-unsorted-array", shape: forum-code}
+      - {url: "https://www.gov.uk/foreign-travel-advice/slovenia", shape: gov}
+      - {url: "https://www.nps.gov/yell/index.htm", shape: gov-tourism}
+      - {url: "https://www.who.int/news-room/fact-sheets/detail/obesity-and-overweight", shape: institutional}
+      - {url: "https://european-union.europa.eu/principles-countries-history/eu-countries_en", shape: institutional}
+      - {url: "https://www.bbc.com/news", shape: listing}
+      - {url: "https://www.theguardian.com/international", shape: listing}
+      - {url: "https://www.gutenberg.org/cache/epub/1342/pg1342-images.html", shape: longform-book}
+      - {url: "https://www.smithsonianmag.com/history/", shape: listing}
+      - {url: "https://en.wikisource.org/wiki/The_Federalist_Papers", shape: longform}
+      - {url: "https://www.slovenia.info/en", shape: tourism-spa}
+      - {url: "https://www.visitljubljana.com/en/visitors/", shape: tourism}
+      - {url: "https://www.iana.org/help/example-domains", shape: plain-short}
+      - {url: "https://httpbin.org/html", shape: plain-short}
+      - {url: "https://www.eea.europa.eu/en/analysis", shape: institutional-listing}
+      - {url: "https://ourworldindata.org/energy", shape: data-charts}
+      - {url: "https://www.bbcgoodfood.com/recipes/classic-lasagne", shape: recipe}
+      - {url: "https://www.allrecipes.com/recipe/23600/worlds-best-lasagna/", shape: recipe}
+      - {url: "https://www.seriouseats.com/the-best-slow-cooked-bolognese-sauce-recipe", shape: recipe}
+      - {url: "https://www.nature.com/articles/d41586-024-00001-2", shape: news-science}
+      - {url: "https://www.ecb.europa.eu/press/pr/date/2025/html/index.en.html", shape: institutional-listing}
+      - {url: "https://www.consilium.europa.eu/en/policies/", shape: institutional}
+      - {url: "https://commission.europa.eu/strategy-and-policy/priorities-2024-2029_en", shape: institutional}
+      - {url: "https://www.imf.org/en/Publications/WEO", shape: pdf-link, note: "real content behind a PDF"}
+      - {url: "https://unesdoc.unesco.org/ark:/48223/pf0000380455", shape: pdf-link}
+
+      - {url: "https://martinfowler.com/articles/microservices.html", shape: longform-blog}
+      - {url: "https://docs.djangoproject.com/en/stable/intro/tutorial01/", shape: docs-code}
+      - {url: "https://www.rfc-editor.org/rfc/rfc9110.html", shape: plain-spec}
+      - {url: "https://text.npr.org/", shape: plain-listing, note: "text-only news"}
+      - {url: "https://lwn.net/", shape: listing}
+      - {url: "https://www.esa.int/Science_Exploration", shape: institutional}
+      - {url: "https://www.ietf.org/about/", shape: institutional}
+      - {url: "https://www.python.org/about/", shape: general}
+      - {url: "https://www.cdc.gov/diabetes/about/index.html", shape: gov-health}
+      - {url: "https://www.gutenberg.org/cache/epub/84/pg84-images.html", shape: longform-book}
+
+  eu-wiki:
+    is_wiki: true
+    urls:
+      - {url: "https://nl.wikipedia.org/wiki/Amsterdam?oldid=71769212", lang: nl, shape: city-infobox}
+      - {url: "https://nl.wikipedia.org/wiki/Nederland?oldid=71772716", lang: nl, shape: country-infobox}
+      - {url: "https://nl.wikipedia.org/wiki/Rembrandt_van_Rijn?oldid=71289576", lang: nl, shape: biography}
+      - {url: "https://nl.wikipedia.org/wiki/Deltawerken?oldid=70555105", lang: nl, shape: engineering}
+      - {url: "https://nl.wikipedia.org/wiki/Vincent_van_Gogh?oldid=71481915", lang: nl, shape: biography}
+      - {url: "https://de.wikipedia.org/wiki/Berlin?oldid=269724496", lang: de, shape: city-infobox}
+      - {url: "https://de.wikipedia.org/wiki/Deutschland?oldid=269693872", lang: de, shape: country-infobox}
+      - {url: "https://de.wikipedia.org/wiki/Johann_Sebastian_Bach?oldid=269589154", lang: de, shape: biography}
+      - {url: "https://de.wikipedia.org/wiki/Schwarzwald?oldid=269743621", lang: de, shape: geography}
+      - {url: "https://de.wikipedia.org/wiki/Oktoberfest?oldid=269622595", lang: de, shape: general}
+      - {url: "https://sl.wikipedia.org/wiki/Slovenija?oldid=6730044", lang: sl, shape: country-infobox}
+      - {url: "https://sl.wikipedia.org/wiki/Ljubljana?oldid=6720349", lang: sl, shape: city-infobox}
+      - {url: "https://sl.wikipedia.org/wiki/France_Pre%C5%A1eren?oldid=6731882", lang: sl, shape: biography}
+      - {url: "https://sl.wikipedia.org/wiki/Postojnska_jama?oldid=6684151", lang: sl, shape: geography}
+      - {url: "https://sl.wikipedia.org/wiki/Bazilika_Lur%C5%A1ke_Matere_Bo%C5%BEje,_Brestanica?oldid=6654615", lang: sl, shape: short, note: "in the project corpus"}
+      - {url: "https://sl.wikipedia.org/wiki/Ob%C4%8Dina_Kr%C5%A1ko?oldid=6702655", lang: sl, shape: municipality, note: "in the project corpus"}
+      - {url: "https://hu.wikipedia.org/wiki/Budapest?oldid=29276249", lang: hu, shape: city-infobox}
+      - {url: "https://hu.wikipedia.org/wiki/Magyarorsz%C3%A1g?oldid=29287082", lang: hu, shape: country-infobox}
+      - {url: "https://hu.wikipedia.org/wiki/Liszt_Ferenc?oldid=29239510", lang: hu, shape: biography}
+      - {url: "https://hu.wikipedia.org/wiki/Balaton?oldid=29264549", lang: hu, shape: geography}
+      - {url: "https://hu.wikipedia.org/wiki/Guly%C3%A1s?oldid=22943067", lang: hu, shape: general}
+      - {url: "https://es.wikipedia.org/wiki/Madrid?oldid=174881572", lang: es, shape: city-infobox}
+      - {url: "https://es.wikipedia.org/wiki/Espa%C3%B1a?oldid=174792033", lang: es, shape: country-infobox}
+      - {url: "https://es.wikipedia.org/wiki/Miguel_de_Cervantes?oldid=174702750", lang: es, shape: biography}
+      - {url: "https://es.wikipedia.org/wiki/Sagrada_Familia?oldid=174657835", lang: es, shape: architecture}
+      - {url: "https://es.wikipedia.org/wiki/Camino_de_Santiago?oldid=174295596", lang: es, shape: thematic-prose}
+      - {url: "https://pl.wikipedia.org/wiki/Warszawa?oldid=80240079", lang: pl, shape: city-infobox}
+      - {url: "https://pl.wikipedia.org/wiki/Polska?oldid=80469009", lang: pl, shape: country-infobox}
+      - {url: "https://pl.wikipedia.org/wiki/Fryderyk_Chopin?oldid=80062101", lang: pl, shape: biography}
+      - {url: "https://pl.wikipedia.org/wiki/Krak%C3%B3w?oldid=80229254", lang: pl, shape: city-infobox}
+      - {url: "https://pl.wikipedia.org/wiki/Pierogi?oldid=80335467", lang: pl, shape: general}
+      - {url: "https://pl.wikipedia.org/wiki/Wis%C5%82a?oldid=80094360", lang: pl, shape: geography}
+
+  eu-other:
+    is_wiki: false
+    urls:
+      # Slovene: the project's own real target domains.
+      - {url: "https://www.gradrajhenburg.si/sl", lang: sl, shape: tourism, note: "project corpus"}
+      - {url: "https://www.gradrajhenburg.si/o-nas/zgodovina-muzejske-dejavnosti", lang: sl, shape: prose, note: "project corpus"}
+      - {url: "https://www.brestanica.com/brestanica/zgodovina-kraja-brestanica/", lang: sl, shape: prose, note: "project corpus"}
+      - {url: "https://www.brestanica.com/zgodovina-gradu-rajhenburg/", lang: sl, shape: prose, note: "project corpus"}
+      - {url: "https://www.slovenska-biografija.si/oseba/sbi145314/", lang: sl, shape: biography, note: "project corpus"}
+      - {url: "https://www.slovenska-biografija.si/oseba/sbi200360/", lang: sl, shape: biography, note: "project corpus"}
+      - {url: "https://www.rtvslo.si/", lang: sl, shape: listing}
+      - {url: "https://www.gov.si/drzavni-organi/ministrstva/", lang: sl, shape: gov-listing}
+      - {url: "https://www.kranj.si/", lang: sl, shape: municipality}
+      # Dutch
+      - {url: "https://www.rijksmuseum.nl/nl", lang: nl, shape: museum-spa}
+      - {url: "https://www.nos.nl/", lang: nl, shape: listing}
+      - {url: "https://www.rijksoverheid.nl/onderwerpen", lang: nl, shape: gov-listing}
+      - {url: "https://www.holland.com/nl/toerisme.htm", lang: nl, shape: tourism}
+      - {url: "https://www.knmi.nl/over-het-knmi/nieuws", lang: nl, shape: institutional-listing}
+      # German
+      - {url: "https://www.tagesschau.de/", lang: de, shape: listing}
+      - {url: "https://www.bundesregierung.de/breg-de/aktuelles", lang: de, shape: gov-listing}
+      - {url: "https://www.neuschwanstein.de/deutsch/schloss/index.htm", lang: de, shape: tourism}
+      - {url: "https://www.deutschland.de/de", lang: de, shape: institutional}
+      - {url: "https://www.bpb.de/themen/", lang: de, shape: institutional-listing}
+      # Hungarian
+      - {url: "https://www.budapestinfo.hu/", lang: hu, shape: tourism-spa}
+      - {url: "https://kormany.hu/", lang: hu, shape: gov-listing}
+      - {url: "https://www.mnb.hu/", lang: hu, shape: institutional}
+      - {url: "https://telex.hu/", lang: hu, shape: listing}
+      - {url: "https://www.szepmuveszeti.hu/", lang: hu, shape: museum}
+      # Spanish
+      - {url: "https://www.spain.info/es/", lang: es, shape: tourism-spa}
+      - {url: "https://www.museodelprado.es/coleccion", lang: es, shape: museum}
+      - {url: "https://www.rtve.es/noticias/", lang: es, shape: listing}
+      - {url: "https://www.boe.es/", lang: es, shape: gov}
+      - {url: "https://www.aemet.es/es/portada", lang: es, shape: institutional}
+      # Polish
+      - {url: "https://www.poland.travel/pl/", lang: pl, shape: tourism}
+      - {url: "https://www.gov.pl/web/kultura", lang: pl, shape: gov}
+      - {url: "https://wawel.krakow.pl/", lang: pl, shape: tourism}
+      - {url: "https://www.nbp.pl/", lang: pl, shape: institutional}
+      - {url: "https://tvp.info/", lang: pl, shape: listing}

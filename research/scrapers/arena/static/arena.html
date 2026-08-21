@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Scraper Arena</title>
+<link rel="stylesheet" href="/static/tokens.css" />
+  <link rel="stylesheet" href="/static/arena.css" />
+</head>
+<body>
+<header class="bar">
+  <strong class="brand">Scraper Arena</strong>
+  <span class="counter" id="counter" aria-live="polite">&hellip;</span>
+  <span class="grow"></span>
+  <!-- explore     : the information-weighted sampler over all pairs.
+       calibration : re-serves comparisons the automated panel already judged, so the
+                     two pools build an overlap agreement can be measured on. The
+                     panel's verdict is never sent to the client.
+       duel        : one fixed pair, alternating index-like and article pages. Only
+                     semi-blind, since asking for a pair names both entrants -- the
+                     columns are still randomised, and these votes are tagged. -->
+  <label class="pool">mode
+    <select id="mode">
+      <option value="explore">explore all pairs</option>
+      <option value="calibration">calibration</option>
+      <option value="duel">duel: ours vs trafilatura</option>
+      <!-- The 3-way is wiki-only by necessity: wikiextractor-v2 consumes wikitext, so
+           the 47 wiki pages are the only population where all three produce output. -->
+      <option value="wiki3">wiki 3-way: ours / trafilatura / wikiextractor</option>
+      <!-- Challenger round: trafilatura is on one side of every pair, so three
+           newcomers cost three pairs rather than six. -->
+      <option value="challengers">challengers: trafilatura vs crawl4ai / markitdown / docling</option>
+      <option value="challengers-ours">challengers: ours vs crawl4ai / markitdown / docling</option>
+      <!-- Round-robin, no champion: the similarity matrix already separates every other
+           pair in the field, and these three sit 88-97% from each other. Wiki pages only
+           -- they are the pinned half, so the reference pane shows what was extracted. -->
+      <option value="content3">content 3-way: ours / trafilatura / resiliparse (wiki)</option>
+      <option value="floorcheck">floor check: trafilatura vs scrapling-md (wiki)</option>
+      <!-- The settings question: what the branch holds vs what is committed, with stock
+           trafilatura as the third leg so the answer does not depend on our wrapper. -->
+      <option value="committed">settings: branch / committed / trafilatura (wiki)</option>
+      <!-- The three edges missing from the rating graph. Without them the losers are
+           ordered only by their records against trafilatura. -->
+      <option value="crossplay">cross-play: committed / resiliparse / scrapling-md (wiki)</option>
+      <!-- The converters' own three edges; their trafilatura edges are already judged. -->
+      <option value="converters">converters: crawl4ai / markitdown / docling (wiki)</option>
+      <!-- The like-for-like fight: the branch settings put our output in this family. -->
+      <option value="bottomhalf">bottom half: ours@committed vs the three converters (wiki)</option>
+    </select>
+  </label>
+  <span class="counter" id="calib-progress" hidden></span>
+  <label class="toggle"><input type="checkbox" id="render-md" /> render markdown</label>
+  <!-- Diff marking. Blind-safe: it says where the outputs differ, never which library
+       produced which column. Off in markdown mode, where the spans cannot be mapped
+       onto rendered HTML without re-parsing. -->
+  <label class="toggle"><input type="checkbox" id="mark-diffs" checked /> highlight diffs</label>
+  <!-- On by default: the pairs being judged are commonly 90%+ identical, and an
+       uncollapsed document buries the differences in text nobody needs to read. -->
+  <label class="toggle"><input type="checkbox" id="diffs-only" checked /> collapse unchanged</label>
+  <label class="toggle"><input type="checkbox" id="follow-source" checked /> follow in source</label>
+  <span class="counter" id="diffcount" aria-live="polite" hidden></span>
+  <button class="ghost" id="prev-diff" title="previous difference">&#8593;<kbd>K</kbd></button>
+  <button class="ghost" id="next-diff" title="next difference">&#8595;<kbd>J</kbd></button>
+  <button class="ghost" id="show-board">Leaderboard <kbd>L</kbd></button>
+  <a class="ghost" href="/report" target="_blank" rel="noopener">Report &#8599;</a>
+</header>
+
+<section class="meta" id="meta"></section>
+
+<nav class="votebar" data-votebar>
+  <button class="vote left"  data-vote="a">&#8592; A is better <kbd>&#8592;</kbd></button>
+  <button class="vote draw"  data-vote="draw">Draw <kbd>&#8595;</kbd></button>
+  <button class="vote bad"   data-vote="both_bad">Both bad <kbd>X</kbd></button>
+  <button class="vote right" data-vote="b">B is better &#8594; <kbd>&#8594;</kbd></button>
+  <button class="vote skip"  data-vote="skip">Skip <kbd>S</kbd></button>
+  <button class="vote undo" id="undo">Undo <kbd>U</kbd></button>
+</nav>
+
+<main class="workspace">
+
+<!-- Reference pane. A live iframe, which is safe because the corpus wiki URLs are pinned to
+     `?oldid=` permalinks: a live iframe of a frozen revision IS the snapshot, and can
+     never drift from it. Where the site refuses framing (29 of 52 corpus domains send
+     X-Frame-Options; measured at fetch time into snapshots.frameable) the pane falls
+     back to the saved DOM -- served as the variant the extractors actually read, not
+     whichever renders nicest. -->
+<section class="reference">
+  <div class="refhead">
+    <span id="refkind">Source page</span>
+    <span class="stale" id="stale" hidden></span>
+    <span class="grow"></span>
+    <a id="saved-dom" href="#" target="_blank" rel="noopener">Open saved page &#8599;</a>
+    <a id="original" href="#" target="_blank" rel="noopener">Open original &#8599;</a>
+  </div>
+  <div class="refscroll" id="refscroll" tabindex="0">
+    <iframe id="ref" title="source page" referrerpolicy="no-referrer"
+            sandbox="allow-same-origin allow-scripts allow-popups"></iframe>
+  </div>
+</section>
+
+<section class="columns">
+  <article class="col">
+    <h2>A</h2>
+    <div class="out" id="out-a" tabindex="0"><pre></pre></div>
+  </article>
+  <article class="col">
+    <h2>B</h2>
+    <div class="out" id="out-b" tabindex="0"><pre></pre></div>
+  </article>
+</section>
+
+</main>
+
+
+<!-- Vote confirmations and undo messages land here. aria-live so they are
+     announced: this is the only feedback that a vote was recorded. -->
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+<div class="modal" id="board" role="dialog" aria-modal="true"
+     aria-labelledby="board-title" hidden>
+  <div class="sheet">
+    <header><strong id="board-title">Live leaderboard</strong><span class="grow"></span>
+      <label class="pool">pool
+        <!-- No option is pre-selected: the server picks a populated pool on the
+             first load and the client syncs the control to whatever came back. -->
+        <select id="board-pool">
+          <option value="human">your votes</option>
+          <option value="llm">automated panel</option>
+        </select>
+      </label>
+      <button class="ghost" id="close-board">Close</button></header>
+    <div id="board-body">&hellip;</div>
+    <div id="agreement-body"></div>
+  </div>
+</div>
+
+<script src="/static/arena.js"></script>
+</body>
+</html>

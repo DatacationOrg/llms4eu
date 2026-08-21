@@ -14,3 +14,13 @@ data/scraped/
 data/cache/
 *.checkpoint.json
 knowledge-catalog/
+
+# Generated presentation artefacts. `deck.html` is `deck.src.html` with the four
+# figures base64-inlined (just arena-deck), so tracking it would store the same
+# 1.1 MB of PNGs twice and re-diff 1.6 MB on every figure tweak. `slides.pdf` is a
+# Marp export of PRESENTATION.md. Sources are tracked; these are rebuildable.
+research/scrapers/deck.html
+research/scrapers/slides.pdf
+
+# Per-user Claude Code settings. The shared skill under .claude/skills/ is tracked.
+.claude/settings.local.json

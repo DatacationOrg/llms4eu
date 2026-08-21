@@ -1,0 +1,22 @@
+/* The palette, in one place.
+   Shared by the arena pages (linked before arena.css) and by report.py, which
+   inlines this file -- the report is a standalone document, so it cannot link
+   anything. It used to hand-retype these values, and they drifted. */
+/* Calm, low-contrast palette: this gets stared at for hours. Light and dark are
+   both defined explicitly so nothing borrows the host theme. */
+:root {
+  --bg: #f6f7f9; --panel: #ffffff; --ink: #1a1d23; --muted: #6b7280;
+  --line: #dfe3e9; --accent: #3b5bdb; --good: #2f8f5b; --warn: #b4530a;
+  --mark-a: #ffe9a8; --mark-b: #cfe6ff; --mark-ws: #ffd9c2;
+  --pre-bg: #fbfcfd;
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #14171c; --panel: #1b1f26; --ink: #e6e8ec; --muted: #98a1b0;
+    --line: #2b313b; --accent: #7c93f5; --good: #5fc98d; --warn: #e0913f;
+    --mark-a: #5a4a1e; --mark-b: #1f3c58; --mark-ws: #5c3418;
+    --pre-bg: #171b21;
+  }
+}

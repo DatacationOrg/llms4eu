@@ -65,12 +65,12 @@ def bold_best_table(headers: list[str], rows: list[list[str | float]]) -> str:
                 text = f"**{text}**"
             rendered.append(text)
         rendered_rows.append(rendered)
-    
-    def _plain(text: str) -> str:
-        return text.replace("**", "")
-    
+
+    # Measured on the rendered cell, markers included. Measuring the marker-stripped
+    # width instead leaves a bolded cell wider than its column, so `ljust` becomes a
+    # no-op on that row and every pipe below it shifts right.
     widths = [
-        max(len(_plain(row[index]) ) for row in [headers, *rendered_rows])
+        max(len(row[index]) for row in [headers, *rendered_rows])
         for index in range(len(headers))
     ]
     lines = [
@@ -86,7 +86,6 @@ def bold_best_table(headers: list[str], rows: list[list[str | float]]) -> str:
         for row in rendered_rows
     )
 
-    
     return "\n".join(lines)
 
 

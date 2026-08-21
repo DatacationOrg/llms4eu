@@ -1,0 +1,723 @@
+{
+  "fetchers": {
+    "names": [
+      "ours-httpx",
+      "scrapy",
+      "scrapling",
+      "scrapling-stealthy"
+    ],
+    "common_pages": 89,
+    "chars": {
+      "ours-httpx": {
+        "pages": 91,
+        "mean_own": 60108,
+        "mean_common": 61454
+      },
+      "scrapy": {
+        "pages": 89,
+        "mean_own": 61454,
+        "mean_common": 61454
+      },
+      "scrapling": {
+        "pages": 89,
+        "mean_own": 61432,
+        "mean_common": 61432
+      },
+      "scrapling-stealthy": {
+        "pages": 93,
+        "mean_own": 58945,
+        "mean_common": 61538
+      }
+    },
+    "cosine": {
+      "ours-httpx|ours-httpx": {
+        "pct": 100.0,
+        "n": 91
+      },
+      "ours-httpx|scrapy": {
+        "pct": 100.0,
+        "n": 89
+      },
+      "ours-httpx|scrapling": {
+        "pct": 100.0,
+        "n": 89
+      },
+      "ours-httpx|scrapling-stealthy": {
+        "pct": 98.2,
+        "n": 91
+      },
+      "scrapy|scrapy": {
+        "pct": 100.0,
+        "n": 89
+      },
+      "scrapy|scrapling": {
+        "pct": 100.0,
+        "n": 89
+      },
+      "scrapy|scrapling-stealthy": {
+        "pct": 98.2,
+        "n": 89
+      },
+      "scrapling|scrapling": {
+        "pct": 100.0,
+        "n": 89
+      },
+      "scrapling|scrapling-stealthy": {
+        "pct": 98.2,
+        "n": 89
+      },
+      "scrapling-stealthy|scrapling-stealthy": {
+        "pct": 100.0,
+        "n": 93
+      }
+    },
+    "exact": {
+      "ours-httpx|ours-httpx": {
+        "pct": 100.0,
+        "n": 91
+      },
+      "ours-httpx|scrapy": {
+        "pct": 100.0,
+        "n": 89
+      },
+      "ours-httpx|scrapling": {
+        "pct": 53.9,
+        "n": 89
+      },
+      "ours-httpx|scrapling-stealthy": {
+        "pct": 45.1,
+        "n": 91
+      },
+      "scrapy|scrapy": {
+        "pct": 100.0,
+        "n": 89
+      },
+      "scrapy|scrapling": {
+        "pct": 53.9,
+        "n": 89
+      },
+      "scrapy|scrapling-stealthy": {
+        "pct": 43.8,
+        "n": 89
+      },
+      "scrapling|scrapling": {
+        "pct": 100.0,
+        "n": 89
+      },
+      "scrapling|scrapling-stealthy": {
+        "pct": 47.2,
+        "n": 89
+      },
+      "scrapling-stealthy|scrapling-stealthy": {
+        "pct": 100.0,
+        "n": 93
+      }
+    },
+    "excluded_dynamic": 5
+  },
+  "extractors": {
+    "names": [
+      "ours",
+      "trafilatura",
+      "resiliparse",
+      "justext",
+      "html-text",
+      "goose3",
+      "readability-lxml",
+      "crawl4ai",
+      "scrapling-md",
+      "markitdown",
+      "docling"
+    ],
+    "common_pages": 72,
+    "chars": {
+      "ours": {
+        "pages": 100,
+        "mean_own": 55033,
+        "mean_common": 59984
+      },
+      "trafilatura": {
+        "pages": 97,
+        "mean_own": 56641,
+        "mean_common": 59939
+      },
+      "resiliparse": {
+        "pages": 96,
+        "mean_own": 60278,
+        "mean_common": 62969
+      },
+      "justext": {
+        "pages": 82,
+        "mean_own": 43217,
+        "mean_common": 39855
+      },
+      "html-text": {
+        "pages": 100,
+        "mean_own": 69629,
+        "mean_common": 77669
+      },
+      "goose3": {
+        "pages": 83,
+        "mean_own": 13024,
+        "mean_common": 14944
+      },
+      "readability-lxml": {
+        "pages": 93,
+        "mean_own": 86901,
+        "mean_common": 89007
+      },
+      "crawl4ai": {
+        "pages": 97,
+        "mean_own": 111846,
+        "mean_common": 120240
+      },
+      "scrapling-md": {
+        "pages": 97,
+        "mean_own": 164009,
+        "mean_common": 180504
+      },
+      "markitdown": {
+        "pages": 97,
+        "mean_own": 171543,
+        "mean_common": 189386
+      },
+      "docling": {
+        "pages": 97,
+        "mean_own": 180027,
+        "mean_common": 199214
+      }
+    },
+    "cosine": {
+      "ours|ours": {
+        "pct": 100.0,
+        "n": 100
+      },
+      "ours|trafilatura": {
+        "pct": 96.7,
+        "n": 97
+      },
+      "ours|resiliparse": {
+        "pct": 88.8,
+        "n": 96
+      },
+      "ours|justext": {
+        "pct": 87.7,
+        "n": 82
+      },
+      "ours|html-text": {
+        "pct": 85.7,
+        "n": 100
+      },
+      "ours|goose3": {
+        "pct": 74.5,
+        "n": 83
+      },
+      "ours|readability-lxml": {
+        "pct": 54.0,
+        "n": 93
+      },
+      "ours|crawl4ai": {
+        "pct": 65.4,
+        "n": 97
+      },
+      "ours|scrapling-md": {
+        "pct": 49.0,
+        "n": 97
+      },
+      "ours|markitdown": {
+        "pct": 48.4,
+        "n": 97
+      },
+      "ours|docling": {
+        "pct": 55.3,
+        "n": 97
+      },
+      "trafilatura|trafilatura": {
+        "pct": 100.0,
+        "n": 97
+      },
+      "trafilatura|resiliparse": {
+        "pct": 88.9,
+        "n": 96
+      },
+      "trafilatura|justext": {
+        "pct": 89.0,
+        "n": 82
+      },
+      "trafilatura|html-text": {
+        "pct": 88.5,
+        "n": 97
+      },
+      "trafilatura|goose3": {
+        "pct": 76.8,
+        "n": 83
+      },
+      "trafilatura|readability-lxml": {
+        "pct": 55.3,
+        "n": 93
+      },
+      "trafilatura|crawl4ai": {
+        "pct": 64.9,
+        "n": 97
+      },
+      "trafilatura|scrapling-md": {
+        "pct": 48.4,
+        "n": 97
+      },
+      "trafilatura|markitdown": {
+        "pct": 47.7,
+        "n": 97
+      },
+      "trafilatura|docling": {
+        "pct": 55.1,
+        "n": 97
+      },
+      "resiliparse|resiliparse": {
+        "pct": 100.0,
+        "n": 96
+      },
+      "resiliparse|justext": {
+        "pct": 88.2,
+        "n": 82
+      },
+      "resiliparse|html-text": {
+        "pct": 89.8,
+        "n": 96
+      },
+      "resiliparse|goose3": {
+        "pct": 75.8,
+        "n": 82
+      },
+      "resiliparse|readability-lxml": {
+        "pct": 55.5,
+        "n": 92
+      },
+      "resiliparse|crawl4ai": {
+        "pct": 67.2,
+        "n": 96
+      },
+      "resiliparse|scrapling-md": {
+        "pct": 50.0,
+        "n": 96
+      },
+      "resiliparse|markitdown": {
+        "pct": 49.2,
+        "n": 96
+      },
+      "resiliparse|docling": {
+        "pct": 57.0,
+        "n": 96
+      },
+      "justext|justext": {
+        "pct": 100.0,
+        "n": 82
+      },
+      "justext|html-text": {
+        "pct": 85.2,
+        "n": 82
+      },
+      "justext|goose3": {
+        "pct": 85.6,
+        "n": 73
+      },
+      "justext|readability-lxml": {
+        "pct": 57.0,
+        "n": 81
+      },
+      "justext|crawl4ai": {
+        "pct": 59.4,
+        "n": 82
+      },
+      "justext|scrapling-md": {
+        "pct": 44.9,
+        "n": 82
+      },
+      "justext|markitdown": {
+        "pct": 44.3,
+        "n": 82
+      },
+      "justext|docling": {
+        "pct": 50.6,
+        "n": 82
+      },
+      "html-text|html-text": {
+        "pct": 100.0,
+        "n": 100
+      },
+      "html-text|goose3": {
+        "pct": 72.6,
+        "n": 83
+      },
+      "html-text|readability-lxml": {
+        "pct": 54.7,
+        "n": 93
+      },
+      "html-text|crawl4ai": {
+        "pct": 70.8,
+        "n": 97
+      },
+      "html-text|scrapling-md": {
+        "pct": 57.0,
+        "n": 97
+      },
+      "html-text|markitdown": {
+        "pct": 56.6,
+        "n": 97
+      },
+      "html-text|docling": {
+        "pct": 62.0,
+        "n": 97
+      },
+      "goose3|goose3": {
+        "pct": 100.0,
+        "n": 83
+      },
+      "goose3|readability-lxml": {
+        "pct": 52.4,
+        "n": 81
+      },
+      "goose3|crawl4ai": {
+        "pct": 52.0,
+        "n": 83
+      },
+      "goose3|scrapling-md": {
+        "pct": 38.9,
+        "n": 83
+      },
+      "goose3|markitdown": {
+        "pct": 38.1,
+        "n": 83
+      },
+      "goose3|docling": {
+        "pct": 43.9,
+        "n": 83
+      },
+      "readability-lxml|readability-lxml": {
+        "pct": 100.0,
+        "n": 93
+      },
+      "readability-lxml|crawl4ai": {
+        "pct": 75.0,
+        "n": 93
+      },
+      "readability-lxml|scrapling-md": {
+        "pct": 69.7,
+        "n": 93
+      },
+      "readability-lxml|markitdown": {
+        "pct": 69.5,
+        "n": 93
+      },
+      "readability-lxml|docling": {
+        "pct": 73.0,
+        "n": 93
+      },
+      "crawl4ai|crawl4ai": {
+        "pct": 100.0,
+        "n": 97
+      },
+      "crawl4ai|scrapling-md": {
+        "pct": 84.0,
+        "n": 97
+      },
+      "crawl4ai|markitdown": {
+        "pct": 83.0,
+        "n": 97
+      },
+      "crawl4ai|docling": {
+        "pct": 88.6,
+        "n": 97
+      },
+      "scrapling-md|scrapling-md": {
+        "pct": 100.0,
+        "n": 97
+      },
+      "scrapling-md|markitdown": {
+        "pct": 98.6,
+        "n": 97
+      },
+      "scrapling-md|docling": {
+        "pct": 90.5,
+        "n": 97
+      },
+      "markitdown|markitdown": {
+        "pct": 100.0,
+        "n": 97
+      },
+      "markitdown|docling": {
+        "pct": 89.3,
+        "n": 97
+      },
+      "docling|docling": {
+        "pct": 100.0,
+        "n": 97
+      }
+    },
+    "exact": {
+      "ours|ours": {
+        "pct": 100.0,
+        "n": 100
+      },
+      "ours|trafilatura": {
+        "pct": 47.4,
+        "n": 97
+      },
+      "ours|resiliparse": {
+        "pct": 0.0,
+        "n": 96
+      },
+      "ours|justext": {
+        "pct": 1.2,
+        "n": 82
+      },
+      "ours|html-text": {
+        "pct": 0.0,
+        "n": 100
+      },
+      "ours|goose3": {
+        "pct": 0.0,
+        "n": 83
+      },
+      "ours|readability-lxml": {
+        "pct": 0.0,
+        "n": 93
+      },
+      "ours|crawl4ai": {
+        "pct": 0.0,
+        "n": 97
+      },
+      "ours|scrapling-md": {
+        "pct": 0.0,
+        "n": 97
+      },
+      "ours|markitdown": {
+        "pct": 0.0,
+        "n": 97
+      },
+      "ours|docling": {
+        "pct": 0.0,
+        "n": 97
+      },
+      "trafilatura|trafilatura": {
+        "pct": 100.0,
+        "n": 97
+      },
+      "trafilatura|resiliparse": {
+        "pct": 0.0,
+        "n": 96
+      },
+      "trafilatura|justext": {
+        "pct": 1.2,
+        "n": 82
+      },
+      "trafilatura|html-text": {
+        "pct": 0.0,
+        "n": 97
+      },
+      "trafilatura|goose3": {
+        "pct": 1.2,
+        "n": 83
+      },
+      "trafilatura|readability-lxml": {
+        "pct": 0.0,
+        "n": 93
+      },
+      "trafilatura|crawl4ai": {
+        "pct": 0.0,
+        "n": 97
+      },
+      "trafilatura|scrapling-md": {
+        "pct": 0.0,
+        "n": 97
+      },
+      "trafilatura|markitdown": {
+        "pct": 0.0,
+        "n": 97
+      },
+      "trafilatura|docling": {
+        "pct": 0.0,
+        "n": 97
+      },
+      "resiliparse|resiliparse": {
+        "pct": 100.0,
+        "n": 96
+      },
+      "resiliparse|justext": {
+        "pct": 0.0,
+        "n": 82
+      },
+      "resiliparse|html-text": {
+        "pct": 0.0,
+        "n": 96
+      },
+      "resiliparse|goose3": {
+        "pct": 0.0,
+        "n": 82
+      },
+      "resiliparse|readability-lxml": {
+        "pct": 0.0,
+        "n": 92
+      },
+      "resiliparse|crawl4ai": {
+        "pct": 0.0,
+        "n": 96
+      },
+      "resiliparse|scrapling-md": {
+        "pct": 0.0,
+        "n": 96
+      },
+      "resiliparse|markitdown": {
+        "pct": 0.0,
+        "n": 96
+      },
+      "resiliparse|docling": {
+        "pct": 0.0,
+        "n": 96
+      },
+      "justext|justext": {
+        "pct": 100.0,
+        "n": 82
+      },
+      "justext|html-text": {
+        "pct": 0.0,
+        "n": 82
+      },
+      "justext|goose3": {
+        "pct": 1.4,
+        "n": 73
+      },
+      "justext|readability-lxml": {
+        "pct": 0.0,
+        "n": 81
+      },
+      "justext|crawl4ai": {
+        "pct": 0.0,
+        "n": 82
+      },
+      "justext|scrapling-md": {
+        "pct": 0.0,
+        "n": 82
+      },
+      "justext|markitdown": {
+        "pct": 0.0,
+        "n": 82
+      },
+      "justext|docling": {
+        "pct": 0.0,
+        "n": 82
+      },
+      "html-text|html-text": {
+        "pct": 100.0,
+        "n": 100
+      },
+      "html-text|goose3": {
+        "pct": 0.0,
+        "n": 83
+      },
+      "html-text|readability-lxml": {
+        "pct": 0.0,
+        "n": 93
+      },
+      "html-text|crawl4ai": {
+        "pct": 0.0,
+        "n": 97
+      },
+      "html-text|scrapling-md": {
+        "pct": 0.0,
+        "n": 97
+      },
+      "html-text|markitdown": {
+        "pct": 0.0,
+        "n": 97
+      },
+      "html-text|docling": {
+        "pct": 0.0,
+        "n": 97
+      },
+      "goose3|goose3": {
+        "pct": 100.0,
+        "n": 83
+      },
+      "goose3|readability-lxml": {
+        "pct": 1.2,
+        "n": 81
+      },
+      "goose3|crawl4ai": {
+        "pct": 0.0,
+        "n": 83
+      },
+      "goose3|scrapling-md": {
+        "pct": 0.0,
+        "n": 83
+      },
+      "goose3|markitdown": {
+        "pct": 0.0,
+        "n": 83
+      },
+      "goose3|docling": {
+        "pct": 0.0,
+        "n": 83
+      },
+      "readability-lxml|readability-lxml": {
+        "pct": 100.0,
+        "n": 93
+      },
+      "readability-lxml|crawl4ai": {
+        "pct": 0.0,
+        "n": 93
+      },
+      "readability-lxml|scrapling-md": {
+        "pct": 1.1,
+        "n": 93
+      },
+      "readability-lxml|markitdown": {
+        "pct": 0.0,
+        "n": 93
+      },
+      "readability-lxml|docling": {
+        "pct": 0.0,
+        "n": 93
+      },
+      "crawl4ai|crawl4ai": {
+        "pct": 100.0,
+        "n": 97
+      },
+      "crawl4ai|scrapling-md": {
+        "pct": 0.0,
+        "n": 97
+      },
+      "crawl4ai|markitdown": {
+        "pct": 0.0,
+        "n": 97
+      },
+      "crawl4ai|docling": {
+        "pct": 0.0,
+        "n": 97
+      },
+      "scrapling-md|scrapling-md": {
+        "pct": 100.0,
+        "n": 97
+      },
+      "scrapling-md|markitdown": {
+        "pct": 0.0,
+        "n": 97
+      },
+      "scrapling-md|docling": {
+        "pct": 0.0,
+        "n": 97
+      },
+      "markitdown|markitdown": {
+        "pct": 100.0,
+        "n": 97
+      },
+      "markitdown|docling": {
+        "pct": 0.0,
+        "n": 97
+      },
+      "docling|docling": {
+        "pct": 100.0,
+        "n": 97
+      }
+    }
+  }
+}

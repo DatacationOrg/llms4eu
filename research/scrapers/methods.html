@@ -1,0 +1,242 @@
+<h2 id="methods">Methods</h2>
+<p><strong>The question.</strong> This project has exactly one content-extraction
+path &mdash; a BeautifulSoup pre-clean feeding
+<code>trafilatura.extract(&hellip;, favor_precision=True)</code>, wrapped in a
+prose&rarr;listing&rarr;document&rarr;render fallback ladder. It was never measured
+against an alternative, and there is no automatic metric for extraction quality
+that does not need gold annotations. So the metric here is human judgement over
+blind pairwise comparisons.</p>
+
+<p><strong>Fetch once, extract many.</strong> Each URL was fetched exactly once and
+snapshotted; every entrant then ran against those identical bytes. Re-fetching per
+entrant would give each a different document (A/B tests, rotating banners, edits)
+and any quality difference would be confounded by snapshot luck. It also means the
+arena needs no network at all.</p>
+
+<p><strong>Entrant = (input variant, extractor).</strong> Keeping the input explicit
+makes the raw-vs-rendered axis votable rather than a hidden constant. Two snapshot
+variants exist per page: <code>raw.html</code> (httpx GET) and
+<code>rendered.html</code> (Playwright, <code>networkidle</code>, falling back to
+<code>domcontentloaded</code> plus a grace period on ad-heavy pages that never
+settle).</p>
+
+<p><strong>Blinding.</strong> Columns are labelled A and B, left/right assignment is
+randomised per matchup, and identity is revealed only after the vote is committed.
+<code>entrant_a</code> is stored as the left column, so position bias stays
+measurable afterwards &mdash; it is reported below.</p>
+
+<p><strong>What is judged.</strong> Raw output strings in a <code>&lt;pre&gt;</code>,
+because that string is what lands in a corpus: stray <code>](#)</code> links,
+duplicated navigation and broken tables must be visible rather than styled away.
+Note an asymmetry: <code>ours</code>, <code>trafilatura*</code> and
+<code>scrapling-md</code> emit Markdown while the rest emit plain text, since that
+is all they produce. Stock trafilatura is deliberately configured to Markdown so
+the <code>ours</code> vs <code>trafilatura</code> matchup isolates our wrapper
+rather than a formatting difference.</p>
+
+<p><strong>Active sampling.</strong> Pairs are drawn with probability proportional
+to <code>p(1-p) / sqrt(1 + n_ij)</code>, where <code>p</code> is the ELO-expected
+win probability. <code>p(1-p)</code> peaks for evenly-matched pairs and decays as
+one side dominates, so first-versus-last stops being sampled once it is settled;
+the <code>n_ij</code> term spreads coverage. Draws are proportional rather than
+argmax, plus a 10% uniform-random floor so early noise cannot freeze the ordering.
+Pages are chosen round-robin across the four buckets so per-bucket ratings stay
+balanced at any stopping point.</p>
+
+<p><strong>Auto-draws.</strong> Byte-identical outputs are recorded as draws and
+never shown. This is what makes the raw-vs-rendered axis affordable: on a static
+page an extractor and its <code>@rendered</code> twin agree exactly, so the pairing
+only reaches the reviewer when rendering actually changed something. Auto-draws are
+tagged and counted separately from judged draws.</p>
+
+<p><strong>Timing.</strong> One discarded warmup call, then the median of three
+timed calls, single-threaded, all entrants in one run on one machine. The warmup
+matters: resiliparse is Cython and goose3 lazily loads stopword data, so a cold
+first call would measure import cost. <code>input_ms</code> (the cost of producing
+that entrant's input) is charged to the entrant, because needing a headless browser
+is a real cost rather than a free precondition.</p>
+
+<p><strong>Ratings.</strong> Online ELO (K=24, start 1500, draw=&frac12;) drives the
+live view. The report leads with Bradley-Terry MLE plus percentile-bootstrap 95%
+intervals, because sequential ELO is order-dependent &mdash; the same votes in a
+different sequence give different numbers, which matters at these vote counts.
+Bradley-Terry is order-independent and yields intervals, so overlapping bars can be
+read honestly as &ldquo;indistinguishable&rdquo;. Draws count as half a win to each
+side (Rao-Kupper simplification). Votes are stored append-only, so every rating is
+recomputable from scratch.</p>
+
+<h3>Defects found and fixed during the build</h3>
+<p>These were found by auditing the harness rather than trusting it, and each one
+would have corrupted a headline number. They are recorded because anyone
+reproducing this needs to know the traps.</p>
+<ul>
+<li><strong>trafilatura's deduplication cache silently gutted our own output.</strong>
+Our pipeline passes <code>deduplicate=True</code>, which drives a
+<em>process-global</em> LRU cache. Because the timing protocol calls each entrant
+several times per page, the 4th call onward returned progressively less text, and
+the runner stored the last call. On one page that meant 17,028 characters
+collapsing to 618 &mdash; a 96% loss &mdash; and it leaked across entrants, since
+<code>ours</code> and <code>ours@raw-only</code> run back to back over the same
+HTML. Every <code>ours</code> output was affected (median &minus;8%, worst
+&minus;96%). Fixed by clearing that cache before every call and storing the first
+timed result; outputs are now verified byte-stable across repeats. Note the
+consequence: <code>ours</code> is measured on a cold cache, so this comparison does
+not model the cross-page boilerplate suppression a warm cache gives in
+production.</li>
+<li><strong>goose3 was being treated unfairly by our adapter.</strong> It reported
+36 empty pages; 19 of those were an artifact. goose3's <code>post_cleanup()</code>
+keeps a hardcoded tag whitelist and deletes all other children of the article node,
+and modern Wikipedia is served as Parsoid HTML wrapping content in
+<code>&lt;section&gt;</code>. goose3 found the right container and then deleted all
+of it. Fixed with goose3's own <code>known_context_patterns</code> knob, applied as
+a retry only when the first pass is empty (applying it unconditionally regresses 16
+pages that already work). Empties 36 &rarr; 17. The remaining 17 are genuine: goose3
+is news-tuned and high-precision/low-recall, and even when rescued it recovers a
+section rather than the whole article.</li>
+<li><strong>Three rendered snapshots were anti-bot pages.</strong> The raw fetch
+path screened for Cloudflare and error interstitials; the Playwright path did not.
+Two 403s and one Cloudflare challenge were stored as valid renders, scored as
+successful ~190-character extractions, and counted as evidence that rendering
+changes output &mdash; precisely where it had failed. The renderer now applies the
+same screening and re-uses the URL the raw fetch actually succeeded on.</li>
+<li><strong>Raw fetch time measured the politeness delay.</strong> The per-domain
+throttle sleep sat inside the timed region, so pages on multi-candidate domains
+read ~3400 ms against ~150 ms for single-candidate ones. That understated the
+browser's relative cost several-fold. The throttle is now waited out before the
+timer starts.</li>
+<li><strong>Our wikiextractor adapter configured a phantom class.</strong>
+<code>WikiExtractor.py</code> puts <code>wikiextractor/extract/</code> on
+<code>sys.path</code> and does <code>from extract import Extractor</code>, importing
+<code>extract.py</code> a second time under a different module name. Our adapter
+configured <code>wikiextractor.extract.extract.Extractor</code> &mdash; a different
+class object, invisible to the tool's own logic. Its discard config therefore stayed
+a literal <em>path string</em>, so every <code>title.lower() in
+self.discardTemplates</code> test degraded into a substring match against
+<code>"config/discard_templates.txt"</code>: <code>"ca"</code> occurs inside
+<code>"dis<b>ca</b>rd"</code>, so any page using a <code>{{ca|1786}}</code> circa
+template was discarded whole. Beethoven and nl/Amsterdam extracted to zero bytes for
+that reason alone. Fixed (65,162 and 60,017 chars respectively); 14 votes cast on
+the stale output were invalidated.</li>
+<li><strong>The fetcher-divergence count was our regex, not the fetchers.</strong>
+The comparison hashed a regex tag-strip, and <code>&lt;[^&gt;]+&gt;</code> stops at
+the first <code>&gt;</code> <em>inside</em> an attribute value or comment. Wikipedia's
+JSON-in-attribute payloads leaked fragments like
+<code>of the United Nations"}},"i":0}}]}'&gt;</code> into the "visible text" on the
+raw side only, because Scrapling returns an lxml-reserialized DOM where those
+attributes are re-quoted. That reported <strong>79 of 93</strong> pages as fetcher
+disagreements when the fetchers had returned the same content. Both sides are now
+parsed with lxml, and bodies are persisted so the next suspicious number can be
+diffed instead of re-fetched.</li>
+<li><strong>Three wikitext snapshots were redirect stubs.</strong>
+<code>action=raw</code> returns the redirect itself, so wikiextractor was scored on
+40&ndash;90 byte <code>#REDIRECT</code> documents for three pages, through no fault
+of its own. Redirects are now followed (the keyword is localised, so the link is
+matched rather than the keyword).</li>
+<li><strong>Markdown writer settings were being scored as extractor quality.</strong>
+markdownify defaults to setext headings and backslash-escaping, which put 415
+underlines and 384 stray escapes into two entrants' output while trafilatura emits
+ATX and no escapes. Both are now aligned, so the arena compares extractors rather
+than Markdown writers.</li>
+<li><strong>The scrapling-md floor was bloated by our reimplementation.</strong> It
+replicated Scrapling's noise-tag stripping but skipped its hidden-element
+sanitisation, keeping content the real <code>scrapling extract --md</code> drops
+(up to +35% on one page). It now calls Scrapling's own converter.</li>
+<li><strong>Bradley-Terry blew up on sparse data.</strong> An undefeated entrant has
+an unbounded MLE, so a single 1&ndash;0 record rated 2817. A symmetric shrinkage
+prior now keeps early ratings near the mean; it yields to evidence as votes
+accumulate.</li>
+<li><strong>The closed leaderboard overlay swallowed every mouse click.</strong>
+<code>display:flex</code> outranks the user-agent stylesheet's
+<code>[hidden]{{display:none}}</code>, so voting by mouse was impossible until the
+overlay was explicitly hidden.</li>
+</ul>
+<p class="note">Verified clean by the same audits, and worth stating: no adapter
+touches the network during extraction (checked under a hard socket block, zero
+connection attempts), so timings and offline reproducibility are sound; there is no
+minimum-length threshold anywhere that could turn short-but-valid output into
+&ldquo;empty&rdquo; &mdash; every empty row is genuinely zero characters; and
+jusText's byte handling introduces no mojibake (it has the highest diacritic
+density of any entrant on non-English pages).</p>
+
+<h3>Automated judging</h3>
+<p>A second vote pool is produced by LLM judges, one per matchup, each given a
+blinded brief and no other context. It exists because Bradley-Terry intervals need
+hundreds of comparisons before the middle of the field separates, and a human has
+hours. The brief holds the page metadata, a neutral tag-strip of the same snapshot
+the entrants were given, and the two outputs labelled <code>1</code> and
+<code>2</code> in randomised order; entrant names live in a separate keys directory
+the judge is never pointed at, and are resolved only when the verdict is recorded.
+The rubric ranks content coverage first, then boilerplate removal, then
+markdown-like structure, then token economy, with citation markers and reference
+lists explicitly minor; a draw is stated to be a legitimate verdict.</p>
+<p>It also had to be calibrated against a failure mode that would have inverted the
+result. Ranking coverage first without qualification rewards the entrant that
+removes nothing: <code>html-text</code> performs no boilerplate removal at all, so
+it cannot lose on coverage and would win by default. The rubric therefore treats
+over-extraction as seriously as under-extraction, states that "kept more text" is
+not "better", and warns that closely resembling the reference rendering means
+nothing was removed.</p>
+<p>The reference rendering is deliberately <em>not</em> any entrant's output: using
+one entrant as the yardstick would hand it a perfect coverage score. It is a plain
+tag-strip, noisy on purpose, and the rubric says so &mdash; an output that reproduces
+its navigation junk scores worse, not better.</p>
+<p>The two pools are never merged; see the section above for why, and for the
+measured correlation between them.</p>
+
+<h3>Limitations</h3>
+<ul>
+<li><strong>Blinding is client-side, not server-side.</strong> The
+<code>/api/matchup</code> payload carries the entrant names, because the vote
+endpoint needs them; the UI shows only A and B and reveals identity after the vote
+commits. A reviewer who opened the browser console could therefore see which tool
+produced which column. Nothing enforces that they do not, so the blinding holds by
+convention rather than by construction.</li>
+<li><strong>Single reviewer.</strong> No inter-rater agreement can be computed, and
+one person's preferences are baked into the result. The automated pool is a
+different instrument, not a second rater.</li>
+<li><strong>Automated judges see excerpts, not whole outputs.</strong> Outputs above
+10,000 characters are shown as three windows &mdash; head, middle and tail &mdash;
+with the true character count stated. That is enough to judge structure and
+boilerplate, and enough to tell whether the article body survived, but it is weaker
+than the human's view on the coverage of very long outputs: readability's 178k-char
+output on one Wikipedia page is shown at 6% of its length. This asymmetry is a
+reason to treat the human pool as the reference rather than the tiebreaker.</li>
+<li><strong>The <code>ours</code> adapter deviates slightly.</strong> The production
+ladder calls Playwright live on fallback; here it runs its own decision logic
+against the cached <code>raw</code> snapshot and, if it declines, the cached
+<code>rendered</code> snapshot. Same branches, no network.</li>
+<li><strong>Wikiextractor-V2 is not comparable to the rest.</strong> It consumes
+MediaWiki wikitext, not HTML, so it appears only in the wiki-slice table. It is also
+AGPL-3.0 (everything else is Apache/MIT/BSD), it only imports on Python &le;3.10
+(inline regex global flags), and its <code>--generator</code> mode is broken
+upstream (<code>collect_pages</code> yields 5-tuples, its own caller unpacks 4).
+Critically, <em>template expansion &mdash; its actual differentiator &mdash; is
+unavailable here</em>, because template definitions live in a dump header and this
+drives it from single-page <code>action=raw</code> wikitext. Its timings also come
+from a separate Python 3.10 process and are indicative only.</li>
+<li><strong>Wikiextractor-V2 drops Spanish articles carrying a hatnote.</strong> Its
+shipped <code>discard_templates.txt</code> lists <code>Otros usos</code> under
+<code>es</code>, and a template in that list discards the <em>entire document</em>,
+not just the template. <code>Otros usos</code> is an ordinary "other uses" hatnote,
+not a disambiguation marker, so España, Madrid and Sagrada Familia all extract to
+zero bytes &mdash; 3 of the 4 Spanish pages in the corpus. Verified as the cause:
+those three contain the hatnote and the one survivor (Cervantes) does not. This is
+upstream's config, left unpatched on purpose &mdash; editing it would mean measuring
+our fork rather than the tool. It only became visible once the adapter bug above was
+fixed, since before that the config never loaded at all. Note also that the config is
+keyed by language and parsed against the dump's <code>&lt;base&gt;</code> URL, so a
+multi-language corpus has to reload it per language; a real single-wiki run does this
+once.</li>
+<li><strong>Corpus is a snapshot.</strong> Fetched on one date; sites change.</li>
+<li><strong>Output-format asymmetry</strong> between Markdown and plain-text
+entrants may still confer a small presentation advantage despite the raw
+<code>&lt;pre&gt;</code> default.</li>
+<li><strong><code>ours</code> sometimes emits a link list, not prose.</strong> Its
+listing branch fires on a handful of index pages, where a voter is then comparing
+output <em>format</em> against every other entrant's prose rather than extraction
+fidelity. That branch is also the only place any entrant receives the page title as
+an input.</li>
+<li><strong>Scrapy's median latency is not comparable</strong> to the serial
+clients: it runs a scheduler with concurrency and per-domain politeness, so
+per-request wall time includes queue wait.</li>
+</ul>

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from bs4 import BeautifulSoup
 import trafilatura
 
 
@@ -8,23 +7,33 @@ EXTRACTOR_NAME = "trafilatura"
 
 
 def extract_markdown(html: str, url: str | None = None) -> str:
-    cleaned_html = _remove_common_junk(html)
     markdown = trafilatura.extract(
-        cleaned_html,
+        html,
         url=url,
         output_format="markdown",
+        # Only switches that add *markdown structure* are set here. Anything that
+        # changes which content trafilatura selects is left at its default: its own
+        # four-stage cascade does that better than our overrides did. The measurements
+        # behind each choice are in research/scrapers/RESEARCH_LOG.md, "The flag
+        # audit (session 2)".
+        #
+        # Load-bearing rather than redundant: this is what captures the Wikipedia
+        # infobox, so it is passed explicitly even though 2.0.0 defaults it on.
         include_tables=True,
-        include_images=True,
-        include_links=True,
+        # Headings, bold and lists. Pure serialisation, no effect on selection.
         include_formatting=True,
-        deduplicate=True,
-        favor_precision=True,
+        # Off: 2.0.0 splits a sentence before an inline link and fuses the word after
+        # it (6,230 fused links across the 100-page corpus, zero with it off).
+        include_links=False,
+        # Not set, and deliberately: include_images lets an image replace a table
+        # cell's text, favor_precision disables two of the cascade's own rescues, and
+        # deduplicate drives a process-global LRU that guts repeat extractions.
     )
     cleaned = clean_markdown(markdown or "")
     if cleaned and not _looks_like_web_chrome(cleaned):
         return cleaned
 
-    fallback = trafilatura.baseline(cleaned_html)
+    fallback = trafilatura.baseline(html)
     fallback_text = fallback[1] if fallback else ""
     fallback_markdown = clean_markdown(fallback_text)
     if fallback_markdown and not _looks_like_web_chrome(fallback_markdown):
@@ -55,33 +64,12 @@ def markdown_looks_like_contact_footer(markdown: str) -> bool:
     return _looks_like_contact_footer(markdown)
 
 
-def _remove_common_junk(html: str) -> str:
-    soup = BeautifulSoup(html, "lxml")
-    for tag in soup(["script", "style", "noscript", "svg", "form", "button"]):
-        tag.decompose()
-
-    junk_terms = (
-        "cookie",
-        "cookies",
-        "consent",
-        "gdpr",
-        "accessibility",
-    )
-    for tag in soup.find_all(True):
-        if tag.attrs is None:
-            continue
-        values: list[str] = []
-        for attr in ("id", "class", "role", "aria-label"):
-            value = tag.get(attr)
-            if isinstance(value, list):
-                values.extend(str(item) for item in value)
-            elif value:
-                values.append(str(value))
-        haystack = " ".join(values).lower()
-        if any(term in haystack for term in junk_terms):
-            tag.decompose()
-
-    return str(soup)
+# The BeautifulSoup pre-clean that used to run here is gone. It stripped
+# script/style/svg/form/button (which trafilatura already does) and any element whose
+# id/class/role/aria-label matched cookie/consent/gdpr/accessibility -- which cost 104
+# zero-padded table cells and deleted real `## Accessibility` sections, for no change
+# in median output. Evidence in research/scrapers/RESEARCH_LOG.md, "`_remove_common_junk`
+# removed".
 
 
 def clean_markdown(markdown: str) -> str:

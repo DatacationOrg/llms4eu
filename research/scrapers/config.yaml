@@ -1,0 +1,40 @@
+# Scraper Arena configuration.
+data_dir: .local/scraper-arena
+corpus_path: research/scrapers/corpus/sites.yaml
+
+arena_host: 127.0.0.1
+arena_port: 8090
+
+fetch:
+  timeout_seconds: 30.0
+  domain_delay_seconds: 1.5
+  workers: 4
+  browser_timeout_ms: 45000
+  respect_robots: true
+
+render:
+  # Playwright viewport for the rendered-DOM pass. Wide enough that responsive sites
+  # serve their desktop layout, which is what the extractors are being judged on.
+  viewport_width: 1000
+
+timing:
+  warmup_runs: 1
+  timed_runs: 3
+  # `--timing-only` re-measures with these instead: more repeats, pinned to a
+  # single CPU, intended to run on an otherwise idle machine.
+  precise_warmup: 2
+  precise_runs: 10
+  pin_cpu: 0
+  # Gate on sampled CPU utilisation, not load average: under WSL2 the load
+  # average is inflated by I/O wait and stays high on an idle machine.
+  max_cpu_busy_percent: 25.0
+
+rating:
+  initial: 1500.0
+  k_factor: 24.0
+  scale: 400.0
+  bootstrap_rounds: 200
+
+sampling:
+  epsilon: 0.10          # fraction of matchups drawn uniformly at random
+  candidate_pairs: 24    # candidates scored per matchup before weighted draw
