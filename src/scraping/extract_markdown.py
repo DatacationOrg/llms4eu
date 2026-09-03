@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from bs4 import BeautifulSoup
 import trafilatura
 
 
@@ -8,23 +7,24 @@ EXTRACTOR_NAME = "trafilatura"
 
 
 def extract_markdown(html: str, url: str | None = None) -> str:
-    cleaned_html = _remove_common_junk(html)
+    # Only switches that add markdown *structure* are set; content selection is left
+    # to trafilatura's own cascade. include_images destroys table cells,
+    # favor_precision disables the cascade's own rescues, deduplicate drives a
+    # process-global LRU, and include_links fuses words onto inline links. Evidence:
+    # research/scrapers/RESEARCH_LOG.md, "The flag audit (session 2)".
     markdown = trafilatura.extract(
-        cleaned_html,
+        html,
         url=url,
         output_format="markdown",
         include_tables=True,
-        include_images=True,
-        include_links=True,
         include_formatting=True,
-        deduplicate=True,
-        favor_precision=True,
+        include_links=False,
     )
     cleaned = clean_markdown(markdown or "")
     if cleaned and not _looks_like_web_chrome(cleaned):
         return cleaned
 
-    fallback = trafilatura.baseline(cleaned_html)
+    fallback = trafilatura.baseline(html)
     fallback_text = fallback[1] if fallback else ""
     fallback_markdown = clean_markdown(fallback_text)
     if fallback_markdown and not _looks_like_web_chrome(fallback_markdown):
@@ -53,35 +53,6 @@ def markdown_needs_browser_render(markdown: str) -> bool:
 
 def markdown_looks_like_contact_footer(markdown: str) -> bool:
     return _looks_like_contact_footer(markdown)
-
-
-def _remove_common_junk(html: str) -> str:
-    soup = BeautifulSoup(html, "lxml")
-    for tag in soup(["script", "style", "noscript", "svg", "form", "button"]):
-        tag.decompose()
-
-    junk_terms = (
-        "cookie",
-        "cookies",
-        "consent",
-        "gdpr",
-        "accessibility",
-    )
-    for tag in soup.find_all(True):
-        if tag.attrs is None:
-            continue
-        values: list[str] = []
-        for attr in ("id", "class", "role", "aria-label"):
-            value = tag.get(attr)
-            if isinstance(value, list):
-                values.extend(str(item) for item in value)
-            elif value:
-                values.append(str(value))
-        haystack = " ".join(values).lower()
-        if any(term in haystack for term in junk_terms):
-            tag.decompose()
-
-    return str(soup)
 
 
 def clean_markdown(markdown: str) -> str:
