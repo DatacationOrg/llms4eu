@@ -7,10 +7,7 @@ EXTRACTOR_NAME = "trafilatura"
 
 
 def extract_markdown(html: str, url: str | None = None) -> str:
-    # Only switches that add markdown *structure* are set; content selection is left
-    # to trafilatura's own cascade. include_images destroys table cells,
-    # favor_precision disables the cascade's own rescues, deduplicate drives a
-    # process-global LRU, and include_links fuses words onto inline links. Evidence:
+    # Structure-only switches; selection is trafilatura's job. See
     # research/scrapers/RESEARCH_LOG.md, "The flag audit (session 2)".
     markdown = trafilatura.extract(
         html,
