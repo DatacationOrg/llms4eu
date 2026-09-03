@@ -7,8 +7,6 @@ EXTRACTOR_NAME = "trafilatura"
 
 
 def extract_markdown(html: str, url: str | None = None) -> str:
-    # Structure-only switches; selection is trafilatura's job. See
-    # research/scrapers/RESEARCH_LOG.md, "The flag audit (session 2)".
     markdown = trafilatura.extract(
         html,
         url=url,
