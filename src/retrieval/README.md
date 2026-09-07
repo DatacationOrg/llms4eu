@@ -45,6 +45,19 @@ The agentic sufficiency judge is a local Ollama model set by
 structured output via tool calls). Ollama must be running and the model pulled
 before any `*_agentic*` method works.
 
+Reasoning effort is a benchmark dimension, not a fixed setting. Every name in
+`agentic_reasoning_levels` generates a parallel method suffixed with it —
+`qwen_hybrid_agentic_high`, `qwen_hybrid_agentic_tools_high`, `dci_high`,
+`dci_k50_high` — running the same loop at that effort. The unsuffixed names keep
+the configured default (`low`), so adding a rung cannot move a published number.
+Sweep both rungs with `--methods reasoning` (agents) or `--methods reasoning-dci`.
+
+This axis exists because the 2026-09-01 comparison ran the whole family at `low`
+and its two worst results were a tool agent failing to emit valid JSON on 7% of
+steps and a DCI agent exhausting its step budget without answering — failures
+reasoning effort plausibly moves, which made "the tools do not help"
+inseparable from "the judge was thinking as little as it is allowed to".
+
 Sparse retrieval uses BM25. `sparse_k1` controls repeated-term saturation, and
 `sparse_b` controls length normalization.
 

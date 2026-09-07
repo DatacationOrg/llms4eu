@@ -11,14 +11,130 @@ reranker_max_length: 2048
 reranker_local_files_only: true
 reranker_prompt_name:
 reranker_prompt:
-agentic_judge_model: gpt-oss:20b
+# `nvidia/llama-nemotron-rerank-1b-v2` ships its scoring head as custom code
+# (`llama_bidirectional_model.py`, auto_map -> LlamaBidirectionalForSequenceClassification)
+# and CrossEncoder refuses to load it without this. The gate stays off for
+# Qwen3-Reranker, which needs no remote code, so enabling it is a deliberate
+# per-model choice rather than a blanket permission. With
+# `reranker_local_files_only: true` the executed file is the one already in the
+# shared cache; nothing is fetched at load time.
+reranker_trust_remote_code: false
+# CrossEncoder loads float32 unless told otherwise, whatever the checkpoint
+# declares. Left unset for the 0.6B default so every published number keeps the
+# exact arithmetic that produced it; the larger rungs below set it, because a
+# float32 4B reranker is 16 GB beside a 16 GB embedder on one 48 GB card.
+reranker_dtype:
+
+# Additional reranker models. Each name here generates `{provider}_rerank_{name}`
+# and `{provider}_hybrid_rerank_{name}` methods; the unnamed default above keeps
+# its own method names and scores untouched, so adding an entry cannot move a
+# published number.
+#
+# Why a second rung exists at all: the 08-14 and 08-17 chunk sweeps found the
+# reranker to be the dominant factor by a wide margin — on `base` hit@5 it moved
+# nemotron 0.744 -> 0.875, +0.131, against a 0.069 spread across every chunking
+# of that same reranked row — and the model doing that lifting is the *smallest*
+# member of its family. Scaling the stage already shown to dominate is a better
+# bet than scaling the one already shown not to.
+#
+# An entry inherits every `reranker_*` default and overrides only what it names,
+# so `max_length` and `rerank_candidate_limit` stay fixed and the rung is a pure
+# model change.
+rerankers:
+  4b:
+    model: Qwen/Qwen3-Reranker-4B
+    batch_size: 4
+    dtype: bfloat16
+
+# Which embedders host an agent. `qwen8b` is here so the local stand-in for the
+# removed Azure `embed-v-4-0` gets the same agentic treatment its predecessor had
+# in the 2026-07-27 comprehensive report, which is what makes the two mergeable.
+# Every name must also appear in src/indexing/config.yaml:providers.
+agentic_providers:
+  - qwen
+  - nemotron
+  - qwen8b
+# Which backend judges sufficiency for every agentic method (`*_agentic*`, `dci*`).
+#   azure  -- the Azure AI Foundry deployment in .env (AZURE_AI_ENDPOINT,
+#             AZURE_AI_API_KEY, AZURE_AI_MODEL = DeepSeek-V4-Pro), the judge the
+#             agentic family was first built on. No GPU, no Ollama; the
+#             `agentic_judge_model` / reasoning / structured-method settings below
+#             do not apply to it. `agentic_judge_num_predict` becomes max_tokens.
+#   ollama -- the local judge described by the settings below.
+# Switched back to azure on 2026-09-07. The gemma4:31b track is parked: it works
+# (thinking off + function_calling, 100% on 150 real prompts, ~9 s/call) but costs
+# 28 GB of a shared GPU and is ~9x slower than gpt-oss; see
+# development_assets/plans/gemma-judge-rerun-handoff.md.
+agentic_judge_provider: azure
+agentic_judge_azure_timeout_seconds: 90
+# --- Ollama judge settings (only with agentic_judge_provider: ollama) ---
+agentic_judge_model: gemma4:31b
 agentic_judge_num_ctx: 32768
-agentic_judge_num_predict: 1024
-agentic_judge_reasoning: low
-# Gemma 4 returns no tool call at all on Slovenian sufficiency prompts, and
-# answers json_schema prompts in prose; gpt-oss is reliable via tool calls.
+# Output cap, and on a thinking model the thinking counts against it. Measured on
+# 50 real prompts (probe_structured_output.py --from-eval, 2026-09-03): gemma4:31b
+# at 1024 failed 12/50, every failure done_reason=length with empty content; at
+# 4096 it failed 1/50. The cap only costs on a runaway, so it is a bound, not a
+# budget. See .local/reports/schema-reliability-real-2026-09-03-*.md.
+agentic_judge_num_predict: 4096
+# Thinking is OFF for gemma. Its `think` is a switch, not an effort level: low,
+# high and true produced byte-identical output and latency (2026-09-03). With
+# thinking on, real prompts overrun the output cap (the scratchpad hit 12k chars
+# on one question) at 36-61 s/call; with it off, function_calling gave 50/50 on
+# real ChunkSufficiency prompts at 9.5 s/call. gpt-oss takes low/medium/high here.
+agentic_judge_reasoning: false
+# Reasoning effort is a benchmark dimension, not a fixed setting. Each name here
+# generates a parallel `*_agentic*`, `*_agentic_tools*` and `dci*` method suffixed
+# with it, run at that effort; the unnamed default above stays `low`, so every
+# published number keeps the exact configuration that produced it and adding a
+# rung cannot move one.
+#
+# Why this exists: the 2026-09-01 comparison ran the whole agentic family on
+# gpt-oss:20b at `low`, and its two worst results were schema and planning
+# failures -- 44 `Invalid json output` in the tool agent, 35 in DCI, plus a DCI
+# agent that burned all 8 steps without answering on over half of questions.
+# Those are exactly the failures reasoning effort would move, so "the tools do
+# not help" could not be separated from "the judge was thinking as little as it
+# is allowed to". This axis separates them.
+agentic_reasoning_levels:
+  high: high
+# Measured, not assumed: `experiments/indexing/probe_structured_output.py` puts a
+# real prompt of each schema to a model N times and counts first-attempt success.
+# The 2026-09-01 grid, 10 samples per cell (`.local/reports/schema-reliability-2026-09-01.md`):
+#
+#                    ChunkSufficiency   ToolAction   CorpusAction
+#   gemma4:31b  fc         0%              100%         100%
+#               js       100%              100%           0%
+#   gpt-oss:20b fc       100%                0%         100%
+#               js       100%              100%           0%
+#
+# So the method is a property of (model, schema), not of either alone, and a wrong
+# pairing does not error -- it returns no structured output, the retriever falls
+# back, and the cell silently scores something other than the method under test.
+# Re-run the probe before changing the judge model; the older note here claimed
+# Gemma answers json_schema prompts in prose, which the grid disproves (100%).
+#
+# That grid was thinking ON. With thinking OFF the first column flips for gemma:
+# function_calling 100% (50/50 real prompts, 2026-09-03), json_schema 0% (it
+# answers in prose: `sufficient=false\nreason: ...`). So for gemma the working
+# pairing is thinking off + function_calling on every schema; for gpt-oss it is
+# thinking low + function_calling here and json_schema for ToolAction. The
+# `_high` methods from `agentic_reasoning_levels` turn thinking back on and are
+# therefore unusable on gemma; the circuit breaker below will stop such a run.
 agentic_judge_structured_method: function_calling
 agentic_judge_retries: 3
+# Retries sample at this temperature; the first attempt stays at 0. At 0 an
+# identical prompt reproduces an identical failure, so retries were wasted calls.
+agentic_judge_retry_temperature: 0.3
+# Sent with every judge request. Ollama otherwise unloads an idle model after ~5
+# minutes; the gap between cells is longer than that, and on a shared GPU the
+# reload can fail, after which the judge fails silently for the rest of the cell.
+agentic_judge_keep_alive: 24h
+# Circuit breaker. After `breaker_min_calls` judge calls, a failure rate (after
+# retries) above this raises `JudgeCircuitOpen` and stops the run, because a cell
+# whose judge keeps failing is scoring fallback, not the method in its row. The
+# 2026-09-01 gemma run failed 136 times over 9.5 hours before anyone noticed.
+agentic_judge_max_failure_rate: 0.2
+agentic_judge_breaker_min_calls: 20
 agentic_max_attempts: 3
 agentic_min_sufficient_chunks: 2
 agentic_initial_limit: 10
@@ -29,9 +145,12 @@ agentic_tools_max_attempts: 4
 agentic_tools_max_tool_calls: 3
 agentic_tools_section_limit: 40
 agentic_tools_search_limit: 5
-# The richer ToolAction schema is unreliable via tool calls (1/3) but solid via
-# json_schema (9/10); the plain sufficiency judge is the other way around.
-agentic_tools_structured_method: json_schema
+# ToolAction: gemma with thinking on handled either method (100%/100%, 2026-09-01
+# synthetic grid), but with thinking off json_schema comes back as prose and only
+# function_calling parses (2026-09-03, real prompts). gpt-oss is json_schema-only
+# here. Declared per method rather than inherited, because the pairing that is
+# safe today is only known to be safe by measurement.
+agentic_tools_structured_method: function_calling
 # Direct Corpus Interaction (RISE-style). dci_shortlist_k is the BM25 chunk
 # shortlist; dci_max_documents is K, the bounded working set of pages. Sweep K
 # with the dci_k<N> methods: larger K is not monotonically better.
@@ -39,10 +158,21 @@ dci_shortlist_k: 1000
 dci_max_documents: 1000
 dci_k_sweep: [10, 50, 200]
 dci_max_steps: 8
+# A cited page id resolves to at most this many of that page's chunks. The agent
+# names a page far more often than it names a chunk (the workspace files are named
+# after their page, so the listing is full of page ids that read like chunk ids
+# minus the `:index`), and before this existed every one of those was dropped as a
+# fabrication and the cell silently scored its BM25 shortlist. Measured over 25
+# questions: 13 of 27 citations were page ids, 15 of 25 questions resolved to
+# nothing, and hit@10 read 0.520 against 0.900 on the questions that did resolve.
+dci_page_expansion_limit: 3
+# How many times an answer that resolves to nothing is handed back before the
+# emptiness is accepted. Costs a step each time, out of dci_max_steps.
+dci_max_answer_retries: 2
 dci_search_limit: 30
 dci_read_limit: 120
-# Measured per schema, not assumed: CorpusAction is 3/3 via tool calls and 0/3
-# via json_schema at every num_predict, K and reasoning level tried. ToolAction
-# is the other way around. Re-measure before changing either.
+# CorpusAction is function_calling-only, and for both models: json_schema is 0/10
+# on gemma and 0/10 on gpt-oss, failing with OutputParserException every time.
+# This is the one pairing the judge swap does not touch.
 dci_structured_method: function_calling
 dci_num_predict: 4096

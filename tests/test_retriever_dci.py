@@ -26,12 +26,14 @@ def corpus(monkeypatch, tmp_path):
         );
         create table page_chunks (
           id text primary key, page_id text, chunk_index integer,
-          heading_path text, text text
+          heading_path text, text text,
+          variant text not null default 'base'
         );
         insert into page_metadata values
           ('p1', 'castle', 'https://x.test/castle', 'Rajhenburg Castle'),
           ('p2', 'town', 'https://x.test/town', 'Brestanica');
-        insert into page_chunks values
+        insert into page_chunks (id, page_id, chunk_index, heading_path, text)
+        values
           ('p1-0', 'p1', 0, 'Intro', 'The castle stands above Brestanica.'),
           ('p1-1', 'p1', 1, 'Hours', 'Open Tuesday to Sunday.'),
           ('p1-2', 'p1', 2, 'Hours', 'Closed on Mondays in winter.'),
@@ -112,7 +114,7 @@ def test_workspace_drops_pages_that_disappear(corpus, monkeypatch, tmp_path):
     monkeypatch.setattr(
         workspace_module,
         "_pages",
-        lambda: iter([{"page_id": "p1", "chunks": rows}]),
+        lambda *_: iter([{"page_id": "p1", "chunks": rows}]),
     )
     rebuilt = build_workspace(corpus.root)
 
@@ -235,3 +237,150 @@ def test_agent_failure_falls_back_to_the_shortlist(corpus, capsys):
 
 def test_dci_actions_cover_the_documented_set():
     assert set(dci.DCI_ACTIONS) == {"search", "read", "toc", "answer"}
+
+
+def test_cited_page_id_resolves_to_that_pages_chunks(corpus):
+    """The agent naming a page is a coarse answer, not a fabrication.
+
+    The workspace names each file after its page, so the listing the agent reads
+    is full of page ids that look like a chunk id minus the `:index`. Dropping
+    them scored the BM25 shortlist under this method's name.
+    """
+    resolved, report = dci._resolve_citations(
+        cited=["p1"],
+        workspace=corpus,
+        fallback=_chunks("p1-1"),
+        page_expansion_limit=3,
+    )
+
+    # p1-1 is in the shortlist so it leads; the rest follow in document order.
+    assert resolved == ["p1-1", "p1-0", "p1-2"]
+    assert report["expanded"] == {"p1": ["p1-1", "p1-0", "p1-2"]}
+    assert report["dropped"] == []
+
+
+def test_page_expansion_is_capped(corpus):
+    resolved, report = dci._resolve_citations(
+        cited=["p1"],
+        workspace=corpus,
+        fallback=[],
+        page_expansion_limit=2,
+    )
+
+    assert resolved == ["p1-0", "p1-1"]
+    assert report["expanded"] == {"p1": ["p1-0", "p1-1"]}
+
+
+def test_exact_chunk_ids_are_untouched_and_fabrications_still_dropped(corpus):
+    resolved, report = dci._resolve_citations(
+        cited=["p1-2", "does-not-exist"],
+        workspace=corpus,
+        fallback=[],
+        page_expansion_limit=3,
+    )
+
+    assert resolved == ["p1-2"]
+    assert report["exact"] == ["p1-2"]
+    assert report["dropped"] == ["does-not-exist"]
+
+
+def test_empty_answer_is_sent_back_before_it_is_accepted(corpus):
+    shortlist = StubShortlist(_chunks("p1-0"))
+    agent = ScriptedAgent(
+        [
+            CorpusAction(action="answer", chunk_ids=[]),
+            CorpusAction(action="answer", chunk_ids=["p1-2"]),
+        ]
+    )
+    retriever = DirectCorpusRetriever(
+        name="dci",
+        shortlist_retriever=shortlist,
+        judge=agent,
+        workspace=corpus,
+        max_steps=4,
+    )
+
+    ranked = retriever.retrieve("query", 10)
+
+    assert "carried no chunk ids at all" in agent.prompts[1]
+    assert ranked[0].id == "p1-2"
+
+
+def test_unresolvable_answer_is_sent_back_naming_the_bad_id(corpus):
+    shortlist = StubShortlist(_chunks("p1-0"))
+    agent = ScriptedAgent(
+        [
+            CorpusAction(action="answer", chunk_ids=["totally-made-up"]),
+            CorpusAction(action="answer", chunk_ids=["p1-1"]),
+        ]
+    )
+    retriever = DirectCorpusRetriever(
+        name="dci",
+        shortlist_retriever=shortlist,
+        judge=agent,
+        workspace=corpus,
+        max_steps=4,
+    )
+
+    ranked = retriever.retrieve("query", 10)
+
+    assert "totally-made-up" in agent.prompts[1]
+    assert ranked[0].id == "p1-1"
+
+
+def test_answer_retries_are_bounded(corpus):
+    shortlist = StubShortlist(_chunks("p1-0", "p2-0"))
+    empty = CorpusAction(action="answer", chunk_ids=[])
+    agent = ScriptedAgent([empty, empty, empty, empty])
+    retriever = DirectCorpusRetriever(
+        name="dci",
+        shortlist_retriever=shortlist,
+        judge=agent,
+        workspace=corpus,
+        max_steps=8,
+        max_answer_retries=2,
+    )
+
+    ranked = retriever.retrieve("query", 10)
+
+    # Two retries, then the emptiness is accepted: three answer steps, not eight.
+    assert len(agent.prompts) == 3
+    assert [chunk.id for chunk in ranked] == ["p1-0", "p2-0"]
+
+
+def test_resolution_is_recorded_on_the_action_log(corpus):
+    shortlist = StubShortlist(_chunks("p1-1"))
+    agent = ScriptedAgent([CorpusAction(action="answer", chunk_ids=["p1", "nope"])])
+    retriever = DirectCorpusRetriever(
+        name="dci",
+        shortlist_retriever=shortlist,
+        judge=agent,
+        workspace=corpus,
+        max_steps=1,
+    )
+
+    retriever.retrieve("query", 10)
+
+    report = retriever.batch_stats.action_log[-1]["citation_resolution"]
+    assert report["dropped"] == ["nope"]
+    assert report["expanded"]["p1"][0] == "p1-1"
+
+
+def test_search_signature_ignores_the_unused_path_field():
+    """`_run` ignores `path` for a search, so it must not create a new identity."""
+    bare = CorpusAction(action="search", pattern="Slovenia")
+    with_path = CorpusAction(action="search", pattern="Slovenia", path="wikipedia/x.md")
+    blank_path = CorpusAction(action="search", pattern="Slovenia", path="")
+
+    assert (
+        dci._signature(bare) == dci._signature(with_path) == dci._signature(blank_path)
+    )
+
+
+def test_read_signature_still_separates_line_ranges():
+    first = CorpusAction(action="read", path="castle/p1.md", start_line=1, end_line=20)
+    second = CorpusAction(
+        action="read", path="castle/p1.md", start_line=21, end_line=40
+    )
+
+    assert dci._signature(first) != dci._signature(second)

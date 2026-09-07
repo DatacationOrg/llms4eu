@@ -96,4 +96,10 @@ tools and shared infrastructure are available.
 
 - [docs/architecture-decisions.md](docs/architecture-decisions.md): durable decisions and why they matter.
 - [experiments/indexing/README.md](experiments/indexing/README.md): retrieval experiments and evaluation protocol.
-- [docs/retrieval-results-agentic.md](docs/retrieval-results-agentic.md): current agentic retrieval report.
+- [docs/agentic-findings.md](docs/agentic-findings.md): what agentic retrieval was tried and what it measured.
+- [docs/chunk-size-sweeps/](docs/chunk-size-sweeps/): chunk-variant sweeps; [the merged table](docs/chunk-size-sweeps/chunk-size-sweep-merged-2026-08-18.md) is the current head.
+
+Result reports are regenerable and mostly untracked, so a link to one may point at
+a file you have to produce. Anything dated before 2026-08-11 was measured at the
+old 512-token sequence cap, where 22% of the corpus never reached the embedder;
+see `docs/architecture-decisions.md` before comparing it with a new run.

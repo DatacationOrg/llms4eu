@@ -26,6 +26,7 @@ from functools import lru_cache
 from pathlib import Path
 
 from src.db.pages import connect_pages as connect
+from src.preprocess.chunks import BASE_CHUNK_VARIANT
 from src.shared.env import ROOT
 
 CHUNK_MARKER = "<!-- chunk:"
@@ -112,9 +113,26 @@ class CorpusWorkspace:
         return self.by_chunk_id.get(chunk_id)
 
 
-def build_workspace(root: Path | None = None, *, rebuild: bool = False):
+def variant_workspace_root(variant: str = BASE_CHUNK_VARIANT) -> Path:
+    """Workspace directory for one chunk variant.
+
+    The base variant keeps the historical path so existing workspaces, and the
+    reports built from them, stay valid.
+    """
+    root = ROOT / DEFAULT_WORKSPACE
+    if variant != BASE_CHUNK_VARIANT:
+        root = root.with_name(f"{root.name}_{variant}")
+    return root
+
+
+def build_workspace(
+    root: Path | None = None,
+    *,
+    rebuild: bool = False,
+    variant: str = BASE_CHUNK_VARIANT,
+):
     """Write the corpus to disk, rewriting only what changed."""
-    root = (root or ROOT / DEFAULT_WORKSPACE).resolve()
+    root = (root or variant_workspace_root(variant)).resolve()
     index_path = root / "index.json"
     stored: dict[str, dict] = {}
     if index_path.exists() and not rebuild:
@@ -124,7 +142,7 @@ def build_workspace(root: Path | None = None, *, rebuild: bool = False):
 
     documents: list[PageDocument] = []
     written = 0
-    for page in _pages():
+    for page in _pages(variant):
         path = _page_path(page)
         previous = stored.get(path)
         content_hash = _page_hash(page["chunks"])
@@ -155,12 +173,19 @@ def build_workspace(root: Path | None = None, *, rebuild: bool = False):
 
 
 @lru_cache(maxsize=4)
-def load_workspace(root: str | None = None) -> CorpusWorkspace:
-    """Process-wide cached workspace; a benchmark loads it once, not per query."""
-    return build_workspace(Path(root) if root else None)
+def load_workspace(
+    root: str | None = None,
+    variant: str = BASE_CHUNK_VARIANT,
+) -> CorpusWorkspace:
+    """Process-wide cached workspace; a benchmark loads it once, not per query.
+
+    The variant is part of the cache key: keyed on `root` alone, a second
+    variant would be served the first one's corpus from cache.
+    """
+    return build_workspace(Path(root) if root else None, variant=variant)
 
 
-def _pages() -> Iterator[dict]:
+def _pages(variant: str = BASE_CHUNK_VARIANT) -> Iterator[dict]:
     """Stream pages in page order so the corpus never lands in memory at once."""
     with connect() as conn:
         cursor = conn.execute(
@@ -169,8 +194,10 @@ def _pages() -> Iterator[dict]:
                    coalesce(m.title, '') as title, m.source, m.url
             from page_chunks c
             join page_metadata m on m.id = c.page_id
+            where c.variant = ?
             order by c.page_id, c.chunk_index
-            """
+            """,
+            (variant,),
         )
         current: list[dict] = []
         for row in cursor:

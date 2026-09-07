@@ -37,6 +37,26 @@ def test_chunk_markdown_splits_long_paragraph():
     assert all(len(chunk.text) <= 500 for chunk in chunks)
 
 
+def test_chunk_markdown_hard_split_can_overshoot_by_one_without_overlap():
+    text = "x" * 21
+
+    chunks = chunk_markdown(
+        f"# Title\n\n{text}", target_chars=10, max_chars=10, min_chars=1
+    )
+
+    assert [chunk.text for chunk in chunks] == ["x" * 11, "x" * 10]
+    assert "".join(chunk.text for chunk in chunks) == text
+
+
+def test_chunk_markdown_drops_short_fragments_only_for_multi_chunk_pages():
+    markdown = "# One\n\nLong enough text.\n\n# Two\n\nTiny"
+
+    chunks = chunk_markdown(markdown, target_chars=20, max_chars=30, min_chars=10)
+
+    assert [chunk.text for chunk in chunks] == ["Long enough text."]
+    assert chunk_markdown("# One\n\nTiny", min_chars=10)[0].text == "Tiny"
+
+
 def test_embedding_text_uses_chunk_context():
     text = TitleHeadingChunkText().text_for_embedding(
         PageChunk(
@@ -126,10 +146,13 @@ def _write_existing_labeled_chunk_fixture(path):
               id text primary key,
               page_id text not null references page_metadata(id) on delete cascade,
               chunk_index integer not null,
+              variant text not null default 'base',
               heading_path text,
               text text not null,
               char_count integer not null,
-              unique(page_id, chunk_index)
+              start_char integer,
+              end_char integer,
+              unique(page_id, variant, chunk_index)
             );
             create table eval_questions (
               id text primary key,

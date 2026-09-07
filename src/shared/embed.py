@@ -11,10 +11,16 @@ def load_embedder(
     local_files_only: bool = True,
     dtype: str | None = None,
     attn_implementation: str | None = None,
+    revision: str | None = None,
 ) -> SentenceTransformer:
     """Load a SentenceTransformers model from the local cache by default.
 
     Use local_files_only=False only for explicit model download/cache warmup.
+
+    `revision` pins a specific cached snapshot. A cache can hold several
+    revisions of one model where only some carry weights, and `refs/main` may
+    point at a metadata-only one; loading then fails with "does not appear to
+    have a file named model.safetensors" despite the weights being on disk.
     """
     model_kwargs = {}
     if dtype is not None:
@@ -25,6 +31,7 @@ def load_embedder(
         model_name,
         local_files_only=local_files_only,
         model_kwargs=model_kwargs,
+        revision=revision,
     )
 
 

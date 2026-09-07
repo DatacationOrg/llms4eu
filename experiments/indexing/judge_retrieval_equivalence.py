@@ -19,12 +19,13 @@ from src.okf.evidence import (
     load_bundle_page_map,
     project_pages_to_concepts,
 )
-from src.shared.env import ROOT, load_local_env
+from src.shared.env import ROOT, load_local_env, load_yaml
 from src.shared.llm import LocalOllamaStructuredLlm
 
+EXPERIMENT_CONFIG = load_yaml(Path(__file__).with_name("config.yaml"))
 DEFAULT_CHECKPOINT = Path("docs/retrieval-results-chunks-okf.md.checkpoint.json")
 DEFAULT_OUTPUT = Path("docs/retrieval-equivalence-judge.md")
-DEFAULT_LOCAL_MODEL = "gpt-oss:20b"
+DEFAULT_LOCAL_MODEL = EXPERIMENT_CONFIG.get("equivalence_judge_model", "gpt-oss:20b")
 
 
 @dataclass(frozen=True)

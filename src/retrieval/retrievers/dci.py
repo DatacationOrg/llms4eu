@@ -24,6 +24,7 @@ from pydantic import BaseModel, Field
 
 from src.retrieval.base import RankedChunk, Retriever, retrieve_batch_default
 from src.retrieval.retrievers.agentic import AgenticBatchStats
+from src.preprocess.chunks import BASE_CHUNK_VARIANT
 from src.retrieval.workspace import CorpusWorkspace, PageDocument, load_workspace
 from src.shared.llm import StructuredLlm
 
@@ -64,7 +65,17 @@ class DirectCorpusRetriever:
     search_limit: int = 30
     read_limit: int = 120
     judge_retries: int = 3
+    # A cited page id is expanded to at most this many of that page's chunks.
+    # The agent naming a page is real evidence -- it read something there -- but
+    # a page can hold hundreds of chunks and promoting all of them would push the
+    # shortlist out of the ranking entirely and score as a flood, not a find.
+    page_expansion_limit: int = 3
+    # How many times an `answer` carrying nothing usable is sent back before its
+    # emptiness is accepted. Bounded because a model that answers empty twice is
+    # not going to be talked round on the third ask.
+    max_answer_retries: int = 2
     workspace: CorpusWorkspace | None = None
+    variant: str = BASE_CHUNK_VARIANT
     batch_stats: AgenticBatchStats = field(
         default_factory=AgenticBatchStats,
         init=False,
@@ -73,7 +84,7 @@ class DirectCorpusRetriever:
     )
 
     def retrieve(self, query: str, limit: int) -> list[RankedChunk]:
-        workspace = self.workspace or load_workspace()
+        workspace = self.workspace or load_workspace(variant=self.variant)
         fallback = self.shortlist_retriever.retrieve(query, self.shortlist_k)
         documents = _shortlist_documents(workspace, fallback, self.max_documents)
         if not documents:
@@ -84,6 +95,7 @@ class DirectCorpusRetriever:
         observations: list[str] = []
         attempted: set[tuple] = set()
         cited: list[str] = []
+        answer_retries = 0
         steps = 0
 
         for _ in range(max(1, self.max_steps)):
@@ -94,7 +106,19 @@ class DirectCorpusRetriever:
             self._record(query, steps, action, judge_ms)
 
             if action.action == "answer":
-                cited = [chunk_id for chunk_id in action.chunk_ids if chunk_id]
+                raw = [chunk_id for chunk_id in action.chunk_ids if chunk_id]
+                cited, report = _resolve_citations(
+                    raw, workspace, fallback, self.page_expansion_limit
+                )
+                self._record_resolution(report)
+                # An answer that resolves to nothing is the failure this guards:
+                # `_ranking` would drop every id and the run would silently score
+                # the BM25 shortlist while wearing this method's name. Say what
+                # was wrong and spend a step asking again instead.
+                if not cited and answer_retries < self.max_answer_retries:
+                    answer_retries += 1
+                    observations.append(_answer_rejection(report))
+                    continue
                 break
 
             signature = _signature(action)
@@ -204,14 +228,132 @@ class DirectCorpusRetriever:
             }
         )
 
+    def _record_resolution(self, report: dict) -> None:
+        """Attach citation resolution to the answer step, and say so out loud.
+
+        Silence is what made this bug survive a smoke test: `_ranking` dropped
+        every unusable id without a word, so a run that scored BM25 looked
+        exactly like a run where the agent had chosen BM25's chunks.
+        """
+        if self.batch_stats.action_log:
+            self.batch_stats.action_log[-1]["citation_resolution"] = report
+        if report["dropped"]:
+            print(
+                f"dci dropped {len(report['dropped'])} unresolvable citation(s): "
+                f"{', '.join(report['dropped'][:5])}",
+                flush=True,
+            )
+        if report["expanded"]:
+            print(
+                f"dci expanded {len(report['expanded'])} cited page id(s) to "
+                f"{sum(len(v) for v in report['expanded'].values())} chunk(s)",
+                flush=True,
+            )
+
 
 def _signature(action: CorpusAction) -> tuple:
+    """Identity of a step, over only the fields that step actually uses.
+
+    Including every field made the guard useless: `_run` ignores `path` for a
+    search, so a model that emitted a stray path alongside an unchanged pattern
+    produced a fresh signature each time and re-ran the identical ripgrep. One
+    observed question spent three of its eight steps searching "Slovenia".
+    """
+    if action.action == "search":
+        return ("search", (action.pattern or "").strip().casefold())
+    if action.action == "toc":
+        return ("toc", (action.path or "").strip())
+    if action.action == "read":
+        return (
+            "read",
+            (action.path or "").strip(),
+            action.start_line,
+            action.end_line,
+        )
+    return (action.action,)
+
+
+def _resolve_citations(
+    cited: list[str],
+    workspace: CorpusWorkspace,
+    fallback: list[RankedChunk],
+    page_expansion_limit: int,
+) -> tuple[list[str], dict]:
+    """Turn what the agent named into chunk ids, and report what could not be.
+
+    The agent is asked for chunk ids and frequently returns page ids instead:
+    the workspace names each file after its page, so the listing it reads is full
+    of bare page ids that look exactly like a chunk id minus the `:index`. The
+    old code passed those to `_ranking`, which dropped them as fabrications and
+    fell back to BM25 -- measured over 25 questions, 13 of 27 citations were page
+    ids and 15 questions ended with nothing usable, so the method scored BM25
+    under its own name.
+
+    A page id is not a fabrication, it is a coarser answer, so it resolves to
+    that page's chunks: the ones the shortlist already ranked first, in shortlist
+    order, then document order for any the shortlist never returned. Anything
+    that is neither a chunk nor a page stays dropped -- that is a real
+    fabrication and must not enter the ranking.
+    """
+    exact: list[str] = []
+    expanded: dict[str, list[str]] = {}
+    dropped: list[str] = []
+    resolved: list[str] = []
+    seen: set[str] = set()
+
+    shortlist_by_page: dict[str, list[str]] = {}
+    for chunk in fallback:
+        document = workspace.document_for_chunk(chunk.id)
+        if document is not None:
+            shortlist_by_page.setdefault(document.page_id, []).append(chunk.id)
+
+    for chunk_id in cited:
+        if workspace.document_for_chunk(chunk_id) is not None:
+            exact.append(chunk_id)
+            if chunk_id not in seen:
+                resolved.append(chunk_id)
+                seen.add(chunk_id)
+            continue
+
+        document = workspace.by_page_id.get(chunk_id)
+        if document is None:
+            dropped.append(chunk_id)
+            continue
+
+        ranked = list(shortlist_by_page.get(chunk_id, []))
+        ranked_set = set(ranked)
+        ranked.extend(
+            span.chunk_id for span in document.spans if span.chunk_id not in ranked_set
+        )
+        promoted = ranked[: max(0, page_expansion_limit)]
+        expanded[chunk_id] = promoted
+        for promoted_id in promoted:
+            if promoted_id not in seen:
+                resolved.append(promoted_id)
+                seen.add(promoted_id)
+
+    return resolved, {
+        "cited": list(cited),
+        "exact": exact,
+        "expanded": expanded,
+        "dropped": dropped,
+    }
+
+
+def _answer_rejection(report: dict) -> str:
+    """What to tell an agent whose answer resolved to no scoreable chunk."""
+    if report["dropped"]:
+        names = ", ".join(report["dropped"][:5])
+        return (
+            f"Your answer named {names}, which match no chunk and no file in the "
+            "working set. A chunk id is the exact string on a "
+            "'<!-- chunk: <id> | ... -->' marker line. Search or read until you "
+            "see a marker line, then answer with the id written on it."
+        )
     return (
-        action.action,
-        (action.pattern or "").strip().casefold(),
-        (action.path or "").strip(),
-        action.start_line,
-        action.end_line,
+        "Your answer carried no chunk ids at all, so nothing can be returned. "
+        "Answer again with the ids from the marker lines of the most relevant "
+        "text you have seen, best first, even if you are not certain."
     )
 
 
@@ -361,6 +503,12 @@ def _corpus_prompt(
         "Every chunk of every file starts with a marker line "
         "'<!-- chunk: <id> | <heading> -->'. The id on that marker is what you "
         "must return.\n\n"
+        "A file name is NOT a chunk id. Files below are named after their page, "
+        "so 'wikipedia/abc123.md' is a page and 'abc123' on its own identifies "
+        "nothing you can return. The chunk id is longer than the file's name: it "
+        "is written in full on the marker line, and it ends with a colon and a "
+        "number, like 'abc123:7'. Copy it from the marker, do not build it from "
+        "a file name.\n\n"
         "Actions:\n"
         "- search (pattern): case-insensitive regular expression over all files "
         "below. Prefer a distinctive word, name or number from the query. Search "

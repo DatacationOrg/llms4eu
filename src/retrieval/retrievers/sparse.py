@@ -12,6 +12,7 @@ from src.indexing.chunk_text import (
     PageChunk,
     chunk_text_representation,
 )
+from src.preprocess.chunks import BASE_CHUNK_VARIANT
 from src.retrieval.base import RankedChunk, retrieve_batch_default
 
 TOKEN_RE = re.compile(r"[^\W_]+", re.UNICODE)
@@ -23,9 +24,10 @@ class SparseRetriever:
     k1: float = 1.5
     b: float = 0.75
     chunk_version: str = LEGACY_CHUNK_VERSION
+    variant: str = BASE_CHUNK_VARIANT
 
     def retrieve(self, query: str, limit: int) -> list[RankedChunk]:
-        corpus = _corpus(self.chunk_version)
+        corpus = _corpus(self.chunk_version, self.variant)
         query_terms = _tokens(query)
         scores = []
         for chunk in corpus:
@@ -71,18 +73,26 @@ class Corpus:
 
 
 @cache
-def _corpus(chunk_version: str = LEGACY_CHUNK_VERSION) -> Corpus:
+def _corpus(
+    chunk_version: str = LEGACY_CHUNK_VERSION,
+    variant: str = BASE_CHUNK_VARIANT,
+) -> Corpus:
+    # The cache key must carry the variant as well as the version: keyed on the
+    # version alone, a second variant silently reuses the first one's corpus.
     representation = chunk_text_representation(chunk_version)
     with connect() as conn:
         rows = conn.execute(
             """
             select c.id, c.page_id, c.chunk_index, c.heading_path, c.text,
-                   m.title, m.source, s.language, m.page_kind
+                   m.title, m.source, m.page_kind,
+                   coalesce(m.language, s.language) as language
             from page_chunks c
             join page_metadata m on m.id = c.page_id
             left join page_sources s on s.source = m.source
+            where c.variant = ?
             order by c.id
-            """
+            """,
+            (variant,),
         ).fetchall()
 
     chunks = []

@@ -55,12 +55,29 @@ def build_agentic_diagnostics(
     return {"cutoff": cutoff, "summaries": summaries, "details": details}
 
 
+# Reasoning rungs are an agent-only axis: there is no `*_rerank_high`, because
+# the reranker runs no LLM. A rung suffix therefore has to come off before the
+# baseline name is derived, or every rung would pair with a method that does not
+# exist and the diagnostics would report no pairs at all rather than an error.
+REASONING_SUFFIXES = ("_high", "_medium", "_low")
+
+
+def strip_reasoning_suffix(method_name: str) -> tuple[str, str | None]:
+    """Split a method name into its base name and its reasoning rung, if any."""
+    for suffix in REASONING_SUFFIXES:
+        if suffix in method_name:
+            head, _, tail = method_name.partition(suffix)
+            return head + tail, suffix.lstrip("_")
+    return method_name, None
+
+
 def baseline_for_agent(method_name: str) -> str | None:
     if "_agentic" not in method_name:
         return None
+    name, _ = strip_reasoning_suffix(method_name)
     # The tool-using agent pairs with the same reranked baseline as the plain
     # agent, so `_tools` must come off before the `_agentic` swap.
-    base = method_name.replace("_agentic_tools", "_agentic", 1)
+    base = name.replace("_agentic_tools", "_agentic", 1)
     return base.replace("_agentic", "_rerank", 1)
 
 
