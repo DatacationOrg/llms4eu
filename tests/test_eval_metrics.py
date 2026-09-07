@@ -195,10 +195,12 @@ def test_bold_best_table_highlights_column_winners():
         [["vector", 0.5], ["rerank", 0.75]],
     )
 
-    assert "| vector | 0.500     |" in table
+    # Columns are sized by the visible text: the bold markers do not widen a
+    # column, so every line has the same length once they are stripped.
+    assert "| vector | 0.500 |" in table
     assert "| rerank | **0.750** |" in table
-    assert len({line.index("|") for line in table.splitlines()}) == 1
-    assert len({line.rindex("|") for line in table.splitlines()}) == 1
+    assert len({len(line.replace("**", "")) for line in table.splitlines()}) == 1
+    assert len({line.replace("**", "").rindex("|") for line in table.splitlines()}) == 1
 
 
 def test_eval_default_methods_are_narrow():
@@ -285,14 +287,22 @@ def test_judge_adjusted_score_is_added_to_overall_table():
 
 # The same corpus under two cuttings: 20 chunks of 500 characters against 5 of
 # 2,000. Same 10,000-character store, same pages, different granularity.
-SMALL_STORE = {f"s{index}": ("page-1", index * 500, (index + 1) * 500) for index in range(20)}
-LARGE_STORE = {f"l{index}": ("page-1", index * 2000, (index + 1) * 2000) for index in range(5)}
+SMALL_STORE = {
+    f"s{index}": ("page-1", index * 500, (index + 1) * 500) for index in range(20)
+}
+LARGE_STORE = {
+    f"l{index}": ("page-1", index * 2000, (index + 1) * 2000) for index in range(5)
+}
 
 
 def test_store_share_charges_the_large_cut_for_the_text_it_returns():
     """Identical k, identical answer found, four times the index read."""
-    small = score_store_share(SMALL_STORE, {"q1": list(SMALL_STORE)[:4]}, 10_000, ks=(4,))
-    large = score_store_share(LARGE_STORE, {"q1": list(LARGE_STORE)[:4]}, 10_000, ks=(4,))
+    small = score_store_share(
+        SMALL_STORE, {"q1": list(SMALL_STORE)[:4]}, 10_000, ks=(4,)
+    )
+    large = score_store_share(
+        LARGE_STORE, {"q1": list(LARGE_STORE)[:4]}, 10_000, ks=(4,)
+    )
 
     assert small["store_share@4"] == 20.0, "4 x 500 of a 10,000-char store"
     assert large["store_share@4"] == 80.0, "4 x 2,000 of the same store"
@@ -332,8 +342,12 @@ def test_efficiency_ranks_the_cheaper_cut_ahead_at_equal_recall():
     them — and `char_recall` is the metric the report ranks on. One of them read
     four times the index to do it.
     """
-    small = score_retrieval_efficiency({"char_recall@4": 1.0, "store_share@4": 20.0}, ks=(4,))
-    large = score_retrieval_efficiency({"char_recall@4": 1.0, "store_share@4": 80.0}, ks=(4,))
+    small = score_retrieval_efficiency(
+        {"char_recall@4": 1.0, "store_share@4": 20.0}, ks=(4,)
+    )
+    large = score_retrieval_efficiency(
+        {"char_recall@4": 1.0, "store_share@4": 80.0}, ks=(4,)
+    )
 
     assert small["recall_per_share@4"] == 4 * large["recall_per_share@4"]
 
@@ -343,9 +357,12 @@ def test_efficiency_is_omitted_rather_than_faked_without_span_metrics():
     assert score_retrieval_efficiency({"store_share@10": 2.0}, ks=(10,)) == {}
     assert score_retrieval_efficiency({"char_recall@10": 0.9}, ks=(10,)) == {}
     # A cut that returned nothing has no ratio either, rather than an infinite one.
-    assert score_retrieval_efficiency(
-        {"char_recall@10": 0.0, "store_share@10": 0.0}, ks=(10,)
-    ) == {}
+    assert (
+        score_retrieval_efficiency(
+            {"char_recall@10": 0.0, "store_share@10": 0.0}, ks=(10,)
+        )
+        == {}
+    )
 
 
 def test_a_cost_column_bolds_its_smallest_cell():
