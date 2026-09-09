@@ -16,7 +16,7 @@ characters or — via `from_huggingface_tokenizer` — in the embedding provider
 own tokens. Three things are project-specific and live here rather than in the
 library: NFC normalization of the page before splitting, resolving each chunk's
 character span (`add_start_index` returns `-1` whenever a piece is not found
-verbatim), and reserving the v1/v2 representation prefix from the size budget so
+verbatim), and reserving the v1 representation prefix from the size budget so
 the *indexed document*, not merely the chunk text, fits the sequence limit.
 
 Token sizing is what makes a size budget mean the same thing in every language.
@@ -57,7 +57,7 @@ exactly.
 ## Languages
 
 `languages.py` detects each page's language with `lingua`, restricted to the
-EU-24. It is read-only until `--apply`, because language is written into the v2
+EU-24. It is read-only until `--apply`, because language is written into the chunk
 embedding text and into every chunk's Chroma metadata. Markdown boilerplate is
 stripped first and at least 120 characters of prose are required: raw Markdown
 makes an address-and-phone-number page look Croatian, and a 60-character list of
@@ -66,13 +66,13 @@ Slovenian church names cannot be told apart from Croatian at all.
 Detection found this corpus is **not** monolingual: 12 `castle_rajhenburg` pages
 are English at 1.00 confidence, though every source is stamped `sl`.
 
-Use `just audit-chunk-tokens` to measure canonical chunks after v1/v2 embedding
+Use `just audit-chunk-tokens` to measure canonical chunks after v1 embedding
 context and model document prompts are applied. The audit is read-only and does
 not change chunk boundaries or positional IDs.
 
 Chunk summaries were useful retrieval experiments, but are not part of the
 steady-state page chunk path. Historical summary results live in
-[`docs/retrieval-results-agentic.md`](../../docs/retrieval-results-agentic.md).
+[`docs/reports/agentic/agentic-findings.md`](../../docs/reports/agentic/agentic-findings.md).
 
 `index.py` embeds each place text with `sentence-transformers/all-MiniLM-L6-v2`
 and recreates the `places` Chroma collection. MiniLM is small, local, and fast
@@ -104,3 +104,15 @@ starts from the same complete Markdown rows but does not run `chunks.py` or
 consume `page_chunks`. Shared scraping and Markdown extraction are measured once
 outside both representation builds. See
 [`experiments/indexing/README.md`](../../experiments/indexing/README.md).
+
+## Page locations
+
+`just locate-pages` (`src/preprocess/locations.py`) writes `page_locations`: the
+place each page is about, as coordinates plus derived ISO and NUTS codes. Three
+tiers, cheapest first: Wikidata for Wikipedia pages, a configured QID per
+single-site source, then an LLM naming places that Nominatim verifies. Read-only
+until `--apply`; adds rows only, never touches `page_chunks`. Needs the NUTS
+boundaries from `just fetch-nuts`. The 2026-09-08 dry run on the corpus: 89 of
+176 pages get a primary location from the first two tiers alone; the 51
+biographies and the concept pages (Bazilika, UTC+01:00, Nemščina) correctly
+get none.

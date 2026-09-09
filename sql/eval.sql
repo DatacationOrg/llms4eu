@@ -60,3 +60,48 @@ create index if not exists idx_eval_questions_approved_type
 
 create index if not exists idx_eval_relevant_chunks_chunk_id
   on eval_relevant_chunks(chunk_id);
+
+-- Where a page is about, as 0..n locations per page.
+--
+-- Coordinates are the canonical fact; the codes are derived from them against
+-- the Eurostat NUTS boundaries (src/shared/nuts.py) so they can be recomputed
+-- when NUTS changes. Names are display labels only and are never filtered on.
+-- One `primary` row per page is what gets denormalised into chunk metadata; a
+-- page with no primary row (a biography, a concept page) has no location and
+-- is never dropped by the boost-only path.
+create table if not exists page_locations (
+  page_id text not null references page_metadata(id) on delete cascade,
+  role text not null check (role in ('primary', 'mentioned')),
+  -- Wikidata QID when known, else the normalised name, so a re-run replaces
+  -- rather than duplicates.
+  location_key text not null,
+  name text,
+  wikidata_qid text,
+  latitude real,
+  longitude real,
+  granularity text not null default 'point'
+    check (granularity in ('point', 'municipality', 'region', 'country')),
+  country_code text,
+  nuts2 text,
+  nuts3 text,
+  nuts3_name text,
+  iso_3166_2 text,
+  confidence real,
+  -- wikidata | source_default | llm_nominatim | manual
+  method text not null,
+  primary key (page_id, role, location_key)
+);
+
+create unique index if not exists idx_page_locations_one_primary
+  on page_locations(page_id) where role = 'primary';
+
+create index if not exists idx_page_locations_codes
+  on page_locations(country_code, nuts2, nuts3);
+
+-- Resolved query scopes, so an eval rerun or an agent retry does not call the
+-- LLM and the gazetteer again for a question it has already placed.
+create table if not exists geo_scope_cache (
+  query_norm text primary key,
+  scope_json text not null,
+  created_at text not null
+);

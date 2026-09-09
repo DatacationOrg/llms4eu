@@ -2,7 +2,7 @@
 
 ## Run Configuration
 
-- Command: `experiments/indexing/audit_chunk_tokens.py --providers qwen,qwen4b --versions v1,v2 --output docs/chunk-token-audit-2026-08-11.md`
+- Command: `experiments/indexing/audit_chunk_tokens.py --providers qwen,qwen4b --versions v1,v2 --output docs/reports/chunking/chunk-token-audit-2026-08-11.md`
 - SQLite chunks scanned: 726
 - Representations: v1, v2
 - Token accounting: document prompt + representation text + special tokens, with truncation disabled

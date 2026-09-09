@@ -4,7 +4,7 @@
 **Corpus:** 726 `base` chunks over 176 Slovenian-language tourism / history / biography pages
 **Questions:** 495 of 3,476 approved, shared design — one question set, labels projected per variant
 **Store:** `.local/chroma-sweep` · **Database:** `.local/db/pages-shared.db` · **Judge:** local `gpt-oss:20b`
-**Checkpoints:** `docs/agentic-tools-2026-08-31.md.checkpoint.json`, `docs/agentic-dci-2026-09-01.md.checkpoint.json`
+**Checkpoints:** `docs/reports/agentic/agentic-tools-2026-08-31.md.checkpoint.json`, `docs/reports/agentic/agentic-dci-2026-09-01.md.checkpoint.json`
 **Compute:** 1h56m + 3h04m on one RTX A6000, shared with other users
 
 ---
@@ -390,7 +390,7 @@ CHROMA_PATH=.local/chroma-sweep PAGES_DB_PATH=.local/db/pages-shared.db \
 uv run python experiments/indexing/compare_chunkings.py \
   --variants base --design shared --limit 500 --agentic-diagnostics --keep-checkpoint \
   --methods qwen_hybrid_rerank,qwen_hybrid_agentic,qwen_hybrid_agentic_tools \
-  --output docs/agentic-tools-2026-08-31.md
+  --output docs/reports/agentic/agentic-tools-2026-08-31.md
 
 # DCI + baseline control (3h04m measured). Separate checkpoint because adding a
 # method to a finished run changes the signature and discards every completed cell.
@@ -398,14 +398,14 @@ CHROMA_PATH=.local/chroma-sweep PAGES_DB_PATH=.local/db/pages-shared.db \
 uv run python experiments/indexing/compare_chunkings.py \
   --variants base --design shared --limit 500 --keep-checkpoint \
   --methods qwen_hybrid_rerank,dci \
-  --output docs/agentic-dci-2026-09-01.md
+  --output docs/reports/agentic/agentic-dci-2026-09-01.md
 
 # Both, merged, in the compare_qwen report layout
 uv run python experiments/indexing/render_qwen_report.py \
-  docs/agentic-tools-2026-08-31.md.checkpoint.json \
-  docs/agentic-dci-2026-09-01.md.checkpoint.json \
-  --compare docs/retrieval-results-comprehensive-2026-07-27.md \
-  --output docs/agentic-retrieval-qwen-format.md
+  docs/reports/agentic/agentic-tools-2026-08-31.md.checkpoint.json \
+  docs/reports/agentic/agentic-dci-2026-09-01.md.checkpoint.json \
+  --compare docs/reports/retrieval/retrieval-results-comprehensive-2026-07-27.md \
+  --output docs/reports/agentic/agentic-retrieval-<date>-qwen-format.md
 ```
 
 Two environment traps that cost real time:

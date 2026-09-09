@@ -24,7 +24,7 @@ as rows in one `page_chunks` table, discriminated by a `variant` column.
 
 **Chunk version**
 How one chunk is turned into text for embedding: `v1` is title + heading + text,
-`v2` adds labeled page metadata. Variant and version are independent — any
+Only `v1` is in use (v2 and v3 were removed unmeasured on 2026-09-08). Variant and version are independent — any
 variant can be indexed with any version.
 
 **Answer anchor**
@@ -137,7 +137,23 @@ collection instead of overwriting the other's.
 `page_metadata.language` is the detected language of one page and wins where it
 is set. Reads use `coalesce(m.language, s.language)`. Detection
 (`src/preprocess/languages.py`) is read-only until `--apply`, because language
-is embedded into the v2 representation and into chunk metadata.
+is written into chunk metadata.
+
+**Page location**
+A `page_locations` row: where a page is about. Coordinates are canonical; the
+ISO country code and NUTS-2/NUTS-3 codes are derived from them against the
+Eurostat boundaries in `data/geo/`; `name` is a label, never a filter key. One
+`primary` row per page is denormalised into chunk metadata. A biography or a concept page has no primary row on purpose.
+Enrichment (`src/preprocess/locations.py`, `just locate-pages`) is read-only
+until `--apply`.
+
+**Geo scope**
+What a question resolves to (`src/shared/geo_resolver.py`): codes and an
+optional point with radius. A `*_geo` method over-fetches the hybrid stage
+and re-scores every chunk by distance to the point or membership of the region
+(a page with no location stays neutral); `*_geo_strict` filters the stage and
+widens (radius -> NUTS-3 -> NUTS-2 -> country -> none) when too little comes
+back. Cached per normalised question in `geo_scope_cache`.
 
 **Ranking method**
 A named retrieval strategy used in experiments to return ranked chunk ids for a

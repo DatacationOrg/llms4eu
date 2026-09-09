@@ -2,7 +2,7 @@
 
 ## Run Configuration
 
-- Command: `experiments/indexing/compare_chunkings.py --variants base --methods qwen_hybrid_rerank,qwen_hybrid_agentic,qwen_hybrid_agentic_tools --design shared --limit 500 --agentic-diagnostics --keep-checkpoint --output docs/agentic-tools-2026-08-31.md`
+- Command: `experiments/indexing/compare_chunkings.py --variants base --methods qwen_hybrid_rerank,qwen_hybrid_agentic,qwen_hybrid_agentic_tools --design shared --limit 500 --agentic-diagnostics --keep-checkpoint --output docs/reports/agentic/agentic-tools-2026-08-31.md`
 - Variants: base
 - Methods: qwen_hybrid_rerank, qwen_hybrid_agentic, qwen_hybrid_agentic_tools
 - Questions: 500 | Category: all | Warmup: 5

@@ -2,7 +2,6 @@ collection_name: page_chunks
 default_chunk_version: v1
 chunk_versions:
   v1: title_heading_chunk
-  v2: metadata_context_chunk
 default_provider: qwen
 providers:
   - english
@@ -35,7 +34,7 @@ qwen4b_batch_size: 1
 qwen4b_local_files_only: true
 
 # The local stand-in for the removed Azure `embed-v-4-0`, which
-# docs/architecture-decisions.md records as the strongest method ever measured
+# docs/architecture/decisions.md records as the strongest method ever measured
 # here. 15.1 GB of weights, ~16 GB resident, which still leaves the A6000 room
 # for the reranker alongside it. Batch 2 rather than qwen4b's 1 because the
 # per-batch pad is to the batch's own longest item, not to the 32k ceiling.

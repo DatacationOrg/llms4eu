@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+from collections import defaultdict
 from contextlib import suppress
 from dataclasses import dataclass
 from functools import cache
@@ -9,7 +11,7 @@ import chromadb
 from tqdm import tqdm
 
 from src.db.pages import connect_pages as connect
-from src.db.pages import initialize_page_artifacts_db
+from src.db.pages import initialize_page_artifacts_db, load_chunk_rows
 from src.indexing.chunk_text import (
     CHUNK_VERSIONS,
     LEGACY_CHUNK_VERSION,
@@ -25,6 +27,10 @@ CONFIG = load_yaml(Path(__file__).parents[1] / "indexing" / "config.yaml")
 INDEXING_PROVIDERS = tuple(CONFIG["providers"])
 DEFAULT_INDEXING_PROVIDER = CONFIG["default_provider"]
 DEFAULT_CHUNK_VERSION = CONFIG["default_chunk_version"]
+# Bumped when `_metadata` gains keys a filter depends on. Collections built
+# before it are still fine for unfiltered methods; `collection_has_geo_metadata`
+# is what a geo method checks before trusting a `where` clause.
+GEO_METADATA_SCHEMA = "geo1"
 
 
 @dataclass(frozen=True)
@@ -40,6 +46,7 @@ def query_chunk_vectors(
     limit: int,
     version: str = DEFAULT_CHUNK_VERSION,
     variant: str = BASE_CHUNK_VARIANT,
+    where: dict | None = None,
 ) -> list[ScoredChunk]:
     _validate_provider(provider)
     _validate_version(version)
@@ -49,6 +56,7 @@ def query_chunk_vectors(
         query_embeddings=[vector],
         n_results=limit,
         include=["metadatas", "distances"],
+        **_where_kwargs(where),
     )
     chunk_ids = _chunk_ids_from_result(result, offset=0)
     return _scored_chunks_from_result(result, offset=0, texts=_chunk_texts(chunk_ids))
@@ -65,7 +73,15 @@ def query_chunk_vectors_batch(
     limit: int,
     version: str = DEFAULT_CHUNK_VERSION,
     variant: str = BASE_CHUNK_VARIANT,
+    where: dict | None = None,
+    where_by_query: dict[int, dict | None] | None = None,
 ) -> dict[int, list[ScoredChunk]]:
+    """Batch query; `where_by_query` gives one metadata filter per query index.
+
+    Chroma takes a single `where` per call, so queries are grouped by identical
+    filter and each group is one (batched) call. Queries without an entry fall
+    back to `where`.
+    """
     _validate_provider(provider)
     _validate_version(version)
     load_local_env()
@@ -74,20 +90,48 @@ def query_chunk_vectors_batch(
     collection = _existing_collection(provider, version, variant)
     batch_size = CONFIG.get("query_batch_size", 128)
 
-    for start in range(0, len(vectors), batch_size):
-        result = collection.query(
-            query_embeddings=vectors[start : start + batch_size],
-            n_results=limit,
-            include=["metadatas", "distances"],
-        )
-        texts = _chunk_texts(_batch_chunk_ids_from_result(result))
-        for offset in range(len(result.get("ids", []))):
-            rankings[start + offset] = _scored_chunks_from_result(
-                result,
-                offset,
-                texts,
+    groups: dict[str, list[int]] = defaultdict(list)
+    filters: dict[str, dict | None] = {}
+    for index in range(len(vectors)):
+        query_where = (where_by_query or {}).get(index, where)
+        key = json.dumps(query_where, sort_keys=True)
+        groups[key].append(index)
+        filters[key] = query_where
+
+    for key, indices in groups.items():
+        for start in range(0, len(indices), batch_size):
+            batch = indices[start : start + batch_size]
+            result = collection.query(
+                query_embeddings=[vectors[index] for index in batch],
+                n_results=limit,
+                include=["metadatas", "distances"],
+                **_where_kwargs(filters[key]),
             )
+            texts = _chunk_texts(_batch_chunk_ids_from_result(result))
+            for offset, index in enumerate(batch):
+                rankings[index] = _scored_chunks_from_result(result, offset, texts)
     return rankings
+
+
+def _where_kwargs(where: dict | None) -> dict:
+    return {"where": where} if where else {}
+
+
+def collection_has_geo_metadata(
+    provider: str,
+    version: str = DEFAULT_CHUNK_VERSION,
+    variant: str = BASE_CHUNK_VARIANT,
+) -> bool:
+    """Whether the collection was written with the geo metadata keys.
+
+    A collection from before `GEO_METADATA_SCHEMA` has no `country_code` or
+    `nuts3` on its vectors; a `where` on them would match nothing and a geo
+    method would silently score an empty first stage.
+    """
+    if not collection_ready(provider, version, variant):
+        return False
+    collection = _client().get_collection(_collection_name(provider, version, variant))
+    return (collection.metadata or {}).get("metadata_schema") == GEO_METADATA_SCHEMA
 
 
 def collection_exists(
@@ -165,6 +209,7 @@ def rebuild_chunk_collection(
         "chunk_version": version,
         "chunk_variant": variant,
         "representation": CONFIG["chunk_versions"][version],
+        "metadata_schema": GEO_METADATA_SCHEMA,
     }
     # Chroma rejects a null metadata value, and an unknown length must not be
     # recorded as though it were known.
@@ -197,37 +242,11 @@ def rebuild_chunk_collection(
 
 def load_chunks(variant: str = BASE_CHUNK_VARIANT) -> list[PageChunk]:
     """Load one variant's chunks from SQLite without modifying stored artifacts."""
-    with connect() as conn:
-        return [
-            PageChunk(
-                id=row["id"],
-                page_id=row["page_id"],
-                heading_path=row["heading_path"],
-                text=row["text"],
-                title=row["title"],
-                chunk_index=row["chunk_index"],
-                source=row["source"],
-                language=row["language"],
-                page_kind=row["page_kind"],
-            )
-            for row in conn.execute(
-                """
-                select c.id, c.page_id, c.chunk_index, c.heading_path, c.text,
-                       m.title, m.source, m.page_kind,
-                       coalesce(m.language, s.language) as language
-                from page_chunks c
-                join page_metadata m on m.id = c.page_id
-                left join page_sources s on s.source = m.source
-                where c.variant = ?
-                order by c.id
-                """,
-                (variant,),
-            )
-        ]
+    return [PageChunk.from_row(row) for row in load_chunk_rows(variant)]
 
 
 def _metadata(chunk: PageChunk) -> dict:
-    return {
+    metadata = {
         "id": chunk.id,
         "page_id": chunk.page_id,
         "chunk_index": chunk.chunk_index,
@@ -235,7 +254,17 @@ def _metadata(chunk: PageChunk) -> dict:
         "source": chunk.source or "",
         "language": chunk.language or "",
         "page_kind": chunk.page_kind or "",
+        # Codes are "" rather than absent for an unlocated page, so a filter can
+        # let those chunks through explicitly (`GeoScope.include_null`).
+        "country_code": chunk.country_code or "",
+        "nuts2": chunk.nuts2 or "",
+        "nuts3": chunk.nuts3 or "",
     }
+    # Chroma rejects null values and "" is not a coordinate: omit when unknown.
+    if chunk.latitude is not None and chunk.longitude is not None:
+        metadata["latitude"] = float(chunk.latitude)
+        metadata["longitude"] = float(chunk.longitude)
+    return metadata
 
 
 def _chunk_count(variant: str = BASE_CHUNK_VARIANT) -> int:

@@ -28,12 +28,6 @@ Every method runs locally; no retrieval path calls a hosted API.
   chunk from the same page, so the agent's choices are scored rather than
   parked at the end of the list. Tool calls are capped by
   `agentic_tools_max_tool_calls`.
-- Every dense, hybrid, reranked, and agentic method also has a `_v2` variant,
-  such as `nemotron_hybrid_rerank_v2` and
-  `nemotron_hybrid_agentic_v2`. These use isolated metadata-context dense and
-  sparse indexes. Unsuffixed names retain the legacy v1 behavior.
-- `sparse_v2` and `sparse_rerank_v2` use the same metadata-context text as v2
-  dense retrieval; v1 sparse methods continue to index raw chunk text.
 
 Retrieval tuning lives in `config.yaml`. Enabled vector providers come from
 `src/indexing/config.yaml`; eval defaults come from `src/eval/config.yaml`.

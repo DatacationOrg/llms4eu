@@ -151,7 +151,7 @@ quality. There is no composite OKF-versus-RAG score.
 
 Reason: industry IR and search benchmarks report effectiveness together with
 latency, throughput, build cost, and storage. The complete protocol and sources
-are in [`experiments/indexing/README.md`](../experiments/indexing/README.md).
+are in [`experiments/indexing/README.md`](../../experiments/indexing/README.md).
 
 ## Agentic Page Tools
 
@@ -227,6 +227,87 @@ per query.
 opposite of `ToolAction` in the tool agent. The right structured-output mode is
 a per-schema measurement, not a per-model setting.
 
+## Geographic Scope
+
+Pages carry where they are about; questions resolve to a scope; retrieval
+re-scores on it (soft, the default) or filters, widens and boosts (strict, for
+measurement). Standards first, model second.
+
+**Data model** (`sql/eval.sql` `page_locations`, 0..n rows per page). Coordinates
+(WGS84) are the canonical fact. ISO 3166-1 country codes and Eurostat NUTS-2 /
+NUTS-3 codes are *derived* from them by point-in-polygon against the GISCO 2024
+boundaries (`src/shared/nuts.py`), so a NUTS revision is `just locate-pages
+--recompute-codes`, not a re-extraction. Names are display labels and are never
+filtered on: they are ambiguous and multilingual (Štajerska / Styria /
+Steiermark), and Slovenia's statistical regions are not administrative units, so
+Wikidata's `P131` chain skips them. NUTS is the one region hierarchy that is
+consistent across EU countries, which is what an EU-wide corpus needs. One
+`primary` row per page is denormalised into chunk metadata; `mentioned` rows stay
+in SQLite for the agent's geo tools.
+
+**Enrichment** (`src/preprocess/locations.py`, read-only until `--apply`) in
+three tiers, each recorded in `method`: Wikidata for Wikipedia pages (`P625`,
+`P605`, `P300`, with `P31` telling a person or a concept from a place, and a
+country or administrative parent required, because a language item can carry
+coordinates); a configured Wikidata QID per single-site source
+(`src/preprocess/config.yaml` `source_locations`); and, last, an LLM naming the
+place a page is about, resolved through Nominatim and kept only when the hit's
+name matches what the model said. The model never produces coordinates
+(Hu et al. 2024). Adding rows never touches `page_chunks`, so the approved
+labels are safe.
+
+**Retrieval** (`src/retrieval/retrievers/geo.py`, methods `*_hybrid_geo`,
+`*_hybrid_rerank_geo`, `*_hybrid_rerank_geo_strict`). A `GeoScope` is resolved
+once per question (`src/shared/geo_resolver.py`: the judge LLM names the
+anchoring place and its width, a gazetteer places it; corpus names, then NUTS
+names, then Wikidata, then Nominatim; cached in `geo_scope_cache`, but only a
+settled answer is cached: a failed extraction or a place the gazetteer could not
+find is retried next time rather than frozen into "no scope").
+
+*Decision 2026-09-09: geography re-ranks; it does not pre-filter.* The first
+measured run (2026-09-08, 500 questions) filtered the stage to the scope and lost
+15 of the 72 scoped questions against the text baseline, winning one. Every loss
+was a gold page with no footprint (biographies, Celeja, national-scope pages)
+that the hard filter removed, and widening never fired because five located
+pages always supplied chunks. With 89 of 176 pages located, any hard filter is a
+coverage lottery. So the default path over-fetches `limit * geo_overfetch`
+chunks unfiltered, reranks as the baseline does, and recombines each score as
+`(1 - w) * text + w * s_geo` with both in [0, 1] (`w = 0.3`): `s_geo` is
+`exp(-km / decay)` to a point scope, in/out of a region scope, and **1.0 for a
+page with no location**. Unknown footprint is neutral, never "outside". A region
+level is applied only when it keeps at most `geo_max_scope_share` (90%) of the
+located pages; with 85 of 89 in one NUTS-3, "Slovenija" and "Posavska" are
+no-ops on this corpus. The convex combination of normalised scores is the
+fusion Bruch et al. (TOIS 2023) found beats rank fusion; the neutral-for-unknown
+rule and the selectivity gate are the corpus facts from
+[geo-improvement-plan.md](geo-improvement-plan.md) §1 and §3.
+
+The strict shape survives as `*_hybrid_rerank_geo_strict` for measurement, with
+two changes from the 2026-09-08 run: unlocated pages pass the filter
+(`geo_include_null: true`) and widening counts located in-scope chunks rather
+than all returned chunks, so the filter widens when *it* contributed too little.
+The scope reaches the stage through constructor fields, `VectorChunkRetriever.where`
+(Chroma `where`) and `SparseRetriever.allowed_page_ids`, so the `Retriever`
+protocol and the eval harness are unchanged. This is the Spatial-RAG shape (Yu
+et al. 2025), and the agent's `pages_in_region` tool keeps it because there the
+user asked for containment.
+
+Geo is payload metadata rather than a bespoke scoring pass so the planned Chroma
+-> Qdrant move keeps it: Qdrant has native `geo_radius` filters, Chroma only a
+`$gte/$lte` bounding box on the stored latitude and longitude.
+
+**Agent tools** (`src/retrieval/retrievers/agentic_tools.py`): `find_pages_near
+(place, radius_km)` and `pages_in_region(nuts_or_iso_code)` return each located
+page's first chunk id *of the chunk variant being scored*, so what the agent
+finds stays scoreable, like `list_sections` and `search_in_page`. They exist
+only on the `*_geo` tool agent; the plain `*_hybrid_agentic_tools` keeps the
+tool set its published numbers were measured with.
+
+Not done: the legacy `places` collection behind `src.rag.agent_search` carries no
+location payload; `WiderGeoFilter` now widens a real `GeoScope`, but the
+places search it schedules does not filter. The page-chunk stack is where the
+filter applies.
+
 ## Local-Only Inference
 
 Every model call in the repo runs on local hardware. There is no hosted-model
@@ -239,9 +320,11 @@ or credential path in the tree.
 - Agent model is `gpt-oss:20b` at low reasoning effort, set by
   `agentic_judge_model` in `src/retrieval/config.yaml`, `model` in
   `src/okf/config.yaml`, and `DEFAULT_LOCAL_MODEL` in the equivalence judge.
-- Removed: the Azure Foundry chat client (`DeepSeek-V4-Pro`), the Azure
-  embedding provider (`embed-v-4-0`, published as `embed_v4_*`), and the
-  Azure-hosted Cohere reranker (`*_cohere*`).
+- Removed: the Azure embedding provider (`embed-v-4-0`, published as
+  `embed_v4_*`) and the Azure-hosted Cohere reranker (`*_cohere*`). The Azure
+  Foundry chat client (`DeepSeek-V4-Pro`) came back on 2026-09-07 as the
+  agentic judge (`agentic_judge_provider: azure` in `src/retrieval/config.yaml`)
+  and is also the default geo resolver; embeddings and reranking stay local.
 
 Reason for going local: the hosted path cost quota, imposed a ~125k tok/min
 rate limit on the agentic judge, hit content filters on tourism source text,

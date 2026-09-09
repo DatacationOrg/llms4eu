@@ -68,7 +68,7 @@ def test_chunk_collection_rebuild_readiness_and_query(monkeypatch, tmp_path):
     assert [hit.id for hit in small_batch_hits[1]] == ["chunk-forest"]
 
 
-def test_v2_chunk_collection_is_isolated_and_contains_metadata(monkeypatch, tmp_path):
+def test_chunk_collection_contains_geo_metadata(monkeypatch, tmp_path):
     db_path = tmp_path / "raw_pages.db"
     _write_chunk_fixture(db_path)
 
@@ -79,18 +79,10 @@ def test_v2_chunk_collection_is_isolated_and_contains_metadata(monkeypatch, tmp_
     )
 
     rebuild_chunk_collection("qwen")
-    rebuild_chunk_collection("qwen", "v2")
 
     assert collection_ready("qwen")
-    assert collection_ready("qwen", "v2")
-    assert chunk_vectors._collection_name("qwen", "v1") != (
-        chunk_vectors._collection_name("qwen", "v2")
-    )
-    hits = query_chunk_vectors("qwen", "castle history", limit=1, version="v2")
-    assert [hit.id for hit in hits] == ["chunk-castle"]
-
     collection = chunk_vectors._client().get_collection(
-        chunk_vectors._collection_name("qwen", "v2")
+        chunk_vectors._collection_name("qwen", "v1")
     )
     stored = collection.get(ids=["chunk-castle"], include=["metadatas"])
     assert stored["metadatas"][0] == {
@@ -101,7 +93,47 @@ def test_v2_chunk_collection_is_isolated_and_contains_metadata(monkeypatch, tmp_
         "page_kind": "prose",
         "source": "fixture",
         "title": "Castle Page",
+        "country_code": "SI",
+        "nuts2": "SI03",
+        "nuts3": "SI036",
+        "latitude": 45.99,
+        "longitude": 15.47,
     }
+    # An unlocated page carries "" codes and no coordinates, never null values.
+    forest = collection.get(ids=["chunk-forest"], include=["metadatas"])
+    assert forest["metadatas"][0]["country_code"] == ""
+    assert "latitude" not in forest["metadatas"][0]
+    assert chunk_vectors.collection_has_geo_metadata("qwen")
+
+
+def test_where_filters_and_batch_groups_by_filter(monkeypatch, tmp_path):
+    db_path = tmp_path / "raw_pages.db"
+    _write_chunk_fixture(db_path)
+    monkeypatch.setenv("CHROMA_PATH", str(tmp_path / "chroma"))
+    monkeypatch.setattr("src.db.pages.raw_pages_db_path", lambda: db_path)
+    monkeypatch.setattr(
+        "src.vector_store.chunks.build_indexer", lambda *_: StubIndexer()
+    )
+    rebuild_chunk_collection("qwen")
+
+    # The forest query would return the forest chunk; the filter leaves only SI036.
+    hits = query_chunk_vectors(
+        "qwen", "forest trail", limit=2, where={"nuts3": {"$eq": "SI036"}}
+    )
+    assert [hit.id for hit in hits] == ["chunk-castle"]
+
+    batch = query_chunk_vectors_batch(
+        "qwen",
+        ["forest trail", "forest trail", "castle history"],
+        limit=2,
+        where_by_query={
+            0: {"nuts3": {"$eq": "SI036"}},
+            2: {"country_code": {"$eq": ""}},
+        },
+    )
+    assert [hit.id for hit in batch[0]] == ["chunk-castle"]
+    assert [hit.id for hit in batch[1]] == ["chunk-forest", "chunk-castle"]
+    assert [hit.id for hit in batch[2]] == ["chunk-forest"]
 
 
 def test_chunk_variants_get_isolated_collections(monkeypatch, tmp_path):
@@ -162,20 +194,19 @@ def test_enabled_provider_names_comes_from_indexing_config(monkeypatch):
     assert enabled_provider_names() == ["english", "qwen"]
 
 
-def test_v2_sparse_indexes_metadata_without_changing_v1(monkeypatch, tmp_path):
+def test_sparse_page_restriction(monkeypatch, tmp_path):
     db_path = tmp_path / "raw_pages.db"
     _write_chunk_fixture(db_path)
     monkeypatch.setattr("src.db.pages.raw_pages_db_path", lambda: db_path)
     sparse_module._corpus.cache_clear()
 
-    legacy_hits = SparseRetriever(chunk_version="v1").retrieve("fixture", limit=2)
-    contextual_hits = SparseRetriever(chunk_version="v2").retrieve(
-        "fixture",
-        limit=2,
+    hits = SparseRetriever().retrieve("chunk", limit=2)
+    scoped = SparseRetriever(allowed_page_ids=frozenset({"page-forest"})).retrieve(
+        "chunk", limit=2
     )
 
-    assert legacy_hits == []
-    assert {hit.id for hit in contextual_hits} == {"chunk-castle", "chunk-forest"}
+    assert {hit.id for hit in hits} == {"chunk-castle", "chunk-forest"}
+    assert [hit.id for hit in scoped] == ["chunk-forest"]
     sparse_module._corpus.cache_clear()
 
 
@@ -206,6 +237,18 @@ def _write_chunk_fixture(path):
               end_char integer,
               unique(page_id, variant, chunk_index)
             );
+            create table page_locations (
+              page_id text not null, role text not null, location_key text not null,
+              name text, wikidata_qid text, latitude real, longitude real,
+              granularity text not null default 'point', country_code text,
+              nuts2 text, nuts3 text, nuts3_name text, iso_3166_2 text,
+              confidence real, method text not null,
+              primary key (page_id, role, location_key)
+            );
+            insert into page_locations (page_id, role, location_key, name, latitude,
+              longitude, country_code, nuts2, nuts3, nuts3_name, method)
+            values ('page-castle', 'primary', 'Q1', 'Castle', 45.99, 15.47,
+                    'SI', 'SI03', 'SI036', 'Posavska', 'manual');
                  insert into page_sources (source, language) values ('fixture', 'en');
                  insert into page_metadata (id, title, source, page_kind)
                  values ('page-castle', 'Castle Page', 'fixture', 'prose'),

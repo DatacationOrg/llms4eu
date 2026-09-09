@@ -6,7 +6,7 @@ from collections import Counter
 from dataclasses import dataclass
 from functools import cache
 
-from src.db.pages import connect_pages as connect
+from src.db.pages import load_chunk_rows
 from src.indexing.chunk_text import (
     LEGACY_CHUNK_VERSION,
     PageChunk,
@@ -25,12 +25,20 @@ class SparseRetriever:
     b: float = 0.75
     chunk_version: str = LEGACY_CHUNK_VERSION
     variant: str = BASE_CHUNK_VARIANT
+    # A geo scope's page set. Applied inside the scan rather than to the cached
+    # corpus, so the corpus stays one shared object per (version, variant).
+    allowed_page_ids: frozenset[str] | None = None
 
     def retrieve(self, query: str, limit: int) -> list[RankedChunk]:
         corpus = _corpus(self.chunk_version, self.variant)
         query_terms = _tokens(query)
         scores = []
         for chunk in corpus:
+            if (
+                self.allowed_page_ids is not None
+                and chunk.page_id not in self.allowed_page_ids
+            ):
+                continue
             score = 0.0
             for term in query_terms:
                 term_frequency = chunk.term_counts.get(term, 0)
@@ -57,6 +65,7 @@ class SparseRetriever:
 @dataclass(frozen=True)
 class ChunkTerms:
     id: str
+    page_id: str
     text: str
     term_counts: Counter[str]
     length: int
@@ -80,42 +89,23 @@ def _corpus(
     # The cache key must carry the variant as well as the version: keyed on the
     # version alone, a second variant silently reuses the first one's corpus.
     representation = chunk_text_representation(chunk_version)
-    with connect() as conn:
-        rows = conn.execute(
-            """
-            select c.id, c.page_id, c.chunk_index, c.heading_path, c.text,
-                   m.title, m.source, m.page_kind,
-                   coalesce(m.language, s.language) as language
-            from page_chunks c
-            join page_metadata m on m.id = c.page_id
-            left join page_sources s on s.source = m.source
-            where c.variant = ?
-            order by c.id
-            """,
-            (variant,),
-        ).fetchall()
+    rows = load_chunk_rows(variant)
 
     chunks = []
     document_frequency: Counter[str] = Counter()
     for row in rows:
-        chunk = PageChunk(
-            id=row["id"],
-            page_id=row["page_id"],
-            chunk_index=row["chunk_index"],
-            heading_path=row["heading_path"],
-            text=row["text"],
-            title=row["title"],
-            source=row["source"],
-            language=row["language"],
-            page_kind=row["page_kind"],
-        )
+        chunk = PageChunk.from_row(row)
         terms = _tokens(
-            row["text"]
+            chunk.text
             if chunk_version == LEGACY_CHUNK_VERSION
             else representation.text_for_embedding(chunk)
         )
         term_counts = Counter(terms)
-        chunks.append(ChunkTerms(row["id"], row["text"], term_counts, len(terms) or 1))
+        chunks.append(
+            ChunkTerms(
+                chunk.id, chunk.page_id, chunk.text, term_counts, len(terms) or 1
+            )
+        )
         document_frequency.update(term_counts.keys())
 
     document_count = len(chunks)

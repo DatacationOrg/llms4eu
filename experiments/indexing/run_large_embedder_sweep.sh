@@ -54,7 +54,7 @@ fi
 # checkpoint, and a later interruption in that leg starts it over.
 leg() {
   local name="$1" methods="$2" variants="$3"
-  local output="docs/chunk-size-sweeps/chunk-size-sweep-${DATE}-${name}.md"
+  local output="docs/reports/chunking/sweeps/chunk-size-sweep-${DATE}-${name}.md"
   echo
   echo "=== leg $name ($methods) over $variants — $(date -Is) ==="
   local start=$SECONDS

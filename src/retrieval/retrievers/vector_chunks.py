@@ -20,6 +20,8 @@ class VectorChunkRetriever:
     provider: str
     chunk_version: str = LEGACY_CHUNK_VERSION
     variant: str = BASE_CHUNK_VARIANT
+    # Chroma metadata filter (`GeoScope.chroma_where()`); None for no filter.
+    where: dict | None = None
 
     def retrieve(self, query: str, limit: int) -> list[RankedChunk]:
         chunks = _query_chunk_vectors()(
@@ -28,6 +30,7 @@ class VectorChunkRetriever:
             limit,
             self.chunk_version,
             self.variant,
+            where=self.where,
         )
         return [_ranked_chunk(chunk) for chunk in chunks]
 
@@ -42,6 +45,7 @@ class VectorChunkRetriever:
             limit,
             self.chunk_version,
             self.variant,
+            where=self.where,
         )
         return {
             index: [_ranked_chunk(chunk) for chunk in chunks]
@@ -53,16 +57,13 @@ def _ranked_chunk(chunk: ScoredChunk) -> RankedChunk:
     return RankedChunk(id=chunk.id, score=chunk.score, text=chunk.text)
 
 
-def _query_chunk_vectors() -> Callable[[str, str, int, str, str], list[ScoredChunk]]:
+def _query_chunk_vectors() -> Callable[..., list[ScoredChunk]]:
     from src.vector_store.chunks import query_chunk_vectors
 
     return query_chunk_vectors
 
 
-def _query_chunk_vectors_batch() -> Callable[
-    [str, list[str], int, str, str],
-    dict[int, list[ScoredChunk]],
-]:
+def _query_chunk_vectors_batch() -> Callable[..., dict[int, list[ScoredChunk]]]:
     from src.vector_store.chunks import query_chunk_vectors_batch
 
     return query_chunk_vectors_batch

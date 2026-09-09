@@ -63,7 +63,7 @@ own chunks. Anchor them (`src.eval.anchors`) and project them onto every variant
 
 Chunk summaries are historical retrieval experiments, not steady-state eval
 inputs. Current results live in
-[`docs/retrieval-results-agentic.md`](../../docs/retrieval-results-agentic.md).
+[`docs/reports/agentic/agentic-findings.md`](../../docs/reports/agentic/agentic-findings.md).
 
 All inference is local: embeddings, reranking, question generation, and the
 agentic sufficiency judge run through sentence-transformers and Ollama.

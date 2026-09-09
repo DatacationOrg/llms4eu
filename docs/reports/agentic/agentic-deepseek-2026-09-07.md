@@ -3,7 +3,7 @@ Scoring unit: chunk
 Warmup: 5 queries
 Variant: base
 Design: shared
-Source checkpoints: docs/agentic-deepseek-2026-09-07.md.checkpoint.json
+Source checkpoints: docs/reports/agentic/agentic-deepseek-2026-09-07.md.checkpoint.json
 Rendered: 2026-09-07T15:19:39
 
 Progress

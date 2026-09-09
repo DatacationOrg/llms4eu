@@ -23,8 +23,10 @@ from src.shared.env import ROOT, load_local_env, load_yaml
 from src.shared.llm import LocalOllamaStructuredLlm
 
 EXPERIMENT_CONFIG = load_yaml(Path(__file__).with_name("config.yaml"))
-DEFAULT_CHECKPOINT = Path("docs/retrieval-results-chunks-okf.md.checkpoint.json")
-DEFAULT_OUTPUT = Path("docs/retrieval-equivalence-judge.md")
+DEFAULT_CHECKPOINT = Path(
+    "docs/reports/retrieval/retrieval-results-full.md.checkpoint.json"
+)
+DEFAULT_OUTPUT = Path("docs/reports/retrieval/retrieval-equivalence-judge.md")
 DEFAULT_LOCAL_MODEL = EXPERIMENT_CONFIG.get("equivalence_judge_model", "gpt-oss:20b")
 
 
@@ -220,6 +222,46 @@ class IncrementalEquivalenceAudit:
         return summaries
 
 
+def checkpoint_view(
+    state: dict[str, Any], variant: str | None = None
+) -> dict[str, Any]:
+    """One variant's `signature.timed_ids` + `methods` view of a checkpoint.
+
+    compare_qwen_modes.py (state version 4) keys cells by `variant|method` and
+    stores the question ids per variant; this audit was written for the older
+    `methods`-keyed layout. Cell dicts are shared with the source state, so
+    judgments written through the view land in the caller's checkpoint. Older
+    checkpoints pass through unchanged.
+    """
+    if "cells" not in state:
+        return state
+    questions = state.get("signature", {}).get("questions", {})
+    if variant is None:
+        if len(questions) != 1:
+            raise ValueError(
+                "Checkpoint holds variants "
+                + ", ".join(sorted(questions))
+                + "; pass --variant to choose one"
+            )
+        variant = next(iter(questions))
+    if variant not in questions:
+        raise ValueError(
+            f"Checkpoint has no variant {variant!r} (has: {', '.join(sorted(questions))})"
+        )
+    prefix = f"{variant}|"
+    return {
+        "signature": {
+            **state["signature"],
+            "timed_ids": questions[variant]["timed_ids"],
+        },
+        "methods": {
+            key[len(prefix) :]: cell
+            for key, cell in state["cells"].items()
+            if key.startswith(prefix)
+        },
+    }
+
+
 def main() -> None:
     load_local_env()
     args = _parse_args()
@@ -230,7 +272,7 @@ def main() -> None:
         if args.cache
         else output_path.with_suffix(output_path.suffix + ".checkpoint.json")
     )
-    state = _load_json(checkpoint_path)
+    state = checkpoint_view(_load_json(checkpoint_path), args.variant)
     client, model_id = _build_client(args.model)
     judge = EvidenceEquivalenceJudge(
         client=client,
@@ -261,6 +303,13 @@ def _parse_args() -> argparse.Namespace:
         )
     )
     parser.add_argument("--checkpoint", default=str(DEFAULT_CHECKPOINT))
+    parser.add_argument(
+        "--variant",
+        help=(
+            "Chunk variant to audit in a multi-variant checkpoint (compare_qwen_modes "
+            "state version 4+). Defaults to the only variant present."
+        ),
+    )
     parser.add_argument("--output", default=str(DEFAULT_OUTPUT))
     parser.add_argument("--cache")
     parser.add_argument(

@@ -38,14 +38,22 @@ from src.retrieval.retrievers.dci import (
     _corpus_prompt,
     _shortlist_documents,
 )
+from src.preprocess.locations import PageForLocating, PagePlaces, page_places_prompt
 from src.retrieval.retrievers.page_tools import PageRef, page_refs_for_chunks
+from src.shared.geo_resolver import QUERY_LOCATION_PROMPT, ExtractedQueryLocation
 from src.retrieval.workspace import PageDocument, load_workspace
 from src.shared.env import ROOT, load_yaml
 from src.shared.llm import structured_local_model
 
 CONFIG = load_yaml(ROOT / "src" / "retrieval" / "config.yaml")
 METHODS = ("function_calling", "json_schema")
-SCHEMAS = ("ChunkSufficiency", "ToolAction", "CorpusAction")
+SCHEMAS = (
+    "ChunkSufficiency",
+    "ToolAction",
+    "CorpusAction",
+    "ExtractedQueryLocation",
+    "PagePlaces",
+)
 # Prompt-length buckets in tokens, as counted by Ollama for the judge model.
 BUCKETS = (1024, 2048, 4096, 8192, 16384)
 
@@ -134,6 +142,35 @@ def _synthetic_cases(samples: int) -> dict[str, Case]:
             CONFIG["dci_num_predict"],
             "synthetic",
         ),
+        # The geo schemas are small; 512 output tokens is what the resolver and
+        # the locate pass hand the model.
+        "ExtractedQueryLocation": Case(
+            ExtractedQueryLocation,
+            [QUERY_LOCATION_PROMPT.format(query="Kateri gradovi so blizu Brestanice?")]
+            * samples,
+            512,
+            "synthetic",
+        ),
+        "PagePlaces": Case(
+            PagePlaces,
+            [
+                page_places_prompt(
+                    PageForLocating(
+                        id="fixture",
+                        source="castle_rajhenburg",
+                        url="https://x.test/grad",
+                        title="Grad Rajhenburg",
+                        markdown=(
+                            "Grad Rajhenburg stoji na skalnem pomolu nad Brestanico "
+                            "v občini Krško. Je najstarejši ohranjeni grad v Sloveniji."
+                        ),
+                    )
+                )
+            ]
+            * samples,
+            512,
+            "synthetic",
+        ),
     }
 
 
@@ -177,6 +214,14 @@ def _eval_cases(
                 CONFIG["agentic_judge_num_predict"],
                 f"eval:{first_stage}",
             )
+
+    if "ExtractedQueryLocation" in schema_names:
+        cases["ExtractedQueryLocation"] = Case(
+            ExtractedQueryLocation,
+            [QUERY_LOCATION_PROMPT.format(query=query) for query in queries],
+            512,
+            "eval:questions",
+        )
 
     if "CorpusAction" in schema_names:
         sparse = build_retriever("sparse", variant=variant)

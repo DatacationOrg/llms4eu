@@ -18,17 +18,13 @@ Current chunk collections are storage names, not public retrieval method names:
 page_chunks_{english,qwen,qwen4b,qwen8b,nemotron,nemotron8b,qwen_s512}_chunk
 ```
 
-Two independently stored chunk-representation versions are available:
-
-- `v1` is the unchanged legacy `TitleHeadingChunkText` representation and keeps
-	the existing `page_chunks_{provider}_chunk` collection names.
-- `v2` uses `MetadataContextChunkText`: labeled title, heading, source language,
-	source collection, page kind, and chunk content. It writes separate
-	`page_chunks_v2_{provider}_chunk` collections. The retrieved evidence remains
-	the original chunk text.
-
-Both versions use the same chunk boundaries and IDs. The version changes only
-the text indexed for dense and sparse retrieval, allowing paired comparisons.
+One chunk-representation version is in use: `v1`, `TitleHeadingChunkText`
+(title, heading path, chunk text), stored as `page_chunks_{provider}_chunk`.
+The version mechanism (`--chunk-version`, a `chunk_versions` map, a version
+suffix on collection and method names) stays so an alternative representation
+can be added as its own collection without touching v1's numbers. Two such
+alternatives (v2 page-metadata lines, v3 plus a location line) existed and were
+removed on 2026-09-08 because neither was ever measured in a published report.
 
 ## Chunk variants
 
@@ -38,13 +34,11 @@ suffixes with the historical case left empty:
 
 ```text
 page_chunks_{provider}_chunk              # v1, base
-page_chunks_v2_{provider}_chunk           # v2, base
 page_chunks_tok512_{provider}_chunk       # v1, tok512 variant
-page_chunks_v2_tok512_{provider}_chunk    # v2, tok512 variant
 ```
 
 ```bash
-uv run python -m src.indexing.chunks --method qwen --chunk-version v2 --variant tok512
+uv run python -m src.indexing.chunks --method qwen --variant tok512
 ```
 
 Readiness is scoped to the variant. `collection_ready` compares against that
@@ -115,12 +109,6 @@ Rebuild one collection:
 
 ```bash
 uv run python -m src.indexing.chunks --method qwen
-```
-
-Build the metadata-context collection without replacing v1:
-
-```bash
-uv run python -m src.indexing.chunks --method qwen --chunk-version v2
 ```
 
 The Nemotron collection uses `nvidia/Nemotron-3-Embed-1B-BF16`, its saved

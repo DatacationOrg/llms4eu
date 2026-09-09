@@ -4,6 +4,11 @@ To make the LLMs4EU scalable there are several mechanisms we can use to reduce s
 
 ## Geographic Enrichment (search space reduction)
 
+*Adopted 2026-09-08; see "Geographic Scope" in architecture-decisions.md. The
+codes live in `page_locations` and in chunk metadata rather than as columns on
+`page_metadata`/`page_chunks`, are derived from coordinates, and NUTS-3 joins
+NUTS-2 as a filter level.*
+
 We inject country_codes to page and page_chunk tables in DB.
 e.g. a french article gets labeled by ISO norm "FR" or "SI"
 we could further refine such geographical searchspace with NUTS-2 codes 

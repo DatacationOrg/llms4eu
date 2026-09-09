@@ -252,16 +252,16 @@ byte-identical output, so reasoning-effort experiments are gpt-oss-only.
 
 | document | content |
 |---|---|
-| `docs/retrieval-results-handmade.md` | July: first embedders, fusion, first reranker attempt (3,476 q) |
-| `docs/retrieval-results-comprehensive-2026-07-27.md` | July: Azure embed-v4, nemotron, first agentic loop, OKF (847 q) |
-| `docs/comprehensive-okf-results.md`, `docs/okf_benchmark.md` | OKF vs chunk retrieval (396 q) |
-| `docs/chunk-token-audit-2026-08-11.md` | 70% of base chunks over the 512-token embedder limit |
-| `docs/chunk-size-sweep-merged-2026-08-18.md` (+ `docs/chunk-size-sweeps/`) | 12 methods × 5 cuttings, full question set |
-| `docs/agentic-retrieval-report-2026-09-01.md` | gpt-oss agentic family, noise floor, DCI analysis |
-| `docs/agentic-tools-2026-08-31.md`, `docs/agentic-dci-2026-09-01.md` | the sweep reports behind it |
-| `docs/agentic-deepseek-2026-09-07.md` | DeepSeek-judged run (rendered from checkpoint) |
-| `docs/agentic-judge-comparison-2026-09-07.md` | three-judge comparison with footnotes |
-| `docs/agentic-findings.md` | July agentic experiments: fusion, multi-query, answerability gating |
-| `docs/architecture-decisions.md` | design record: retrieval names, hybrid and rerank history, OKF, DCI, local inference |
-| `development_assets/plans/gemma-judge-rerun-handoff.md` | day-by-day log of the gemma track and the infrastructure fixes |
+| `docs/reports/retrieval/retrieval-results-handmade.md` | July: first embedders, fusion, first reranker attempt (3,476 q) |
+| `docs/reports/retrieval/retrieval-results-comprehensive-2026-07-27.md` | July: Azure embed-v4, nemotron, first agentic loop, OKF (847 q) |
+| `docs/reports/okf/comprehensive-okf-results.md`, `docs/reports/okf/okf_benchmark.md` | OKF vs chunk retrieval (396 q) |
+| `docs/reports/chunking/chunk-token-audit-2026-08-11.md` | 70% of base chunks over the 512-token embedder limit |
+| `docs/reports/chunking/chunk-size-sweep-merged-2026-08-18.md` (+ `docs/reports/chunking/sweeps/`) | 12 methods × 5 cuttings, full question set |
+| `docs/reports/agentic/agentic-retrieval-report-2026-09-01.md` | gpt-oss agentic family, noise floor, DCI analysis |
+| `docs/reports/agentic/agentic-tools-2026-08-31.md`, `docs/reports/agentic/agentic-dci-2026-09-01.md` | the sweep reports behind it |
+| `docs/reports/agentic/agentic-deepseek-2026-09-07.md` | DeepSeek-judged run (rendered from checkpoint) |
+| `docs/reports/agentic/agentic-judge-comparison-2026-09-07.md` | three-judge comparison with footnotes |
+| `docs/reports/agentic/agentic-findings.md` | July agentic experiments: fusion, multi-query, answerability gating |
+| `docs/architecture/decisions.md` | design record: retrieval names, hybrid and rerank history, OKF, DCI, local inference |
+| `experiments/indexing/README.md` (judge probe and launch sections) | operational notes distilled from the gemma track |
 | `.local/reports/schema-reliability-real-2026-09-03-*.md` | judge reliability on real prompts |

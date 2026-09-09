@@ -12,23 +12,12 @@ uv run python experiments/indexing/evaluate_embedding_models.py --providers qwen
 uv run python experiments/indexing/compare_qwen_modes.py
 uv run python experiments/indexing/compare_qwen_modes.py --category crosslingual
 uv run python experiments/indexing/compare_qwen_modes.py --limit 100
-
-# Paired legacy/v2 reranker and agent comparisons
-just eval-index nemotron v2
-uv run python experiments/indexing/compare_qwen_modes.py \
-	--methods phase2-nemotron \
-	--output docs/retrieval-results-phase2-nemotron.md
 ```
-
-`phase2-nemotron` and `phase2-embed-v4` compare each provider's v1 and v2
-hybrid-reranked baseline and agent. `phase2` includes both provider groups. The
-v2 indexes are separate derived artifacts, so existing collections, retrieval
-method names, reports, and checkpoints remain valid.
 
 When a selected agentic method and its matching reranked baseline are both in
 the run, the report adds paired agentic diagnostics at the configured category
-hit cutoff. For example, `nemotron_hybrid_agentic_v2` is paired with
-`nemotron_hybrid_rerank_v2`. The summary reports retry/rewrite/expansion counts,
+hit cutoff. For example, `nemotron_hybrid_agentic` is paired with
+`nemotron_hybrid_rerank`. The summary reports retry/rewrite/expansion counts,
 recovered and lost hits, retry precision, retry recall, and mean retried versus
 non-retried latency. Here retry precision is the fraction of retries that
 improve the first relevant rank; retry recall is the fraction of baseline misses
@@ -48,14 +37,74 @@ normal indexing path. Every provider is local.
 `config.yaml` sets the default warmup count. Warmup queries are excluded from
 timing.
 
-By default, `compare_qwen_modes.py` runs the primary chunk benchmark: sparse
-rerank, Qwen4B hybrid rerank, Nemotron vector and hybrid rerank, the Qwen and
-Nemotron hybrid agentic methods, and the tool-using `qwen_hybrid_agentic_tools`
-paired against `qwen_hybrid_agentic`. When any agent calls a page tool the
-report adds a `Page tool usage` table, and per-question action sequences and
-search terms land in the `-agentic-diagnostics.json` sidecar. It retains the
-historical `docs/retrieval-results-chunks-okf.md` output name so existing chunk
-checkpoints continue to resume:
+## The comprehensive comparison (`compare_qwen_modes.py`)
+
+`compare_qwen_modes.py` is the full-comparison driver (2026-09-08 rewrite; OKF
+is gone, it is measured out). A cell is one (chunk variant, method) pair and
+keeps per-question rankings, action logs and observations in the checkpoint, so
+the report carries the elaborate diagnostics of the earlier comprehensive runs
+(paired agentic diagnostics, `judge_hit@K`, per-question sidecars) *and* the
+chunk sweep's span and cost metrics (`budget_recall@4000`, `char_recall@10`,
+`store_share@10`, `recall_per_share@10`), per variant and across variants.
+
+Axes, all in one resumable run:
+
+| axis | how | group |
+|---|---|---|
+| embedder | `qwen`, `qwen4b`, `qwen8b`, `nemotron`, `nemotron8b` | `embedders`, `pipelines` |
+| pipeline rung | bare, `_hybrid`, `_hybrid_rerank`, `_hybrid_rerank_4b` | `pipelines`, `reranker-ladder` |
+| geo scope | `_hybrid_geo`, `_hybrid_rerank_geo` (soft: over-fetch and re-score), `_hybrid_rerank_geo_strict` (filter, widen) | `geo` |
+| agent / no agent, tools | `_hybrid_agentic`, `_hybrid_agentic_tools`, `dci`, `dci_k50`, beside `_hybrid_rerank` | `agents` |
+| agents on geo | `_hybrid_agentic_geo`, `_hybrid_agentic_tools_geo` (with `find_pages_near` / `pages_in_region`) | `agents-geo` |
+| judge LLM | unsuffixed = azure DeepSeek; `_gptoss`, `_gemma` from `agentic_judges` in `src/retrieval/config.yaml` | `judges` |
+| reasoning effort | `_high` (gpt-oss only; gemma's `think` is boolean) | `reasoning` |
+| chunk size | `--variants base,tok256,tok512,tok512ov,tok1024` | |
+
+`--methods` mixes groups and bare names (`--methods agents,geo,qwen4b`);
+`full` is the union of every group. Methods run grouped by embedding provider,
+one provider resident at a time, and interleave per question inside a group.
+
+```bash
+# 1. Check the database and price the grid. Nothing is loaded.
+just full-comparison-dry-run                       # sweep store, shared-design DB
+just full-comparison-dry-run agents,geo base       # a slice
+
+# 2. Prerequisites the dry run will name:
+export PAGES_DB_PATH=.local/db/pages-shared.db CHROMA_PATH=.local/chroma-sweep
+just relabel tok256 && just relabel tok512 && just relabel tok512ov && just relabel tok1024
+just full-comparison-prepare                      # page_locations into the sweep DB
+just eval-index qwen v1 base                      # geo metadata: rebuild each (provider, variant); the dry run lists which
+
+# 3. Launch from cron (survives logout), resumable by rerunning the same line.
+just full-comparison
+just full-comparison agents,judges base            # a slice, same checkpoint rules
+```
+
+The run writes `docs/reports/retrieval/retrieval-results-full.md` (rewritten every 30 s while
+running), `<output>.checkpoint.json` (kept by default; `--discard-checkpoint`
+removes it), `<output>.cells.csv` (one row per variant, method, metric, for
+merging with other reports), and the `-judge-actions.json` and
+`-agentic-diagnostics.json` sidecars. `--judge-equivalence` adds `judge_hit@K`
+through the local equivalence judge (`--judge-model` overrides
+`config.yaml:equivalence_judge_model`), cached per variant.
+
+Resume rules: a checkpoint is resumed when the question sets, warmup, design,
+span target and the retrieval fingerprint (reranker, fusion weights, judge
+provider and model, geo settings) match; it is *extended* when only variants or
+methods were added; anything else starts fresh and says which key differed.
+`--catch-up-only` runs newly added cells up to each variant's existing frontier.
+
+Gate any agentic cell on the judge reliability probe (see above) before
+quoting it, and read the `failures` column of the Coverage table: a cell whose
+judge failed is scoring fallback under the method's name.
+
+The legacy default (`--methods legacy-default`) is the 2026-08 primary
+benchmark: sparse rerank, Qwen4B hybrid rerank, Nemotron vector and hybrid
+rerank, the Qwen and Nemotron hybrid agentic methods, and the tool-using
+`qwen_hybrid_agentic_tools` paired against `qwen_hybrid_agentic`. When any agent
+calls a page tool the report adds a `Page tool usage` table, and per-question
+action sequences and search terms land in the `-agentic-diagnostics.json`
+sidecar:
 
 ```bash
 uv run python experiments/indexing/compare_qwen_modes.py
@@ -106,7 +155,7 @@ experiments/indexing/launch_detached.sh gemma-suite \
     uv run python experiments/indexing/compare_chunkings.py --design shared \
     --variants base --limit 500 --agentic-diagnostics --keep-checkpoint \
     --methods qwen_hybrid_rerank,qwen_hybrid_agentic,qwen_hybrid_agentic_tools \
-    --output docs/agentic-gemma-$(date +%F).md
+    --output docs/reports/agentic/agentic-gemma-$(date +%F).md
 grep -cE 'judge failed|corpus agent failed|JudgeCircuitOpen' .local/logs/gemma-suite.log
 ```
 
@@ -126,10 +175,11 @@ translation, and chunk-boundary duplication without silently changing qrels.
 Keep the completed retrieval checkpoint, then run the audit:
 
 ```bash
-uv run python experiments/indexing/compare_qwen_modes.py --keep-checkpoint
+uv run python experiments/indexing/compare_qwen_modes.py   # keeps its checkpoint
 uv run python experiments/indexing/judge_retrieval_equivalence.py \
-  --checkpoint docs/retrieval-results-chunks-okf.md.checkpoint.json \
-  --output docs/retrieval-equivalence-judge.md -k 5
+  --checkpoint docs/reports/retrieval/retrieval-results-full.md.checkpoint.json \
+  --variant base \
+  --output docs/reports/retrieval/retrieval-equivalence-judge.md -k 5
 ```
 
 Alternatively, run the audit as part of the comparison. This adds a
@@ -138,7 +188,7 @@ beside the comparison report:
 
 ```bash
 uv run python experiments/indexing/compare_qwen_modes.py \
-	--keep-checkpoint --judge-equivalence --judge-k 10
+	--judge-equivalence --judge-k 10
 ```
 
 Integrated judging runs immediately after each method's retrieved ranking.
@@ -159,8 +209,7 @@ judge-adjusted rates for conclusions.
 
 The Qwen and Nemotron methods retrieve the same canonical SQLite chunks from
 independent embedding collections. `sparse_rerank` is the embedding-independent
-lexical baseline. Use `--methods all-agentic` for the previous agentic-only
-default suite.
+lexical baseline. Use `--methods agents` for the agentic suite beside its baselines.
 
 Agentic methods normally report the standard top-10 metrics. If an agentic
 retriever expands beyond rank 10, the report also adds hit, recall, and MRR at
@@ -168,17 +217,13 @@ the deepest observed rank. Those expanded columns contain values only for
 agentic methods; non-agentic baselines are shown as `-` because they were not
 retrieved beyond the standard cutoff.
 
-OKF can be included in the checkpointed comparison with `--methods
-comprehensive-okf`. Mixed runs report per-method metrics: chunk RAG methods use
-their native chunk qrels and `hit@K` metrics, while OKF alone uses projected
-concept qrels to classify its `hit@K` values. Both use the same report columns,
-but RAG methods are never evaluated with OKF concept matching.
+OKF is no longer part of the comparison (measured out; see
+`docs/reports/retrieval/retrieval-results-comprehensive-2026-09-07.md` §3 and
+`experiments/indexing/compare_okf_rag.py` for the standalone benchmark).
 
-Use `--methods okf-only` when you want concept-level scoring. In that mode,
-qrels and rankings are projected onto the shared OKF concept ontology.
-
-OKF is not part of any default benchmark group. Score it with
-`--methods okf-only`, or with `compare_okf_rag.py` for the page-level pilot.
+Concept-level OKF scoring (`--methods okf-only`) was removed from
+`compare_qwen_modes.py` with the OKF cells; `compare_okf_rag.py` is the only
+remaining OKF benchmark.
 
 ## OKF versus chunk-RAG benchmark protocol
 
@@ -288,7 +333,7 @@ outputs, and statistical summaries so results can be recomputed.
 
 The original 19-question pilot was recovered from ignored local report artifacts
 and preserved in
-[docs/archived_okf-rag-results-2026-07-15.md](../../docs/archived_okf-rag-results-2026-07-15.md).
+[docs/reports/okf/comprehensive-okf-results.md](../../docs/reports/okf/comprehensive-okf-results.md).
 Treat it as historical evidence only: it is not directly comparable with the
 later broad chunk evaluation.
 

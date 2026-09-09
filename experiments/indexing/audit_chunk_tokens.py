@@ -25,7 +25,7 @@ from src.vector_store.chunks import load_chunks
 
 INDEX_CONFIG = load_yaml(ROOT / "src" / "indexing" / "config.yaml")
 DEFAULT_PROVIDERS = ("qwen", "qwen4b", "nemotron")
-DEFAULT_VERSIONS = ("v1", "v2")
+DEFAULT_VERSIONS = ("v1",)
 DEFAULT_PAIRS = ROOT / "experiments" / "indexing" / "data" / "sl_en_tourism_pairs.jsonl"
 DEFAULT_OUTPUT = ROOT / "docs" / f"chunk-token-audit-{date.today().isoformat()}.md"
 

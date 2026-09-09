@@ -64,7 +64,7 @@ agentic_providers:
 # Switched back to azure on 2026-09-07. The gemma4:31b track is parked: it works
 # (thinking off + function_calling, 100% on 150 real prompts, ~9 s/call) but costs
 # 28 GB of a shared GPU and is ~9x slower than gpt-oss; see
-# development_assets/plans/gemma-judge-rerun-handoff.md.
+# docs/reports/agentic/agentic-judge-comparison-2026-09-07.md.
 agentic_judge_provider: azure
 agentic_judge_azure_timeout_seconds: 90
 # --- Ollama judge settings (only with agentic_judge_provider: ollama) ---
@@ -121,6 +121,31 @@ agentic_reasoning_levels:
 # `_high` methods from `agentic_reasoning_levels` turn thinking back on and are
 # therefore unusable on gemma; the circuit breaker below will stop such a run.
 agentic_judge_structured_method: function_calling
+# The judge LLM as a benchmark axis. Each name here generates
+# `{provider}_hybrid_agentic_{name}`, `{provider}_hybrid_agentic_tools_{name}` and
+# `dci_{name}` methods running under that judge; the unsuffixed methods keep the
+# default above (azure / DeepSeek). Per-schema structured-output methods are
+# spelled out because the working method is a property of the (model, schema)
+# pair, measured by probe_structured_output.py (see the grid above): gpt-oss needs
+# json_schema for ToolAction and function_calling elsewhere; gemma needs thinking
+# off and function_calling everywhere.
+agentic_judges:
+  gptoss:
+    agentic_judge_provider: ollama
+    agentic_judge_model: gpt-oss:20b
+    agentic_judge_reasoning: low
+    agentic_judge_structured_method: function_calling
+    agentic_tools_structured_method: json_schema
+    dci_structured_method: function_calling
+    agentic_judge_num_predict: 1024
+  gemma:
+    agentic_judge_provider: ollama
+    agentic_judge_model: gemma4:31b
+    agentic_judge_reasoning: false
+    agentic_judge_structured_method: function_calling
+    agentic_tools_structured_method: function_calling
+    dci_structured_method: function_calling
+    agentic_judge_num_predict: 4096
 agentic_judge_retries: 3
 # Retries sample at this temperature; the first attempt stays at 0. At 0 an
 # identical prompt reproduces an identical failure, so retries were wasted calls.
@@ -176,3 +201,42 @@ dci_read_limit: 120
 # This is the one pairing the judge swap does not touch.
 dci_structured_method: function_calling
 dci_num_predict: 4096
+
+# --- Geo-aware retrieval (`*_hybrid_geo`, `*_hybrid_rerank_geo[_strict]`, geo tools) ---
+# A question is resolved to a GeoScope once (src/shared/geo_resolver.py): the
+# resolver LLM names the place the question is anchored to, a gazetteer places
+# it, and the result is cached in `geo_scope_cache`. The same judge backend as
+# the agents; ExtractedQueryLocation is a small schema, probe it with
+# experiments/indexing/probe_structured_output.py --schemas ExtractedQueryLocation
+# before changing the model.
+geo_resolver_provider: azure
+geo_structured_method: function_calling
+# "near X" without a distance, and any point or municipality, gets this radius.
+geo_default_radius_km: 25
+# --- Soft path (`*_hybrid_geo`, `*_hybrid_rerank_geo`, the geo agents) ---
+# The stage retrieves limit * overfetch chunks unfiltered; each is re-scored as
+# (1-w) * text + w * s_geo with both in [0, 1]. s_geo = exp(-km/decay) for a
+# point scope, 1/0 for in/out of a region scope, and 1 (neutral) for a page
+# with no location. w = 0.3 is the plan's "in" weight until the resolver
+# returns the spatial relation (geo-improvement-plan.md WP3).
+geo_boost_weight: 0.3
+geo_decay_km: 50
+geo_overfetch: 4
+# Selectivity gate: a region level that keeps more than this share of the
+# located pages carries no information and is skipped. On the current corpus
+# this makes "Slovenija" and "Posavska" scopes no-ops (85 of 89 located pages
+# sit in SI036).
+geo_max_scope_share: 0.9
+# --- Strict path (`*_hybrid_rerank_geo_strict`) ---
+# Fewer located in-scope candidates than this widens the filter one level
+# (radius -> NUTS-3 -> NUTS-2 -> country -> none).
+geo_min_candidates: 5
+# Distance boost after the filter: score * ((1-w) + w*exp(-km/decay)).
+geo_strict_boost_weight: 0.25
+# Whether pages with no location pass the strict filter. On since 2026-09-09:
+# the 2026-09-08 run lost 15 of 72 scoped questions to gold pages without a
+# footprint, so the filter now excludes only pages located *elsewhere*.
+geo_include_null: true
+# Nominatim country bias for ambiguous names (ISO 3166-1 alpha-2, lower case).
+# Empty once the corpus spans several countries.
+geo_country_hint: si

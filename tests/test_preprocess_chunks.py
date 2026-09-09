@@ -1,7 +1,8 @@
 import sqlite3
 
+import pytest
+
 from src.indexing.chunk_text import (
-    MetadataContextChunkText,
     PageChunk,
     TitleHeadingChunkText,
     chunk_text_representation,
@@ -71,29 +72,10 @@ def test_embedding_text_uses_chunk_context():
     assert text == "Castle\nHistory\nFull chunk text."
 
 
-def test_metadata_context_embedding_text_uses_page_metadata():
-    text = MetadataContextChunkText().text_for_embedding(
-        PageChunk(
-            id="chunk-1",
-            page_id="page-1",
-            title="Castle",
-            heading_path="History",
-            text="Full chunk text.",
-            source="encyclopedia",
-            language="sl",
-            page_kind="prose",
-        )
-    )
-
-    assert text == (
-        "Document: Castle\n"
-        "Section: History\n"
-        "Source language: sl\n"
-        "Source collection: encyclopedia\n"
-        "Document type: prose\n"
-        "Content:\nFull chunk text."
-    )
-    assert chunk_text_representation("v2").name == "metadata_context_chunk"
+def test_only_v1_is_registered():
+    assert chunk_text_representation("v1").name == "title_heading_chunk"
+    with pytest.raises(ValueError, match="Unknown chunk representation"):
+        chunk_text_representation("v2")
 
 
 def test_rebuild_page_chunks_appends_new_pages_without_dropping_labels(

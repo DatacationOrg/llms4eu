@@ -38,6 +38,16 @@ eval-index METHOD="qwen" VERSION="v1" VARIANT="base":
 detect-languages *ARGS:
     uv run python -m src.preprocess.languages {{ARGS}}
 
+# Download the Eurostat NUTS 2024 boundaries into data/geo/ (once, ~16 MB).
+fetch-nuts *ARGS:
+    uv run python -m src.shared.nuts {{ARGS}}
+
+# Locate each page (Wikidata, source defaults, then LLM + Nominatim) and derive
+# its NUTS codes. Read-only; pass --apply to write page_locations. Adds rows
+# only, never touches page_chunks, so the eval labels are safe.
+locate-pages *ARGS:
+    uv run python -m src.preprocess.locations {{ARGS}}
+
 # Cut one chunk variant. Needs PAGES_DB_PATH pointed at a `just chunk-sweep-db` copy.
 chunk-variant VARIANT SIZE="512" OVERLAP="0" UNIT="tokens" PROVIDER="qwen" STRATEGY="markdown" EXTRA="":
     uv run python -m src.preprocess.chunks --variant {{VARIANT}} --strategy {{STRATEGY}} \
@@ -96,11 +106,8 @@ shared-overview *ARGS:
     echo "store: $CHROMA_PATH | db: $PAGES_DB_PATH"
     uv run python experiments/indexing/compare_chunkings.py --design shared {{ARGS}}
 
-audit-chunk-tokens PROVIDERS="qwen,qwen4b,nemotron" VERSIONS="v1,v2" OUTPUT="docs/chunk-token-audit-$(date +%F).md":
+audit-chunk-tokens PROVIDERS="qwen,qwen4b,nemotron" VERSIONS="v1" OUTPUT="docs/reports/chunking/chunk-token-audit-$(date +%F).md":
     uv run python experiments/indexing/audit_chunk_tokens.py --providers {{PROVIDERS}} --versions {{VERSIONS}} --output {{OUTPUT}}
-
-eval-phase2 METHODS="phase2-nemotron" OUTPUT="docs/retrieval-results-phase2.md":
-    uv run python experiments/indexing/compare_qwen_modes.py --methods {{METHODS}} --output {{OUTPUT}}
 
 eval-generate LIMIT="10":
     uv run python -m src.eval.generate_dataset --limit {{LIMIT}}
@@ -128,10 +135,40 @@ eval-agentic:
 eval-agentic-limit LIMIT="100":
     uv run python -m src.eval.evaluate --agentic-only --limit {{LIMIT}}
 
-eval-agentic-report OUTPUT="docs/retrieval-results.md":
-    uv run python experiments/indexing/compare_qwen_modes.py --methods all-agentic --output {{OUTPUT}}
+eval-agentic-report OUTPUT="docs/reports/retrieval/retrieval-results.md":
+    uv run python experiments/indexing/compare_qwen_modes.py --methods agents --output {{OUTPUT}}
 
-eval-equivalence CHECKPOINT="docs/retrieval-results-chunks-okf.md.checkpoint.json" OUTPUT="docs/retrieval-equivalence-judge.md" K="5":
+# The comprehensive comparison: every embedder, pipeline rung, chunk-text
+# representation, geo method, agent generation, judge LLM and reasoning rung, over
+# the chunk variants, in one resumable run. Always dry-run first: it checks the
+# database against the design, lists the missing indexes with their build
+# commands, and prices the grid. Runs against the sweep store; the shared-design
+# database needs `just relabel <variant>` for every variant and the page
+# locations copied in (`full-comparison-prepare`) before geo cells can run.
+full-comparison-dry-run METHODS="full" VARIANTS="base,tok256,tok512,tok512ov,tok1024" OUTPUT="docs/reports/retrieval/retrieval-results-full.md":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    export CHROMA_PATH="${SWEEP_CHROMA_PATH:-.local/chroma-sweep}"
+    export PAGES_DB_PATH="${SHARED_PAGES_DB_PATH:-.local/db/pages-shared.db}"
+    echo "store: $CHROMA_PATH | db: $PAGES_DB_PATH"
+    uv run python experiments/indexing/compare_qwen_modes.py --dry-run \
+        --methods {{METHODS}} --variants {{VARIANTS}} --output {{OUTPUT}}
+
+# Copy page locations from the durable database into the sweep database, so geo
+# methods can filter there too. Adds rows only.
+full-comparison-prepare:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    export PAGES_DB_PATH="${SHARED_PAGES_DB_PATH:-.local/db/pages-shared.db}"
+    uv run python -m src.preprocess.locations --copy-from data/db/pages.db
+
+# Launch the full comparison from cron so it survives logout (see launch_cron.sh).
+# Resumable: rerun the same command to continue from the checkpoint.
+full-comparison METHODS="full" VARIANTS="base,tok256,tok512,tok512ov,tok1024" OUTPUT="docs/reports/retrieval/retrieval-results-full.md" NAME="full-comparison":
+    experiments/indexing/launch_cron.sh {{NAME}} .venv/bin/python experiments/indexing/compare_qwen_modes.py \
+        --methods {{METHODS}} --variants {{VARIANTS}} --output {{OUTPUT}} --judge-equivalence
+
+eval-equivalence CHECKPOINT="docs/reports/retrieval/retrieval-results-full.md.checkpoint.json" OUTPUT="docs/reports/retrieval/retrieval-equivalence-judge.md" K="5":
     uv run python experiments/indexing/judge_retrieval_equivalence.py --checkpoint {{CHECKPOINT}} --output {{OUTPUT}} -k {{K}}
 
 eval-inspect LIMIT="20":

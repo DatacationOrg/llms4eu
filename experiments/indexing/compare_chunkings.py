@@ -90,7 +90,7 @@ DEFAULT_OUTPUT = ROOT / "docs" / f"chunk-size-sweep-{date.today().isoformat()}.m
 # Named method sets, so a run meant to line up with an earlier report does not
 # depend on retyping six names correctly.
 #
-# `docs/chunk-size-sweeps/chunk-size-sweep-2026-08-14.md` is the report these are built to extend.
+# `docs/reports/chunking/sweeps/chunk-size-sweep-2026-08-14.md` is the report these are built to extend.
 # It measured three methods over the five variants:
 #
 #   qwen                  vector only
@@ -274,7 +274,7 @@ SHARED_QUESTION_SHARE = 0.5
 # the origin is the model.
 #
 # Refitted 2026-08-17 on the five `nemotron_hybrid_rerank` cells of
-# docs/chunk-size-sweeps/chunk-size-sweep-2026-08-17.md (per-cell 0.00119-0.00149, total
+# docs/reports/chunking/sweeps/chunk-size-sweep-2026-08-17.md (per-cell 0.00119-0.00149, total
 # seconds / total query-tokens = 0.001324). The previous 0.00116 came from a
 # single cell of the 2026-08-14 sweep and ran 12-28% low against every cell of
 # this one.

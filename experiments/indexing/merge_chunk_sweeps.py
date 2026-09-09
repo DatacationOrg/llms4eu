@@ -16,7 +16,7 @@ import csv
 import sys
 from pathlib import Path
 
-DOCS = Path("docs/chunk-size-sweeps")
+DOCS = Path("docs/reports/chunking/sweeps")
 VARIANTS = ["base", "tok256", "tok512", "tok512ov", "tok1024"]
 METRICS = ["hit@1", "hit@5", "hit@10", "recall@10", "mrr@10"]
 CATEGORIES = [

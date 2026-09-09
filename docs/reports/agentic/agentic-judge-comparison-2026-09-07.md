@@ -92,13 +92,12 @@ is the first with real values in these columns.
 
 ## Sources
 
-- gpt-oss: `docs/agentic-tools-2026-08-31.md.checkpoint.json`,
-  `docs/agentic-dci-2026-09-01.md.checkpoint.json`,
-  `docs/agentic-retrieval-report-2026-09-01.md`
-- gemma: `docs/agentic-gemma-2026-09-01.md.checkpoint.json`,
-  `docs/agentic-gemma-2026-09-03.md.checkpoint.json`, `.local/logs/gemma-suite*.log`,
-  `.local/reports/schema-reliability-real-2026-09-03-*.md`
-- DeepSeek: `docs/agentic-deepseek-2026-09-07.md` (rendered from its checkpoint),
+- gpt-oss: `docs/reports/agentic/agentic-tools-2026-08-31.md.checkpoint.json`,
+  `docs/reports/agentic/agentic-dci-2026-09-01.md.checkpoint.json`,
+  `docs/reports/agentic/agentic-retrieval-report-2026-09-01.md`
+- gemma: `.local/reports/schema-reliability-real-2026-09-03-*.md` (the control-only
+  checkpoints and run logs of the two dead runs were deleted on 2026-09-08; their
+  control numbers are quoted in note 1)
+- DeepSeek: `docs/reports/agentic/agentic-deepseek-2026-09-07.md` (rendered from its checkpoint),
   `.local/logs/deepseek-suite-2026-09-07.log`
-- Narrative: `development_assets/plans/gemma-judge-rerun-handoff.md`,
-  `development_assets/plans/gemma-judge-handoff-teams-2026-09-07.md`
+- Overview of every era: `docs/reports/retrieval/retrieval-results-comprehensive-2026-09-07.md`
