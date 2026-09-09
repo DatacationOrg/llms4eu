@@ -1,11 +1,11 @@
 Methods: sparse_rerank, qwen4b_hybrid_rerank, nemotron_hybrid_rerank, embed_v4_hybrid_rerank, embed_v4_hybrid_agentic, nemotron_hybrid_agentic, okf
 Scoring unit: per method (RAG: chunk; OKF: concept)
 Warmup: 5 queries
-Output: docs/retrieval-results-comprehensive-2026-07-27.md
-Checkpoint: docs/retrieval-results-comprehensive-2026-07-27.md.checkpoint.json
+Output: docs/reports/retrieval/retrieval-results-comprehensive-2026-07-27.md
+Checkpoint: docs/reports/retrieval/retrieval-results-comprehensive-2026-07-27.md.checkpoint.json
 Equivalence judge: azure:DeepSeek-V4-Pro
 Equivalence cutoff: 15
-Equivalence cache: docs/retrieval-results-comprehensive-2026-07-27.md.equivalence.json
+Equivalence cache: docs/reports/retrieval/retrieval-results-comprehensive-2026-07-27.md.equivalence.json
 Updated: 2026-07-27T23:46:29
 Status: in-progress
 

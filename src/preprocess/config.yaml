@@ -3,3 +3,14 @@ embedding_model: sentence-transformers/all-MiniLM-L6-v2
 chunk_target_chars: 1800
 chunk_max_chars: 2600
 chunk_min_chars: 300
+
+# Tier 2 of src/preprocess/locations.py: a single-site source is about one
+# place. Wikidata QIDs rather than coordinates, so the coordinates and codes
+# come from the same source of truth as the Wikipedia pages.
+source_locations:
+  castle_rajhenburg:
+    wikidata_qid: Q12790253   # Rajhenburg Castle
+    name: Grad Rajhenburg
+  brestanica_webpage:
+    wikidata_qid: Q2117325    # Brestanica (settlement)
+    name: Brestanica

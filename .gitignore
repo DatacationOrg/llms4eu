@@ -14,3 +14,7 @@ data/scraped/
 data/cache/
 *.checkpoint.json
 knowledge-catalog/
+data/geo/*.geojson
+# Per-run agent sidecars (tens of MB each); the report and cells.csv are tracked.
+docs/reports/**/*-agentic-diagnostics.json
+docs/reports/**/*-judge-actions.json

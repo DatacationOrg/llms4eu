@@ -55,12 +55,38 @@ def build_agentic_diagnostics(
     return {"cutoff": cutoff, "summaries": summaries, "details": details}
 
 
+# Reasoning rungs and named judges are agent-only axes: there is no
+# `*_rerank_high` or `*_rerank_gptoss`, because the reranker runs no LLM. Those
+# suffixes therefore have to come off before the baseline name is derived, or
+# every rung would pair with a method that does not exist and the diagnostics
+# would report no pairs at all rather than an error.
+REASONING_SUFFIXES = ("_high", "_medium", "_low")
+
+
+def judge_suffixes() -> tuple[str, ...]:
+    """`_{name}` for every judge in `agentic_judges` (src/retrieval/config.yaml)."""
+    from src.shared.env import ROOT, load_yaml
+
+    config = load_yaml(ROOT / "src" / "retrieval" / "config.yaml")
+    return tuple(f"_{name}" for name in (config.get("agentic_judges") or {}))
+
+
+def strip_reasoning_suffix(method_name: str) -> tuple[str, str | None]:
+    """Split a method name into its base name and its rung or judge, if any."""
+    for suffix in (*REASONING_SUFFIXES, *judge_suffixes()):
+        if suffix in method_name:
+            head, _, tail = method_name.partition(suffix)
+            return head + tail, suffix.lstrip("_")
+    return method_name, None
+
+
 def baseline_for_agent(method_name: str) -> str | None:
     if "_agentic" not in method_name:
         return None
+    name, _ = strip_reasoning_suffix(method_name)
     # The tool-using agent pairs with the same reranked baseline as the plain
     # agent, so `_tools` must come off before the `_agentic` swap.
-    base = method_name.replace("_agentic_tools", "_agentic", 1)
+    base = name.replace("_agentic_tools", "_agentic", 1)
     return base.replace("_agentic", "_rerank", 1)
 
 

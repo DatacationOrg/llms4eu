@@ -39,11 +39,24 @@ class AgentSearchResult:
     sufficient: bool
 
 
-def agentic_search_places(question: str, limit: int | None = None) -> AgentSearchResult:
+def agentic_search_places(
+    question: str,
+    limit: int | None = None,
+    geo_filter: dict[str, str] | None = None,
+) -> AgentSearchResult:
+    """Retry the legacy places search until the judge is satisfied.
+
+    `geo_filter` is `GeoScope.to_legacy_filter()` for the question's scope; the
+    `WiderGeoFilter` strategy widens it between attempts. The places collection
+    itself carries no location payload yet, so the filter shapes the retry
+    schedule but does not narrow that search; the page-chunk stack
+    (`*_hybrid_rerank_geo`) is where the filter is applied.
+    """
     state = AgentSearchState(
         query=question,
         limit=limit or AGENT_CONFIG["initial_limit"],
         embedding_model=SEARCH_CONFIG["embedding_model"],
+        geo_filter=geo_filter or None,
         attempt=1,
     )
     judge = SufficiencyJudge(

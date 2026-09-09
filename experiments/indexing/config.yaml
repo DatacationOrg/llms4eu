@@ -1,1 +1,5 @@
 default_warmup: 5
+# The evidence-equivalence judge. Config rather than a constant in
+# judge_retrieval_equivalence.py, so every judge role in the repo is set the same
+# way: agentic_judge_model, okf model, anchor_model, question_model, and this.
+equivalence_judge_model: gpt-oss:20b

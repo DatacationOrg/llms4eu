@@ -13,6 +13,7 @@ create table if not exists page_metadata (
   extractor text not null default 'trafilatura',
   page_kind text not null default 'prose',
   markdown_chars integer not null default 0,
+  language text,
   error text
 );
 
