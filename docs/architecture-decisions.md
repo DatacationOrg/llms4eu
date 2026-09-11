@@ -50,6 +50,36 @@ Measured Qwen3 reranking was harmful and slow in our setup. Keep rerank methods
 available for experiments, but do not treat rerank as default until model usage,
 prompt, and input formatting are diagnosed.
 
+## Geo-Aware Ranking
+
+Pages can carry a `latitude`/`longitude`, geocoded once via `just
+geocode-pages` into `page_locations` (`sql/eval.sql`, keyed by `page_id`): a
+local LLM names the one real-world place a page describes, and that name is
+geocoded through OpenStreetMap Nominatim (`src.shared.geocode`). Reruns leave
+existing coordinates alone unless `--force` is passed.
+
+At query time the same LLM step runs on the question; if it names a place,
+every candidate chunk's existing score is rescaled by distance to it. This
+wraps the current retriever rather than replacing it: `qwen_hybrid_geo`
+(`src.retrieval.retrievers.geo.GeoBoostRetriever`) is `qwen_hybrid` plus a
+distance multiplier, registered in `src.retrieval.methods` like any other
+method so `src.eval` can score it directly against the rest:
+
+```text
+final_score = score * ((1 - weight) + weight * exp(-distance_km / decay_km))
+```
+
+Default `weight=0.25` floors the penalty at 75% of the original score, so
+distance can only ever nudge ranking, never override a strong text match —
+the same weighted-fusion shape as hybrid vector+sparse scoring (see "Hybrid
+History"), not a hard radius filter that could drop the right chunk over one
+bad geocode. A chunk or question with no coordinates leaves the score
+untouched.
+
+`qwen_hybrid_geo` only helps once `just geocode-pages` has populated real
+coordinates. Nominatim was chosen over the Google Geocoding API for no API
+key or billing risk, at the cost of an external network dependency.
+
 ## Chunk Storage
 
 SQLite is source of truth for page chunks. Chroma is derived vector cache.
@@ -194,7 +224,9 @@ the query: the first version burned its whole budget re-searching one term.
 ## Local-Only Inference
 
 Every model call in the repo runs on local hardware. There is no hosted-model
-or credential path in the tree.
+or credential path in the tree, except geo-aware ranking's Nominatim lookup
+(see "Geo-Aware Ranking"), which is a plain geocoding HTTP call, not a model
+call or credential.
 
 - Embeddings and reranking run through sentence-transformers; the agentic
   sufficiency judge, the OKF navigator and generator, the evidence-equivalence

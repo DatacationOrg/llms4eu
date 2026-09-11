@@ -4,15 +4,19 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
+from src.db.pages import load_chunk_coordinates
 from src.indexing.chunk_text import CONTEXTUAL_CHUNK_VERSION, LEGACY_CHUNK_VERSION
 from src.retrieval.base import Retriever
 from src.retrieval.retrievers.agentic import AgenticRetriever, default_judge
 from src.retrieval.retrievers.agentic_tools import AgenticToolRetriever
 from src.retrieval.retrievers.fusion import WeightedScoreFusionRetriever
+from src.retrieval.retrievers.geo import GeoBoostRetriever
 from src.retrieval.retrievers.rerank import CrossEncoderRerankRetriever
 from src.retrieval.retrievers.sparse import SparseRetriever
 from src.retrieval.retrievers.vector_chunks import VectorChunkRetriever
 from src.shared.env import load_yaml
+from src.shared.geocode import NominatimGeocoder
+from src.shared.llm import LocalOllamaStructuredLlm
 from src.vector_store.chunks import collection_ready, enabled_provider_names
 
 CONFIG = load_yaml(Path(__file__).with_name("config.yaml"))
@@ -155,6 +159,13 @@ def _provider_specs(
             provider="qwen",
             chunk_version=chunk_version,
         )
+        name = f"qwen_hybrid_geo{suffix}"
+        specs[name] = RetrieverSpec(
+            name,
+            lambda version=chunk_version: _hybrid_geo("qwen", version),
+            provider="qwen",
+            chunk_version=chunk_version,
+        )
     if provider_name in {"qwen", "nemotron"}:
         name = f"{provider_name}_hybrid_agentic{suffix}"
         specs[name] = RetrieverSpec(
@@ -217,6 +228,24 @@ def _hybrid(
         ),
         candidate_limit=CONFIG["rerank_candidate_limit"],
         weights=(CONFIG["hybrid_vector_weight"], CONFIG["hybrid_sparse_weight"]),
+    )
+
+
+def _hybrid_geo(
+    provider_name: str,
+    chunk_version: str = LEGACY_CHUNK_VERSION,
+) -> GeoBoostRetriever:
+    suffix = _version_suffix(chunk_version)
+    return GeoBoostRetriever(
+        name=f"{provider_name}_hybrid_geo{suffix}",
+        base_retriever=_hybrid(provider_name, chunk_version),
+        llm=LocalOllamaStructuredLlm(
+            CONFIG["geo_model"], method=CONFIG["geo_structured_method"]
+        ),
+        geocoder=NominatimGeocoder(),
+        chunk_coordinates=load_chunk_coordinates,
+        weight=CONFIG["geo_weight"],
+        decay_km=CONFIG["geo_decay_km"],
     )
 
 

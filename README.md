@@ -47,10 +47,15 @@ Experimental retrieval eval over scraped Markdown pages:
 ```bash
 just eval-chunks
 just eval-index qwen
+just geocode-pages
 just eval-generate 10
 just eval qwen,sparse
 just eval qwen4b_rerank,qwen4b_hybrid,qwen4b_hybrid_rerank
 ```
+
+`just geocode-pages` geocodes each page once, enabling `qwen_hybrid_geo` — a
+chunk retrieval method that nudges ranking by distance to the question's
+location (see "Geo-Aware Ranking" in [docs/architecture-decisions.md](docs/architecture-decisions.md)).
 
 ## Shape
 
