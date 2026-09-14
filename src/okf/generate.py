@@ -119,18 +119,9 @@ def generate_bundle(
     catalog_path = data_path(CONFIG["catalog_path"])
     if clean:
         _reset_generation(bundle_root, checkpoint_path.parent)
-    if clean:
-        checkpoint = GenerationCheckpoint()
-    else:
-        checkpoint = _load_checkpoint(checkpoint_path)
-    inventory = (
-        DiscoveryInventory()
-        if clean
-        else _load_model(inventory_path, DiscoveryInventory)
-    )
-    catalog = (
-        CanonicalCatalog() if clean else _load_model(catalog_path, CanonicalCatalog)
-    )
+    checkpoint = _load_model(checkpoint_path, GenerationCheckpoint, clean=clean)
+    inventory = _load_model(inventory_path, DiscoveryInventory, clean=clean)
+    catalog = _load_model(catalog_path, CanonicalCatalog, clean=clean)
     _seed_catalog_from_bundle(bundle_root, catalog)
     pages = load_source_pages(pages_db(), source=source, limit=limit)
 
@@ -149,23 +140,7 @@ def generate_bundle(
     regenerate_indexes(bundle_root)
     report = validate_bundle(bundle_root)
     selected_ids = {page.id for page in pages}
-    selected_assignments = {
-        page_id: concept_id
-        for page_id, concept_id in catalog.assignments.items()
-        if page_id in selected_ids
-    }
-    selected_failures = {
-        **{
-            page_id: error
-            for page_id, error in inventory.failures.items()
-            if page_id in selected_ids
-        },
-        **{
-            page_id: error
-            for page_id, error in checkpoint.failures.items()
-            if page_id in selected_ids
-        },
-    }
+    selected_assignments = _selected(catalog.assignments, selected_ids)
     manifest = {
         "okf_version": "0.1",
         "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
@@ -178,12 +153,11 @@ def generate_bundle(
         "processed_pages": processed,
         "resumed_pages": skipped,
         "covered_pages": len(checkpoint.enriched_pages),
-        "fallback_pages": {
-            page_id: error
-            for page_id, error in checkpoint.fallback_pages.items()
-            if page_id in selected_ids
+        "fallback_pages": _selected(checkpoint.fallback_pages, selected_ids),
+        "failures": {
+            **_selected(inventory.failures, selected_ids),
+            **_selected(checkpoint.failures, selected_ids),
         },
-        "failures": selected_failures,
         "concepts": len(set(selected_assignments.values())),
         "catalog_concepts": len(catalog.concepts),
         "model": CONFIG["model"],
@@ -241,7 +215,7 @@ def _discover_pages(
             inventory.failures.pop(page.id, None)
             discovered += 1
         except Exception as exc:
-            inventory.failures[page.id] = _safe_error(exc)
+            inventory.failures[page.id] = str(exc)
             print(f"  failed: {inventory.failures[page.id]}", flush=True)
         _write_model(inventory_path, inventory)
     return discovered
@@ -318,18 +292,13 @@ def _resolve_with_fallback(
 def _resolve_exact_matches(
     proposals: list[PageProposal], catalog: CanonicalCatalog
 ) -> None:
-    names: dict[tuple[str, str], str] = {}
-    for concept_id, concept in catalog.concepts.items():
-        names[(_normalize(concept.title), _normalize(concept.type))] = concept_id
+    names = {
+        (_normalize(concept.title), _normalize(concept.type)): concept_id
+        for concept_id, concept in catalog.concepts.items()
+    }
     for proposal in proposals:
-        proposal_type = _normalize(proposal.type)
-        matching = {
-            names[(normalized, proposal_type)]
-            for name in [proposal.title]
-            if (normalized := _normalize(name), proposal_type) in names
-        }
-        if len(matching) == 1:
-            concept_id = matching.pop()
+        concept_id = names.get((_normalize(proposal.title), _normalize(proposal.type)))
+        if concept_id is not None:
             catalog.assignments[proposal.page_id] = concept_id
 
 
@@ -419,20 +388,14 @@ def _enrich_catalog(
                     checkpoint.enriched_parts[page.id] = part.index
                     checkpoint.failures.pop(page.id, None)
                     _write_model(checkpoint_path, checkpoint)
-                checkpoint.enriched_pages[page.id] = concept_id
-                checkpoint.enriched_parts.pop(page.id, None)
-                checkpoint.failures.pop(page.id, None)
-                checkpoint.fallback_pages.pop(page.id, None)
+                _commit_page(checkpoint, page.id, concept_id)
                 processed += 1
             except Exception as exc:
-                error = _safe_error(exc)
+                error = str(exc)
                 if previous_failure:
                     existing = _source_fallback_document(page, plan, existing)
                     write_concept(bundle_root, concept_id, existing)
-                    checkpoint.enriched_pages[page.id] = concept_id
-                    checkpoint.enriched_parts.pop(page.id, None)
-                    checkpoint.failures.pop(page.id, None)
-                    checkpoint.fallback_pages[page.id] = error
+                    _commit_page(checkpoint, page.id, concept_id, fallback=error)
                     processed += 1
                     print(f"  source fallback: {error}", flush=True)
                 else:
@@ -440,6 +403,22 @@ def _enrich_catalog(
                     print(f"  failed: {error}", flush=True)
             _write_model(checkpoint_path, checkpoint)
     return processed, skipped
+
+
+def _commit_page(
+    checkpoint: GenerationCheckpoint,
+    page_id: str,
+    concept_id: str,
+    *,
+    fallback: str | None = None,
+) -> None:
+    checkpoint.enriched_pages[page_id] = concept_id
+    checkpoint.enriched_parts.pop(page_id, None)
+    checkpoint.failures.pop(page_id, None)
+    if fallback is None:
+        checkpoint.fallback_pages.pop(page_id, None)
+    else:
+        checkpoint.fallback_pages[page_id] = fallback
 
 
 def _llm_client() -> LocalOllamaStructuredLlm:
@@ -717,16 +696,14 @@ def _safe_concept_id(value: str) -> str:
     return f"{category}/{slug}"
 
 
-def _load_model(path: Path, model_type):
-    if not path.exists():
+def _selected(values: dict[str, str], selected_ids: set[str]) -> dict[str, str]:
+    return {key: value for key, value in values.items() if key in selected_ids}
+
+
+def _load_model(path: Path, model_type, *, clean: bool = False):
+    if clean or not path.exists():
         return model_type()
     return model_type.model_validate_json(path.read_text(encoding="utf-8"))
-
-
-def _load_checkpoint(path: Path) -> GenerationCheckpoint:
-    if not path.exists():
-        return GenerationCheckpoint()
-    return GenerationCheckpoint.model_validate_json(path.read_text(encoding="utf-8"))
 
 
 def _reset_generation(bundle_root: Path, state_root: Path) -> None:
@@ -744,10 +721,6 @@ def _write_model(path: Path, model: BaseModel) -> None:
     finally:
         if os.path.exists(temporary):
             os.unlink(temporary)
-
-
-def _safe_error(exc: Exception) -> str:
-    return str(exc)
 
 
 def main() -> None:

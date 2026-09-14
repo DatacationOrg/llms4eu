@@ -98,14 +98,12 @@ def regenerate_indexes(bundle_root: Path) -> list[Path]:
         )
 
     written = []
+    root = bundle_root.resolve()
     directories = set(entries)
     for directory in tuple(directories):
-        parent = directory.parent
-        while bundle_root.resolve() in (parent.resolve(), *parent.resolve().parents):
-            directories.add(parent)
-            if parent.resolve() == bundle_root.resolve():
-                break
-            parent = parent.parent
+        directories.update(
+            root / parent for parent in directory.relative_to(root).parents
+        )
 
     for directory in sorted(
         directories, key=lambda item: len(item.parts), reverse=True

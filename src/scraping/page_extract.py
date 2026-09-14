@@ -33,12 +33,6 @@ class FetchResult:
     markdown_content: PageMarkdownContent | None = None
 
 
-@dataclass(frozen=True)
-class ExtractionAttempt:
-    result: FetchResult | None
-    markdown_chars: int = 0
-
-
 def extract_page(fetched_page: FetchedPage, timeout: float) -> FetchResult:
     if fetched_page.html is None:
         return FetchResult(metadata=_empty_metadata(fetched_page.metadata))
@@ -48,13 +42,15 @@ def extract_page(fetched_page: FetchedPage, timeout: float) -> FetchResult:
 def _extract_or_render(
     metadata: PageMetadata, html: str, timeout: float
 ) -> FetchResult:
-    attempt = _extract_from_html(metadata, html, timeout)
-    if attempt.result:
-        return attempt.result
+    markdown = extract_markdown(html, url=metadata.final_url or metadata.url)
+    result = _extract_from_html(metadata, html, markdown, timeout)
+    if result:
+        return result
 
     try:
         rendered = render_html(
             metadata.final_url or metadata.url,
+            # --timeout can ask for more than the configured browser budget.
             max(int(timeout * 1000), config.browser_timeout_ms),
         )
     except Exception as exc:
@@ -66,27 +62,31 @@ def _extract_or_render(
         )
 
     rendered_metadata = _rendered_metadata(metadata, rendered)
-    rendered_attempt = _extract_from_html(rendered_metadata, rendered.html, timeout)
-    if rendered_attempt.result:
-        return rendered_attempt.result
+    rendered_markdown = extract_markdown(
+        rendered.html, url=rendered_metadata.final_url or rendered_metadata.url
+    )
+    result = _extract_from_html(
+        rendered_metadata, rendered.html, rendered_markdown, timeout
+    )
+    if result:
+        return result
 
     return FetchResult(
         metadata=_empty_metadata(
             rendered_metadata,
             error="Markdown extraction failed after browser render",
-            markdown_chars=rendered_attempt.markdown_chars,
+            markdown_chars=len(rendered_markdown),
         )
     )
 
 
 def _extract_from_html(
-    metadata: PageMetadata, html: str, timeout: float
-) -> ExtractionAttempt:
-    markdown = extract_markdown(html, url=metadata.final_url or metadata.url)
+    metadata: PageMetadata, html: str, markdown: str, timeout: float
+) -> FetchResult | None:
     if markdown_looks_like_contact_footer(markdown):
         document_result = _document_result_from_html(metadata, html, timeout)
         if document_result:
-            return ExtractionAttempt(document_result, len(markdown))
+            return document_result
 
     page_kind = classify_page(html, metadata.final_url or metadata.url, markdown)
     if page_kind == PageKind.LISTING:
@@ -94,27 +94,17 @@ def _extract_from_html(
             html, metadata.final_url or metadata.url, metadata.title
         )
         if listing_markdown:
-            return ExtractionAttempt(
-                _markdown_result(
-                    metadata,
-                    listing_markdown,
-                    extractor=LISTING_EXTRACTOR_NAME,
-                    page_kind=PageKind.LISTING,
-                ),
-                len(markdown),
+            return _markdown_result(
+                metadata,
+                listing_markdown,
+                extractor=LISTING_EXTRACTOR_NAME,
+                page_kind=PageKind.LISTING,
             )
 
     if not markdown_needs_browser_render(markdown):
-        return ExtractionAttempt(
-            _markdown_result(metadata, markdown, page_kind=PageKind.PROSE),
-            len(markdown),
-        )
+        return _markdown_result(metadata, markdown, page_kind=PageKind.PROSE)
 
-    document_result = _document_result_from_html(metadata, html, timeout)
-    if document_result:
-        return ExtractionAttempt(document_result, len(markdown))
-
-    return ExtractionAttempt(None, len(markdown))
+    return _document_result_from_html(metadata, html, timeout)
 
 
 def _rendered_metadata(metadata: PageMetadata, rendered: RenderedPage) -> PageMetadata:
@@ -152,8 +142,6 @@ def _document_result_from_html(
         html,
         page_url=metadata.final_url or metadata.url,
         timeout=timeout,
-        max_bytes=config.max_document_bytes,
-        max_pages=config.max_document_pages,
     )
     if not document_result:
         return None

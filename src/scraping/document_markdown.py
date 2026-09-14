@@ -39,18 +39,9 @@ def extract_first_document_markdown(
     html: str,
     page_url: str,
     timeout: float,
-    max_bytes: int | None = None,
-    max_pages: int | None = None,
 ) -> DocumentMarkdownResult | None:
-    max_bytes = max_bytes or config.max_document_bytes
-    max_pages = max_pages or config.max_document_pages
     for link in find_document_links(html, page_url):
-        result = document_url_to_markdown(
-            link.url,
-            timeout=timeout,
-            max_bytes=max_bytes,
-            max_pages=max_pages,
-        )
+        result = document_url_to_markdown(link.url, timeout=timeout)
         if result.markdown.strip():
             title = link.label.strip()
             prefix = f"# {title}\n\n" if title else ""
@@ -80,14 +71,8 @@ def find_document_links(html: str, page_url: str) -> list[DocumentLink]:
     return _deduplicate_links(links)
 
 
-def document_url_to_markdown(
-    url: str,
-    timeout: float,
-    max_bytes: int | None = None,
-    max_pages: int | None = None,
-) -> DocumentMarkdownResult:
-    max_bytes = max_bytes or config.max_document_bytes
-    max_pages = max_pages or config.max_document_pages
+def document_url_to_markdown(url: str, timeout: float) -> DocumentMarkdownResult:
+    max_bytes = config.max_document_bytes
     try:
         content = _download_document(url, timeout=timeout, max_bytes=max_bytes)
     except Exception as exc:
@@ -107,7 +92,7 @@ def document_url_to_markdown(
             result = converter.convert(
                 tmp.name,
                 max_file_size=max_bytes,
-                max_num_pages=max_pages,
+                max_num_pages=config.max_document_pages,
             )
     except Exception as exc:
         return DocumentMarkdownResult(
