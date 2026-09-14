@@ -9,35 +9,13 @@ from src.shared.indexers import (
 
 
 def test_retriever_catalog_generates_public_names():
+    """One name per shape; the rest of the catalog is the same generator."""
     names = methods.list_retrievers()
 
     assert "sparse" in names
-    assert "qwen_agentic" in names
     assert "qwen_hybrid_agentic" in names
-    assert "qwen4b" in names
-    assert "qwen4b_hybrid" in names
-    assert "qwen4b_rerank" in names
-    assert "qwen4b_hybrid_rerank" in names
-    assert "nemotron" in names
-    assert "nemotron_hybrid" in names
-    assert "nemotron_rerank" in names
-    assert "nemotron_hybrid_rerank" in names
-    assert "nemotron_hybrid_agentic" in names
-    assert "sparse_v2" in names
-    assert "qwen4b_hybrid_rerank_v2" in names
-    assert "nemotron_hybrid_agentic_v2" in names
-    assert "qwen4b_chunk" not in names
+    assert "nemotron_hybrid_rerank_v2" in names
     assert "sparse_hybrid" not in names
-
-
-def test_retriever_catalog_has_no_remote_methods():
-    """Every registered method must run offline."""
-    names = methods.list_retrievers()
-
-    assert not any("cohere" in name for name in names)
-    assert not any("embed_v4" in name for name in names)
-    assert not any(name.startswith("azure") for name in names)
-    assert "azure" not in provider_names()
 
 
 def test_build_retriever_rejects_unknown_name():

@@ -3,17 +3,14 @@ from __future__ import annotations
 import argparse
 import re
 import uuid
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, Field
 
 from src.db.pages import connect_pages as connect
 from src.db.pages import initialize_page_artifacts_db as initialize_eval_db
-from src.shared.env import load_local_env, load_yaml
+from src.shared.env import load_yaml
 from src.shared.llm import (
-    LocalOllamaStructuredLlm,
-    StructuredLlm,
     structured_local_model,
 )
 
@@ -103,11 +100,6 @@ class QuestionCandidate(BaseModel):
     )
 
 
-class SingleQuestionAnswer(BaseModel):
-    question: str | None = Field(default=None, max_length=QUESTION_MAX_CHARS)
-    answer: str | None = Field(default=None, max_length=ANSWER_MAX_CHARS)
-
-
 class EvalQuestionBatch(BaseModel):
     direct_short: QuestionCandidate | None = Field(
         default=None,
@@ -139,7 +131,7 @@ def generate_dataset(
     initialize_eval_db()
     chunks = _eligible_unprocessed_chunks(limit)
     print(f"found {len(chunks)} eligible unprocessed chunks", flush=True)
-    model_name = _resolve_model_name(model_id or CONFIG["question_model"])
+    model_name = model_id or CONFIG["question_model"]
     structured_model = structured_local_model(
         model_name,
         EvalQuestionBatch,
@@ -191,10 +183,6 @@ def _eligible_unprocessed_chunks(limit: int | None) -> list[dict]:
         ]
     chunks = [row for row in rows if _is_fact_dense(row["text"])]
     return chunks[:limit] if limit else chunks
-
-
-def _resolve_model_name(model_name: str) -> str:
-    return CONFIG.get("model_aliases", {}).get(model_name, model_name)
 
 
 def _is_fact_dense(text: str) -> bool:
@@ -327,147 +315,13 @@ def _question_id(chunk_id: str, question: QuestionCandidate) -> str:
     return str(uuid.uuid5(uuid.NAMESPACE_URL, key))
 
 
-def generate_missing_questions(
-    limit: int | None,
-    workers: int = 4,
-    model_id: str | None = None,
-) -> None:
-    initialize_eval_db()
-    load_local_env()
-    client = LocalOllamaStructuredLlm(
-        model_id=_resolve_model_name(model_id or CONFIG["question_model"]),
-        reasoning=CONFIG["question_model_reasoning"],
-        num_ctx=CONFIG["question_model_num_ctx"],
-        num_predict=512,
-        method="function_calling",
-    )
-    tasks = _missing_question_tasks(limit)
-    print(f"found {len(tasks)} missing question slots", flush=True)
-
-    inserted = 0
-    completed = 0
-    with ThreadPoolExecutor(max_workers=workers) as pool:
-        futures = [pool.submit(_single_question, task, client) for task in tasks]
-        for future in as_completed(futures):
-            completed += 1
-            task, item = future.result()
-            if item and _valid_question(task["question_type"], item):
-                with connect() as conn:
-                    inserted += insert_questions(
-                        conn, task["id"], [(task["question_type"], item)]
-                    )
-            if completed % 25 == 0 or completed == len(tasks):
-                print(
-                    f"processed {completed}/{len(tasks)}, inserted {inserted}",
-                    flush=True,
-                )
-    print(f"done, inserted {inserted} questions", flush=True)
-
-
-def _missing_question_tasks(limit: int | None) -> list[dict]:
-    with connect() as conn:
-        rows = [
-            dict(row)
-            for row in conn.execute(
-                """
-                select c.id, c.text, c.heading_path, m.title, s.language,
-                       group_concat(q.question_type, ',') as question_types
-                from page_chunks c
-                join page_metadata m on m.id = c.page_id
-                join page_sources s on s.source = m.source
-                left join eval_relevant_chunks r on r.chunk_id = c.id
-                left join eval_questions q on q.id = r.question_id and q.approved = 1
-                group by c.id, c.text, c.heading_path, m.title, s.language
-                order by c.id
-                """
-            )
-        ]
-
-    tasks = []
-    for chunk in rows:
-        if not _is_fact_dense(chunk["text"]):
-            continue
-        existing = set((chunk["question_types"] or "").split(",")) - {""}
-        for question_type in QUESTION_TYPES:
-            if question_type not in existing:
-                task = {
-                    k: chunk[k]
-                    for k in ("id", "text", "heading_path", "title", "language")
-                }
-                task["question_type"] = question_type
-                task["target_language"] = _crosslingual_language(chunk["id"])
-                tasks.append(task)
-                if limit and len(tasks) >= limit:
-                    return tasks
-    return tasks
-
-
-def _single_question(
-    task: dict,
-    client: StructuredLlm,
-) -> tuple[dict, QuestionCandidate | None]:
-    language = (
-        task["target_language"]
-        if task["question_type"] == "crosslingual"
-        else task["language"]
-    )
-    try:
-        qa = client.structured_output(
-            [
-                ("system", _single_question_system_prompt(task, language)),
-                ("human", _human_prompt(task)),
-            ],
-            SingleQuestionAnswer,
-            retries=3,
-        )
-        if not qa.question or not qa.answer:
-            return task, None
-        return task, QuestionCandidate(
-            question=qa.question,
-            answer=qa.answer,
-            question_language=language,
-        )
-    except (RuntimeError, ValidationError) as exc:
-        print(f"failed {task['id']} {task['question_type']}: {exc}", flush=True)
-        return task, None
-
-
-def _single_question_system_prompt(task: dict, language: str) -> str:
-    question_type = task["question_type"]
-    language_name = LANGUAGE_NAMES.get(language, language)
-    source_language_name = LANGUAGE_NAMES.get(task["language"], task["language"])
-    type_prompts = {
-        "direct_short": f"Write a direct question in {language_name}, about {QUESTION_TARGET_CHARS['direct_short']} characters.",
-        "direct_long": f"Write a direct question with context in {language_name}, about {QUESTION_TARGET_CHARS['direct_long']} characters.",
-        "vague_short": f"Write an indirect question in {language_name}, about {QUESTION_TARGET_CHARS['vague_short']} characters.",
-        "vague_long": f"Write an indirect question with context in {language_name}, about {QUESTION_TARGET_CHARS['vague_long']} characters.",
-        "crosslingual": f"Write a direct question in {language_name}, about {QUESTION_TARGET_CHARS['crosslingual']} characters; translate the answer too.",
-    }
-    return f"""
-Generate one question and one answer from the chunk.
-
-Question type: {question_type}
-Source language: {source_language_name}
-{type_prompts[question_type]}
-Use only facts explicitly present in the chunk.
-Answer in the same language as the question, about {ANSWER_TARGET_CHARS} characters.
-If no good question is possible, return null values.
-Return only JSON: {{"question": string|null, "answer": string|null}}
-"""
-
-
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--limit", type=int)
     parser.add_argument("--model")
     parser.add_argument("--reasoning", action="store_true")
-    parser.add_argument("--fill-missing", action="store_true")
-    parser.add_argument("--workers", type=int, default=4)
     args = parser.parse_args()
-    if args.fill_missing:
-        generate_missing_questions(args.limit, args.workers, args.model)
-    else:
-        generate_dataset(args.limit, args.model, args.reasoning or None)
+    generate_dataset(args.limit, args.model, args.reasoning or None)
 
 
 if __name__ == "__main__":

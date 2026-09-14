@@ -486,49 +486,64 @@ def _run_eval_with_checkpoint(
         for name in method_names
     }
 
-    timings: dict[str, dict[str, float]] = {}
+    timed_question_ids = {row["id"] for row in scored_questions}
+    timed_relevance = [
+        row for row in relevance if row["question_id"] in timed_question_ids
+    ]
+    return _build_eval_run(
+        state=state,
+        questions=scored_questions,
+        relevance=timed_relevance,
+        rankings=method_rankings,
+        method_names=method_names,
+        warmup=warmup,
+    ), state
+
+
+def _build_eval_run(
+    *,
+    state: dict[str, Any],
+    questions: list[dict],
+    relevance: list[dict],
+    rankings: dict[str, dict[str, list[str]]],
+    method_names: list[str],
+    warmup: int,
+    divisor: int | None = None,
+) -> EvalRun:
+    """Score one set of rankings and wrap it with per-method timings."""
+    count = divisor if divisor is not None else len(questions)
+    timings = {}
     for name in method_names:
         elapsed = float(state["methods"][name]["elapsed_seconds"])
         total_queries = float(state["methods"][name].get("timed_total_queries", 0.0))
-        question_count = len(scored_questions)
-        queries_per_query = total_queries / question_count if question_count else 0.0
         timings[name] = {
             "seconds": elapsed,
-            "ms_per_query": elapsed * 1000 / question_count if question_count else 0.0,
-            "queries_per_query": queries_per_query,
+            "ms_per_query": elapsed * 1000 / count if count else 0.0,
+            "queries_per_query": total_queries / count if count else 0.0,
             "total_queries": total_queries,
             "chunk_expansions": count_chunk_expansions(
                 state["methods"][name].get("action_log", [])
             ),
         }
-
-    timed_question_ids = {row["id"] for row in scored_questions}
-    timed_relevance = [
-        row for row in relevance if row["question_id"] in timed_question_ids
-    ]
-    score_names, scores = score_eval_rankings(
-        timed_relevance,
-        method_rankings,
-        method_names,
-    )
+    score_names, scores = score_eval_rankings(relevance, rankings, method_names)
     category_metric_names, category_scores = _score_method_categories(
-        questions=scored_questions,
-        relevance=timed_relevance,
-        rankings=method_rankings,
+        questions=questions,
+        relevance=relevance,
+        rankings=rankings,
         method_names=method_names,
     )
     return EvalRun(
-        questions=scored_questions,
-        relevance=timed_relevance,
+        questions=questions,
+        relevance=relevance,
         methods=method_names,
         warmup_count=warmup,
-        rankings=method_rankings,
+        rankings=rankings,
         timings=timings,
         score_names=score_names,
         scores=scores,
         category_metric_names=category_metric_names,
         category_scores=category_scores,
-    ), state
+    )
 
 
 def _run_warmup_with_checkpoint(
@@ -937,42 +952,14 @@ def _build_live_report(
         }
         for name in method_names
     }
-    score_names, scores = score_eval_rankings(
-        partial_relevance,
-        partial_rankings,
-        method_names,
-    )
-    category_metric_names, category_scores = _score_method_categories(
+    partial_run = _build_eval_run(
+        state=state,
         questions=partial_questions,
         relevance=partial_relevance,
         rankings=partial_rankings,
         method_names=method_names,
-    )
-    timings: dict[str, dict[str, float]] = {}
-    for name in method_names:
-        elapsed = float(state["methods"][name]["elapsed_seconds"])
-        total_queries = float(state["methods"][name].get("timed_total_queries", 0.0))
-        timings[name] = {
-            "seconds": elapsed,
-            "ms_per_query": elapsed * 1000 / aligned,
-            "queries_per_query": total_queries / aligned,
-            "total_queries": total_queries,
-            "chunk_expansions": count_chunk_expansions(
-                state["methods"][name].get("action_log", [])
-            ),
-        }
-
-    partial_run = EvalRun(
-        questions=partial_questions,
-        relevance=partial_relevance,
-        methods=method_names,
-        warmup_count=warmup,
-        rankings=partial_rankings,
-        timings=timings,
-        score_names=score_names,
-        scores=scores,
-        category_metric_names=category_metric_names,
-        category_scores=category_scores,
+        warmup=warmup,
+        divisor=aligned,
     )
     if equivalence_audit is not None:
         summaries = equivalence_audit.summaries(
