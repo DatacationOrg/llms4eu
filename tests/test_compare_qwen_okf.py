@@ -235,21 +235,11 @@ def test_equivalence_space_uses_chunks_for_rag_and_concepts_for_okf():
         questions={},
         relevant_ids={},
         documents={},
-        chunk_pages={"chunk-a": "page-a", "chunk-b": "page-b"},
-        page_concepts={
-            "page-a": ["destinations/a.md"],
-            "page-b": ["destinations/a.md", "destinations/b.md"],
-        },
         okf_methods=frozenset({"okf"}),
         concept_relevant_ids={"q1": ["destinations/a.md"]},
         concept_documents={"destinations/a.md": "Concept evidence"},
     )
 
-    assert space.project_ranking("rag", ["chunk-a", "chunk-b"]) == [
-        "chunk-a",
-        "chunk-b",
-    ]
-    assert space.project_ranking("okf", ["destinations/b.md"]) == ["destinations/b.md"]
     assert space.relevant_for("rag", "q1") == []
     assert space.relevant_for("okf", "q1") == ["destinations/a.md"]
     assert space.documents_for("rag") == {}

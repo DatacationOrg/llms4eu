@@ -33,8 +33,6 @@ class _EvidenceSpace:
     questions: dict[str, dict[str, str]]
     relevant_ids: dict[str, list[str]]
     documents: dict[str, str]
-    chunk_pages: dict[str, str] = field(default_factory=dict)
-    page_concepts: dict[str, list[str]] = field(default_factory=dict)
     okf_methods: frozenset[str] = frozenset()
     concept_relevant_ids: dict[str, list[str]] = field(default_factory=dict)
     concept_documents: dict[str, str] = field(default_factory=dict)
@@ -57,9 +55,6 @@ class _EvidenceSpace:
             if method_name in self.okf_methods
             else self.documents
         )
-
-    def project_ranking(self, method_name: str, ranked: list[str]) -> list[str]:
-        return ranked
 
 
 @dataclass
@@ -110,7 +105,6 @@ class IncrementalEquivalenceAudit:
         gold_ids = self.evidence.relevant_for(method_name, str(question_id))
         if question is None or not gold_ids:
             return
-        ranked = self.evidence.project_ranking(method_name, ranked)
         if _strict_hit(
             ranked=ranked,
             gold_ids=gold_ids,
@@ -186,7 +180,6 @@ class IncrementalEquivalenceAudit:
                 gold_ids = self.evidence.relevant_for(method_name, str(question_id))
                 if ranked is None or question is None or not gold_ids:
                     continue
-                ranked = self.evidence.project_ranking(method_name, ranked)
                 summary["questions"] += 1
                 if _strict_hit(
                     ranked=ranked,
@@ -318,7 +311,6 @@ def judge_checkpoint(
             gold_ids = evidence.relevant_for(method_name, question_id)
             if ranked is None or question is None or not gold_ids:
                 continue
-            ranked = evidence.project_ranking(method_name, ranked)
             summary["questions"] += 1
             if _strict_hit(
                 ranked=ranked,
@@ -472,8 +464,6 @@ def _load_evidence_space(
         questions=questions,
         relevant_ids=relevant_ids,
         documents=chunks,
-        chunk_pages=chunk_pages,
-        page_concepts=page_concepts,
         okf_methods=frozenset(str(name) for name in signature.get("okf_methods", [])),
         concept_relevant_ids=concept_relevance,
         concept_documents=documents,
