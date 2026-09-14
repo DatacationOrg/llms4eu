@@ -21,6 +21,49 @@ Stored page kinds are `prose`, `listing`, `document`, and `empty`.
 Fetch, fallback, document, and listing thresholds live in `config.yaml` under
 `fetch_pages`.
 
+A seed row may carry a `language`; `fetch_pages.py` records it in
+`page_sources`, so a source from another country does not inherit the
+configured Slovenian default.
+
+## Seed files
+
+`data/brestanica.json` is the reference seed: one small heritage locality seen
+from four kinds of source: the attraction's own website (`castle_rajhenburg`),
+the town's website (`brestanica_webpage`), the national biographical lexicon's
+entries for people from the area (`svn_biography`), and the national-language
+Wikipedia articles the town article links to (`wikipedia`).
+
+`seed_urls.py` builds seeds of the same shape for localities in neighbouring
+countries, declared in `seeds.yaml`. Per cluster it discovers the site URLs
+(sitemaps, else a shallow crawl), the Wikipedia articles (the seed articles'
+wikilinks in reading order plus a people category) and the lexicon entries
+(Wikidata: people born in the town or its district that have an entry, most
+linked first, URL from the property's formatter), fetches every candidate once
+and keeps those that answer. Output is `data/seeds/<cluster>.json` and the
+merged `data/eu_neighbours.json`:
+
+```bash
+just seed-urls                      # all clusters
+just seed-urls --cluster hr_zagorje # one cluster, no merged file
+just fetch-pages data/eu_neighbours.json
+```
+
+Single-site sources also need a `source_locations` entry in
+`src/preprocess/config.yaml`, the Wikidata item the geo tier assigns to every
+page of that source.
+
+The Brestanica sources are the gold standard. `seed_quality.py` scores each
+new source against the Brestanica source of its kind (the `reference` map in
+`seeds.yaml`) on page count, median length, prose share, stub share,
+duplicate pages and detected-versus-declared language, and flags a source
+that is thin, stub-heavy or duplicated relative to its reference. Reports
+live under `docs/reports/scraping/`.
+
+```bash
+just seed-quality --output docs/reports/scraping/seed-quality-$(date +%F).md
+just seed-quality --prune-below 300   # drop new-source stubs; never a reference page
+```
+
 `scraper.py` crawls sites and can save raw `.txt` outputs under `data/scraped/`.
 
 `transform.py` turns scraped site/page content into `Place` rows.

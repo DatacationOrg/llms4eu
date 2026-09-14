@@ -113,12 +113,19 @@ def detect_page_languages() -> list[PageLanguage]:
     return results
 
 
-def apply_page_languages(results: list[PageLanguage]) -> int:
-    """Write confident detections onto page_metadata.language."""
+def apply_page_languages(
+    results: list[PageLanguage], exclude_sources: frozenset[str] = frozenset()
+) -> int:
+    """Write confident detections onto page_metadata.language.
+
+    `exclude_sources` keeps a reference corpus as it was labelled: the
+    Brestanica sources stay stamped `sl` while the neighbouring-country
+    sources take their detected per-page language.
+    """
     rows = [
         (result.detected, result.page_id)
         for result in results
-        if result.detected is not None
+        if result.detected is not None and result.source not in exclude_sources
     ]
     with connect() as conn:
         conn.executemany(
@@ -165,6 +172,13 @@ def main() -> None:
         action="store_true",
         help="Write detected languages to page_metadata.language.",
     )
+    parser.add_argument(
+        "--exclude-source",
+        action="append",
+        default=[],
+        metavar="SOURCE",
+        help="Leave this source's pages unchanged when applying (repeatable).",
+    )
     args = parser.parse_args()
 
     results = detect_page_languages()
@@ -172,7 +186,7 @@ def main() -> None:
     if not args.apply:
         print("\nread-only: re-run with --apply to write page_metadata.language")
         return
-    written = apply_page_languages(results)
+    written = apply_page_languages(results, frozenset(args.exclude_source))
     print(f"\nwrote language for {written} pages")
 
 

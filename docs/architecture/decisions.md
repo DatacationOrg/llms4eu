@@ -359,3 +359,60 @@ Two consequences for the LLM layer:
 Consequence: agentic and `embed_v4_*` numbers in existing `docs/` reports were
 produced with the hosted models and are not directly comparable to new runs.
 Label them as historical rather than re-baselining old reports.
+
+## Corpus Expansion (2026-09-13)
+
+The corpus grew from one locality to ten. Brestanica (176 pages, four Slovenian
+sources, 1.08M chars) stays as it was fetched and labelled and is the gold
+standard; nine clusters of the same shape were added around it:
+`src/scraping/seeds.yaml` declares, per locality, the attraction's own site, the
+town's site, the national biographical lexicon and the national-language
+Wikipedia, and `src/scraping/seed_urls.py` discovers, verifies and writes the
+seed files. Result after quality pruning: 1,338 pages, 14.5M chars, 11,261
+base chunks, 38 sources, 8 languages, 690 pages located in 8 countries.
+
+Why: the September geo runs found the spatial signal a constant (85 of 89 located
+pages in one NUTS-3, so region scopes were no-ops), and the chunk-size sweep
+found a 1,024-token cut returning a few percent of the whole store at k=10, so
+size alone could buy recall. Both need a corpus spread over regions and about
+an order of magnitude larger. Now eight NUTS-3 regions hold 58 or more located
+pages each (SI036, SI032, HR064, AT224, HU222, CZ064, SK022, DE214), the
+Croatian cluster is 35 km from Brestanica across a border, the two Czech
+clusters are 8 km apart, and a 1,024-token cut at k=10 reads about 0.3% of the
+store instead of 3.8%.
+
+Decisions:
+
+- **Lexicon entries come from Wikidata, not lexicon search pages.** People born
+  in the town or its district with the lexicon's identifier property, most
+  linked first, URL from the property's formatter. The lexicon search pages are
+  JavaScript-rendered and yield nothing. Slovakia has no such property, so its
+  people come from the Wikipedia category instead.
+- **The reference is never touched.** Language detection was applied with the
+  four Brestanica sources excluded (`--exclude-source`), locations with only
+  the new sources selected (`--source`, now repeatable), and the seed builder
+  drops any URL in `data/brestanica.json`. The last rule exists because two
+  Ptuj wikilinks (Slovenija, Statistični urad) were already reference pages;
+  the fetch upsert moved them to the new source and refreshed their text
+  before this was caught, and they were restored from a pre-fetch copy.
+- **Quality is measured against the reference of the same kind**
+  (`src/scraping/seed_quality.py`, report in `docs/reports/scraping/`). The
+  Brestanica castle and town sites themselves have a third stub pages, which
+  sets the bar. Two cuts were applied to new sources only: 151 pages with under
+  300 characters of prose (mostly Czech lexicon index records, which exist for
+  people whose entry is not yet written) and 91 pages whose content repeated
+  within the source (cookie notices and navigation blocks the extractor fell
+  back to on Desinić, Bojnice, visitptuj and Miramare). The seed builder now
+  rejects pages with under 300 extracted characters at seed time. One source
+  stays flagged: Deutsche Biographie entries are real but short (median 753
+  prose chars against 2,502 for Slovenska biografija).
+- **Geo tiers 1 and 2 only, so far.** 602 of 1,159 new pages got a primary
+  location from Wikidata or the source default; the LLM + Nominatim tier has
+  not run on them, and `geo_country_hint` is still `si`, which mis-geocodes
+  foreign place names (see the 2026-09 country-hint note). Miramare's point
+  falls outside every NUTS polygon (it sits on the coast), so those 35 pages
+  have coordinates but no region code.
+
+Consequence: every report in `docs/` dated before 2026-09-13 was measured on the
+176-page corpus. The approved questions and labels still cover only that part;
+new questions for the added pages are a separate step.

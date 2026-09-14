@@ -546,7 +546,12 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--apply", action="store_true", help="Write page_locations.")
     parser.add_argument("--limit", type=int, help="Only the first N pages.")
-    parser.add_argument("--source", help="Only pages of this source.")
+    parser.add_argument(
+        "--source",
+        action="append",
+        help="Only pages of this source (repeatable). With --apply, other "
+        "sources keep their rows, so a reference corpus stays as located.",
+    )
     parser.add_argument("--no-llm", action="store_true", help="Skip tier 3.")
     parser.add_argument("--no-wikidata", action="store_true", help="Skip tiers 1-2.")
     parser.add_argument("--workers", type=int, default=2)
@@ -610,7 +615,7 @@ def main() -> None:
 
     pages = load_pages()
     if args.source:
-        pages = [page for page in pages if page.source == args.source]
+        pages = [page for page in pages if page.source in set(args.source)]
     if args.limit:
         pages = pages[: args.limit]
     hint = RETRIEVAL_CONFIG.get("geo_country_hint") or None

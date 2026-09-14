@@ -23,6 +23,7 @@ reports: the four measurement eras do not share one (see the 2026-09-07 overview
 
 | folder | contents | produced by |
 |---|---|---|
+| [all-runs-unified-2026-09-14.md](reports/all-runs-unified-2026-09-14.md) | **start here**: every reported or generated result with more than 150 samples from May to September 2026, one table per metric across eras, deleted historical reports recovered from git, smaller-sample results listed in its Appendix A | hand-merged; sources in its Appendix B |
 | [retrieval/](reports/retrieval/) | the comprehensive overviews (2026-07-27, **2026-09-07** is the current head), the hand-made eval, and the output of the full comparison (`retrieval-results-full.md`) | `compare_qwen_modes.py`, `just full-comparison` |
 | [agentic/](reports/agentic/) | agentic retrieval findings, the 2026-09-01 evaluation report, the tools and DCI runs, the DeepSeek run, the judge-model comparison | `compare_qwen_modes.py`, `compare_chunkings.py` |
 | [chunking/](reports/chunking/) | the chunk token audit, the merged chunk-size table, and `sweeps/` with every chunk-size sweep and its `.cells.csv` | `audit_chunk_tokens.py`, `compare_chunkings.py`, `merge_chunk_sweeps.py` |

@@ -14,3 +14,58 @@ source_locations:
   brestanica_webpage:
     wikidata_qid: Q2117325    # Brestanica (settlement)
     name: Brestanica
+  # Neighbouring-country clusters from src/scraping/seeds.yaml.
+  ptuj_museum:
+    wikidata_qid: Q7257119    # Ptuj Castle, seat of the regional museum
+    name: Ptujski grad
+  ptuj_tourism:
+    wikidata_qid: Q15906      # Ptuj
+    name: Ptuj
+  veliki_tabor_castle:
+    wikidata_qid: Q606233     # Veliki Tabor Castle
+    name: Veliki Tabor
+  desinic_municipality:
+    wikidata_qid: Q904320     # Desinić
+    name: Desinić
+  riegersburg_castle:
+    wikidata_qid: Q872115     # Riegersburg Castle
+    name: Riegersburg
+  riegersburg_municipality:
+    wikidata_qid: Q679422     # Riegersburg (Steiermark)
+    name: Riegersburg
+  duino_castle:
+    wikidata_qid: Q2276731    # Duino Castle
+    name: Castello di Duino
+  miramare_castle:
+    wikidata_qid: Q165069     # Miramare Castle
+    name: Castello di Miramare
+  jurisics_castle:
+    wikidata_qid: Q944804     # Jurisics Castle
+    name: Jurisics-vár
+  koszeg_town:
+    wikidata_qid: Q613813     # Kőszeg
+    name: Kőszeg
+  lednice_castle:
+    wikidata_qid: Q370990     # Lednice Castle
+    name: Zámek Lednice
+  lednice_municipality:
+    wikidata_qid: Q1017320    # Lednice (okres Břeclav)
+    name: Lednice
+  valtice_castle:
+    wikidata_qid: Q877062     # Valtice Castle
+    name: Zámek Valtice
+  valtice_town:
+    wikidata_qid: Q782147     # Valtice
+    name: Valtice
+  bojnice_castle:
+    wikidata_qid: Q1520849    # Bojnice Castle
+    name: Bojnický zámok
+  bojnice_town:
+    wikidata_qid: Q788753     # Bojnice
+    name: Bojnice
+  burghausen_castle:
+    wikidata_qid: Q258217     # Burghausen Castle
+    name: Burg zu Burghausen
+  burghausen_town:
+    wikidata_qid: Q262669     # Burghausen
+    name: Burghausen

@@ -19,6 +19,18 @@ scrape-web:
 fetch-pages SOURCE="data/brestanica.json" DB="data/db/pages.db":
     uv run python -m src.scraping.fetch_pages {{SOURCE}} --db {{DB}} --workers 4
 
+# Discover and verify seed URLs for the neighbouring-country localities in
+# src/scraping/seeds.yaml; writes data/seeds/<cluster>.json and the merged
+# data/eu_neighbours.json. Network-bound, a few minutes per cluster.
+seed-urls *ARGS:
+    uv run python -m src.scraping.seed_urls {{ARGS}}
+
+# Score every neighbouring-country source against the Brestanica source of its
+# kind (size, prose share, stubs, duplicates, language). Read-only; pass
+# --prune-below 300 to drop new-source stub pages before chunking.
+seed-quality *ARGS:
+    uv run python -m src.scraping.seed_quality {{ARGS}}
+
 test:
     uv run --extra dev pytest
 
