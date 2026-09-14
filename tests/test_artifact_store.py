@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from src.shared.env import chroma_path, data_path, okf_bundle, pages_db
+from src.shared.env import chroma_path, data_path, pages_db
 
 
 def test_data_path_defaults_to_the_shared_store(monkeypatch):
@@ -28,6 +28,5 @@ def test_named_artifacts_live_in_the_store(monkeypatch, tmp_path):
     monkeypatch.setenv("LLMS4EU_DATA", str(tmp_path))
 
     assert pages_db() == tmp_path / "db/pages.db"
-    assert okf_bundle() == tmp_path / "okf/tourism"
     assert chroma_path() == tmp_path / "chroma"
     assert chroma_path().is_dir()

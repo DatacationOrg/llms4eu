@@ -1,4 +1,11 @@
-# Open Knowledge Format
+# OKF method notes (archived)
+
+The OKF experiment ended; its code was removed from the repo on 2026-09-14.
+This is how the generator worked, kept as a record alongside the results in
+`comprehensive-okf-results.md` and `okf_benchmark.md`. The code is recoverable
+from git history (last present at commit b9d0acd).
+
+---
 
 Generates and consumes a minimal OKF v0.1 tourism bundle from complete scraped
 pages. Generation reads complete Markdown from `$LLMS4EU_DATA/db/pages.db`; navigation

@@ -13,12 +13,20 @@ from urllib.request import Request, urlopen
 import httpx
 from bs4 import BeautifulSoup
 
-from src.scraping.scraper import HEADERS
 from src.scraping.settings import fetch_pages_config
 from src.shared.schema import PageMetadata
 
 
 config = fetch_pages_config()
+
+HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/131.0.0.0 Safari/537.36"
+    ),
+    "Accept-Language": "en-US,en;q=0.9,nl;q=0.8",
+}
 
 
 @dataclass(frozen=True)

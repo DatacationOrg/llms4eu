@@ -1,3 +1,1 @@
-seed_path: data/places.jsonl
-schema_path: sql/init.sql
 default_source_language: sl

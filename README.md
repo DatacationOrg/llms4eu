@@ -1,14 +1,15 @@
 # LLMs4EU - Tourism - RAG
 
-Local RAG for tourism places. SQLite stores canonical content, and Chroma stores
-derived vector indexes. Both run entirely inside the Python environment.
+Local retrieval research over Slovenian tourism pages. SQLite stores canonical
+content, Chroma stores derived vector indexes, and everything runs inside the
+Python environment.
 
 ## Requirements
 
 - [uv](https://docs.astral.sh/uv/)
 - [just](https://just.systems/)
-- [Ollama](https://ollama.com/) — only needed for `just ask`, `just scrape`,
-  and `just eval-generate`
+- [Ollama](https://ollama.com/) — needed for `just eval-generate` and for the
+  agentic retrieval methods
 
 ## Setup
 
@@ -18,9 +19,9 @@ cp .env.example .env  # set LLMS4EU_DATA, the shared artifact store
 ```
 
 All generated data lives outside the repo in one place, `LLMS4EU_DATA`
-(default `/data/llms4eu`): the page database, the OKF bundle, the Chroma
-vector cache, embedding caches, benchmark checkpoints and judge caches.
-The repo tracks code, SQL schema and the small seed fixtures only.
+(default `/data/llms4eu`): the page database, the Chroma vector cache,
+embedding caches, benchmark checkpoints and judge caches. The repo tracks
+code, SQL schema and the source URL list only.
 
 ```bash
 ollama pull gemma4:e4b
@@ -32,59 +33,48 @@ ollama pull gpt-oss:20b
 ## Usage
 
 ```bash
-just init        # load seed data into SQLite
-just index       # embed places and rebuild Chroma
-just ask What place is best for a quiet forest walk near water?  # retrieve + LLM answer
-just scrape https://example.com  # crawl a site, ingest into SQLite, reindex
-just scrape-web  # start the local scraping UI
-just eval-index qwen  # rebuild the default qwen chunk vector index
-just test        # run the non-LLM test suite
+just fetch-pages   # fetch the Slovenian source URLs into the page database
+just chunk         # split fetched Markdown into heading-aware page chunks
+just index qwen    # embed those chunks into a Chroma collection
+just test          # run the non-LLM test suite
 ```
 
-Search defaults to top 10 final results. Override per query:
+Retrieval evaluation over the scraped pages:
 
 ```bash
-uv run python -m src.rag.search "lake picnic" --limit 5
-```
-
-Experimental retrieval eval over scraped Markdown pages:
-
-```bash
-just eval-chunks
-just eval-index qwen
-just eval-generate 10
-just eval qwen,sparse
-just eval qwen4b_rerank,qwen4b_hybrid,qwen4b_hybrid_rerank
+just eval-generate 10        # generate labelled questions
+just eval qwen,sparse        # compare named retrieval methods
+just eval-report             # full benchmark report into docs/
+just eval-inspect            # look at the labelled dataset
 ```
 
 ## Shape
 
 ```text
-data/           tracked seed fixtures (places.jsonl, brestanica.json)
-sql/            one-table schema, portable to SQLite and Postgres
-src/db/         SQLite initialize and place queries
-src/preprocess/ rebuild derived data from SQL rows
+data/           brestanica.json, the tracked Slovenian source URLs
+sql/            page and eval schema, portable to SQLite and Postgres
+src/scraping/   fetch pages, extract Markdown, store in SQLite
+src/db/         page-database connection and schema helpers
+src/preprocess/ heading-aware page chunking
 src/indexing/   provider-shaped vector indexing
 src/vector_store/  Chroma collection, upsert, vector search
 src/retrieval/  chunk retrieval methods and catalog
-src/rag/        place search and answer scripts
-src/eval/       chunked raw-page retrieval evaluation
-src/scraping/   crawler, transform, ingest, scraping UI
+src/eval/       retrieval evaluation over labelled questions
 src/shared/     schema, embeddings, env, LLM helper
-tests/          data contract, retrieval, scrape transform
+experiments/    benchmark orchestration over the method catalog
+tests/          schema contract, retrieval, extraction
 ```
 
 Durable and regenerable artifacts alike live under `LLMS4EU_DATA`
-(`db/pages.db`, `okf/tourism/`, `chroma/`, `embeddings/`, `checkpoints/`,
-`judge-cache/`). SQLite page chunks are the source of truth for chunk text;
+(`db/pages.db`, `chroma/`, `embeddings/`, `checkpoints/`, `judge-cache/`). SQLite page chunks are the source of truth for chunk text;
 Chroma collections are derived indexes over those chunks.
 
 ---
 
 ## Roadmap
 
-This repo focuses on building a clean, portable place database as the foundation
-for a larger RAG system.
+This repo focuses on a clean, portable page corpus and a measured retrieval
+pipeline over it.
 
 **Current:** SQLite + Chroma, everything local, no services needed.
 
@@ -100,4 +90,5 @@ tools and shared infrastructure are available.
 
 - [docs/architecture-decisions.md](docs/architecture-decisions.md): durable decisions and why they matter.
 - [experiments/indexing/README.md](experiments/indexing/README.md): retrieval experiments and evaluation protocol.
-- [docs/](docs/): retrieval, OKF and agentic result reports.
+- [docs/](docs/): retrieval, OKF and agentic result reports, including the
+  findings from experiments whose code has since been removed.

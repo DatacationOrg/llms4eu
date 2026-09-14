@@ -21,19 +21,6 @@ Stored page kinds are `prose`, `listing`, `document`, and `empty`.
 Fetch, fallback, document, and listing thresholds live in `config.yaml` under
 `fetch_pages`.
 
-`scraper.py` crawls sites and can save raw `.txt` outputs under `data/scraped/`.
-
-`transform.py` turns scraped site/page content into `Place` rows.
-
-`ingest.py` upserts scraped places into SQLite without truncating existing rows.
-
-`scrape.py` orchestrates scrape -> transform -> upsert -> reindex.
-
-`web/` contains the local FastAPI interface for running scrape jobs.
-
-Scraping and Markdown extraction are common upstream preparation for both chunk
-RAG and OKF. Comparative representation benchmarks freeze their output and do
-not charge this shared work to either build. Record the source database hash,
-eligible page IDs, page count, languages, and source bytes as the benchmark
-corpus manifest. See
-[`experiments/indexing/README.md`](../../experiments/indexing/README.md).
+Scraping and Markdown extraction are the shared upstream stage for every
+retrieval experiment. Freeze their output and record the source database
+hash, page count and languages as the benchmark corpus manifest.

@@ -13,7 +13,7 @@ from docling.datamodel.pipeline_options import PdfPipelineOptions
 from docling.document_converter import DocumentConverter, PdfFormatOption
 
 from src.scraping.extract_markdown import clean_markdown
-from src.scraping.scraper import HEADERS
+from src.scraping.page_fetch import HEADERS
 from src.scraping.settings import fetch_pages_config
 
 

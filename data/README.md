@@ -1,22 +1,11 @@
 # Data
 
-`places.jsonl` is tracked dummy data for local development.
+`brestanica.json` is the tracked source list: 176 Slovenian tourism URLs as
+`{source, url}` rows, the input to `just fetch-pages`.
 
-Each row must match `src.shared.schema.Place`: `id`, `place_description`, and
-`summary`. `initialize_db()` treats this file as the whole local fixture and
-resets the `places` table before inserting it.
+Everything derived lives outside the repo under `$LLMS4EU_DATA` (default
+`/data/llms4eu`): `db/pages.db` holds scraped pages, chunks and eval labels;
+`chroma/` holds regenerable vector indexes; `embeddings/`, `checkpoints/` and
+`judge-cache/` hold run caches.
 
-`db/pages.db` is the canonical reference SQLite database for scraped pages,
-chunks, and eval labels.
-
-`cache/` holds regenerable artifacts such as Chroma vector indexes. It is not
-tracked. Rebuild the default qwen vector cache with:
-
-```bash
-just eval-index qwen
-```
-
-Scraped raw text outputs are written under `data/scraped/` and are not tracked.
-
-Large raw benchmark observations belong under `.local/`; reviewed aggregate
-reports belong under `docs/`.
+Reviewed aggregate reports belong under `docs/`.

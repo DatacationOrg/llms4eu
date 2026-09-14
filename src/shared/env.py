@@ -11,7 +11,6 @@ __all__ = [
     "data_path",
     "load_local_env",
     "load_yaml",
-    "okf_bundle",
     "pages_db",
     "sqlite_path",
 ]
@@ -40,11 +39,6 @@ def data_path(*parts: str) -> Path:
 def pages_db() -> Path:
     """Canonical raw-page SQLite database."""
     return data_path("db", "pages.db")
-
-
-def okf_bundle() -> Path:
-    """Generated OKF bundle root."""
-    return data_path("okf", "tourism")
 
 
 def sqlite_path() -> Path:

@@ -7,7 +7,7 @@ import time
 from datetime import datetime
 from typing import Any
 
-from src.db.pages import connect_pages, initialize_page_artifacts_db
+from src.db.pages import initialize_page_artifacts_db
 from src.eval.agentic_diagnostics import (
     build_agentic_diagnostics,
     format_agentic_diagnostics,
@@ -23,19 +23,13 @@ from src.eval.evaluate import (
     score_eval_rankings,
 )
 from src.eval.metrics import score_rankings
-from src.okf.evidence import (
-    OKFConceptRetriever,
-    invert_page_map,
-    load_bundle_page_map,
-    project_pages_to_concepts,
-)
 from src.retrieval.base import Retriever
 from src.retrieval.methods import (
     build_retriever,
     ensure_retrievers_ready,
     list_retrievers,
 )
-from src.shared.env import ROOT, data_path, load_local_env, okf_bundle
+from src.shared.env import data_path, load_local_env
 
 DEFAULT_METHODS = (
     "sparse_rerank",
@@ -56,9 +50,7 @@ PHASE2_METHODS = {
         "nemotron_hybrid_agentic_v2",
     ),
 }
-OKF_METHOD = "okf"
-OKF_METHODS = {OKF_METHOD}
-DEFAULT_OUTPUT = Path("docs/retrieval-results-chunks-okf.md")
+DEFAULT_OUTPUT = Path("docs/retrieval-results-chunks.md")
 DEFAULT_WARMUP = 5
 
 
@@ -89,7 +81,6 @@ def main() -> None:
         resume=not args.no_resume,
         save_every=max(1, args.save_every),
         log_every=max(1, args.log_every),
-        okf_bundle_root=Path(args.okf_bundle),
         catch_up_only=args.catch_up_only,
         judge_cutoff=args.judge_k if args.judge_equivalence else None,
         judge_cache_path=judge_cache_path,
@@ -130,15 +121,9 @@ def _parse_args() -> argparse.Namespace:
         help=(
             "Comma-separated retriever names to compare. Defaults to the primary "
             "sparse, Qwen4B, Nemotron, and agentic benchmark suite. Use "
-            "'all-agentic' to include every registered agentic method, 'okf-only' "
-            "for concept-level OKF scoring, or "
+            "'all-agentic' to include every registered agentic method, or "
             "'phase2' / 'phase2-nemotron' for v1/v2 comparisons."
         ),
-    )
-    parser.add_argument(
-        "--okf-bundle",
-        default=str(okf_bundle()),
-        help="OKF bundle used when the okf method is selected.",
     )
     parser.add_argument("--category")
     parser.add_argument("--limit", type=int)
@@ -221,34 +206,12 @@ def _agentic_retrievers() -> list[str]:
     return sorted(name for name in list_retrievers() if "agentic" in name)
 
 
-def _has_okf(method_names: list[str]) -> bool:
-    return bool(OKF_METHODS.intersection(method_names))
-
-
-def _uses_okf(method_names: list[str]) -> bool:
-    return bool(method_names) and all(name in OKF_METHODS for name in method_names)
-
-
-def _scoring_unit_label(method_names: list[str]) -> str:
-    if _uses_okf(method_names):
-        return "OKF concept"
-    if _has_okf(method_names):
-        return "per method (RAG: chunk; OKF: concept)"
-    return "chunk"
-
-
-def _build_okf_retriever(bundle_root: Path) -> Retriever:
-    return OKFConceptRetriever(bundle_root)
-
-
 def _resolve_methods(raw_methods: str) -> list[str]:
     group = raw_methods.strip().lower()
     if group in {"all", "all-agentic"}:
         return _agentic_retrievers()
     if group == "phase2":
         return list(dict.fromkeys(sum(PHASE2_METHODS.values(), ())))
-    if group == "okf-only":
-        return [OKF_METHOD]
     if group in PHASE2_METHODS:
         return list(PHASE2_METHODS[group])
 
@@ -258,7 +221,7 @@ def _resolve_methods(raw_methods: str) -> list[str]:
             "No methods provided. Use --methods all-agentic or a comma-separated list."
         )
 
-    available = set(list_retrievers()) | OKF_METHODS
+    available = set(list_retrievers())
     unknown = sorted(set(methods) - available)
     if unknown:
         raise ValueError(f"Unknown methods: {', '.join(unknown)}")
@@ -275,7 +238,7 @@ def _format_report(
 ) -> str:
     lines = [
         f"Methods: {', '.join(method_names)}",
-        f"Scoring unit: {_scoring_unit_label(method_names)}",
+        "Scoring unit: chunk",
         f"Warmup: {run.warmup_count} queries",
         f"Output: {output_path}",
     ]
@@ -285,22 +248,6 @@ def _format_report(
                 f"Equivalence judge: {judge_details['model_id']}",
                 f"Equivalence cutoff: {judge_details['cutoff']}",
                 f"Equivalence cache: {judge_details['cache_path']}",
-            ]
-        )
-    if _has_okf(method_names):
-        signature = state["signature"]
-        lines.extend(
-            [
-                f"OKF bundle: {signature['okf_bundle']}",
-                f"OKF coverage: {signature['okf_covered_pages']} pages in "
-                f"{signature['okf_concepts']} concepts",
-                f"OKF-eligible questions: {signature['eligible_questions']}",
-                "OKF failures: "
-                + ", ".join(
-                    f"{name}={state['methods'][name].get('failures', 0)}"
-                    for name in method_names
-                    if name in OKF_METHODS
-                ),
             ]
         )
     formatted_run = format_eval_report(run, include_categories=include_categories)
@@ -434,20 +381,13 @@ def _run_eval_with_checkpoint(
     resume: bool,
     save_every: int,
     log_every: int = 1,
-    okf_bundle_root: Path = okf_bundle(),
     catch_up_only: bool = False,
     retrievers_out: dict[str, Retriever] | None = None,
     judge_cutoff: int | None = None,
     judge_cache_path: Path | None = None,
 ) -> tuple[EvalRun, dict[str, Any]]:
     initialize_page_artifacts_db()
-    bundle_root = (ROOT / okf_bundle_root).resolve()
-    questions, relevance, chunk_pages, page_concepts = _load_comparison_rows(
-        method_names=method_names,
-        limit=limit,
-        category=category,
-        bundle_root=bundle_root,
-    )
+    questions, relevance = load_eval_rows(limit=limit, category=category)
     if not questions:
         return EvalRun([], [], [], 0, {}, {}, [], {}), {}
 
@@ -463,19 +403,7 @@ def _run_eval_with_checkpoint(
         "warmup_ids": [row["id"] for row in warmup_questions],
         "timed_ids": [row["id"] for row in timed_questions],
         "result_limit": EVAL_CONFIG["result_limit"],
-        "scoring_unit": (
-            "mixed"
-            if _has_okf(method_names) and not _uses_okf(method_names)
-            else "okf_concept"
-            if _uses_okf(method_names)
-            else "chunk"
-        ),
-        "okf_bundle": str(bundle_root) if _has_okf(method_names) else None,
-        "okf_covered_pages": len(page_concepts),
-        "okf_concepts": len(
-            {concept for concepts in page_concepts.values() for concept in concepts}
-        ),
-        "okf_methods": sorted(OKF_METHODS.intersection(method_names)),
+        "scoring_unit": "chunk",
         "eligible_questions": len(questions),
     }
     catch_up = (
@@ -508,21 +436,11 @@ def _run_eval_with_checkpoint(
         category=category,
         output_path=output_path,
         checkpoint_path=checkpoint_path,
-        chunk_pages=chunk_pages,
-        page_concepts=page_concepts,
         equivalence_audit=equivalence_audit,
     )
 
-    rag_methods = [name for name in method_names if name not in OKF_METHODS]
-    ensure_retrievers_ready(rag_methods)
-    retrievers = {
-        name: (
-            _build_okf_retriever(bundle_root)
-            if name in OKF_METHODS
-            else build_retriever(name)
-        )
-        for name in method_names
-    }
+    ensure_retrievers_ready(method_names)
+    retrievers = {name: build_retriever(name) for name in method_names}
     if retrievers_out is not None:
         retrievers_out.update(retrievers)
 
@@ -547,8 +465,6 @@ def _run_eval_with_checkpoint(
         category=category,
         save_every=save_every,
         log_every=log_every,
-        chunk_pages=chunk_pages,
-        page_concepts=page_concepts,
         targets=catch_up,
         equivalence_audit=equivalence_audit,
     )
@@ -590,20 +506,16 @@ def _run_eval_with_checkpoint(
     timed_relevance = [
         row for row in relevance if row["question_id"] in timed_question_ids
     ]
-    score_names, scores = _score_method_rankings(
-        relevance=timed_relevance,
-        rankings=method_rankings,
-        method_names=method_names,
-        chunk_pages=chunk_pages,
-        page_concepts=page_concepts,
+    score_names, scores = score_eval_rankings(
+        timed_relevance,
+        method_rankings,
+        method_names,
     )
     category_metric_names, category_scores = _score_method_categories(
         questions=scored_questions,
         relevance=timed_relevance,
         rankings=method_rankings,
         method_names=method_names,
-        chunk_pages=chunk_pages,
-        page_concepts=page_concepts,
     )
     return EvalRun(
         questions=scored_questions,
@@ -647,8 +559,6 @@ def _run_timed_round_robin(
     category: str | None,
     save_every: int,
     log_every: int,
-    chunk_pages: dict[str, str],
-    page_concepts: dict[str, list[str]],
     targets: dict[str, int] | None = None,
     equivalence_audit=None,
 ) -> None:
@@ -732,8 +642,6 @@ def _run_timed_round_robin(
                     category=category,
                     output_path=output_path,
                     checkpoint_path=checkpoint_path,
-                    chunk_pages=chunk_pages,
-                    page_concepts=page_concepts,
                     equivalence_audit=equivalence_audit,
                 )
 
@@ -818,6 +726,7 @@ def _extend_compatible_state(
         "warmup_ids",
         "timed_ids",
         "result_limit",
+        "scoring_unit",
     )
     if any(previous.get(key) != signature.get(key) for key in stable_keys):
         return False
@@ -825,21 +734,6 @@ def _extend_compatible_state(
     existing_methods = set(state.get("methods", {}))
     if not existing_methods or not existing_methods.issubset(method_names):
         return False
-
-    previous_scoring = previous.get("scoring_unit", "chunk")
-    scoring = signature.get("scoring_unit", "chunk")
-    upgrading_to_okf = (
-        previous_scoring == "chunk"
-        and scoring in {"okf_concept", "mixed"}
-        and not existing_methods.intersection(OKF_METHODS)
-        and bool(set(method_names).intersection(OKF_METHODS))
-    )
-    if previous_scoring != scoring and not upgrading_to_okf:
-        return False
-    if scoring == "okf_concept" and not upgrading_to_okf:
-        okf_keys = ("okf_bundle", "okf_covered_pages", "okf_concepts")
-        if any(previous.get(key) != signature.get(key) for key in okf_keys):
-            return False
 
     for name in method_names:
         state["methods"].setdefault(name, _empty_method_state())
@@ -880,138 +774,12 @@ def _catch_up_plan(
     }
 
 
-def _load_comparison_rows(
-    *,
-    method_names: list[str],
-    limit: int | None,
-    category: str | None,
-    bundle_root: Path,
-) -> tuple[list[dict], list[dict], dict[str, str], dict[str, list[str]]]:
-    if not _has_okf(method_names):
-        questions, relevance = load_eval_rows(limit=limit, category=category)
-        return questions, relevance, {}, {}
-
-    page_concepts = invert_page_map(load_bundle_page_map(bundle_root))
-    if not page_concepts:
-        raise RuntimeError(
-            f"OKF bundle contains no source page provenance: {bundle_root}"
-        )
-
-    questions, relevance = load_eval_rows(limit=None, category=category)
-    with connect_pages() as conn:
-        chunk_pages = {
-            str(row["id"]): str(row["page_id"])
-            for row in conn.execute("select id, page_id from page_chunks")
-        }
-    covered_question_ids = {
-        row["question_id"]
-        for row in relevance
-        if chunk_pages.get(row["chunk_id"]) in page_concepts
-    }
-    questions = [row for row in questions if row["id"] in covered_question_ids]
-    if limit is not None:
-        questions = questions[:limit]
-    selected_ids = {row["id"] for row in questions}
-    relevance = [row for row in relevance if row["question_id"] in selected_ids]
-    return questions, relevance, chunk_pages, page_concepts
-
-
-def _scoring_inputs(
-    *,
-    relevance: list[dict],
-    rankings: dict[str, dict[str, list[str]]],
-    method_names: list[str],
-    chunk_pages: dict[str, str],
-    page_concepts: dict[str, list[str]],
-) -> tuple[list[dict], dict[str, dict[str, list[str]]]]:
-    if not _uses_okf(method_names):
-        return relevance, rankings
-
-    concept_relevance = []
-    seen_relevance = set()
-    for row in relevance:
-        page_id = chunk_pages.get(row["chunk_id"])
-        for concept in page_concepts.get(page_id, []):
-            key = (row["question_id"], concept)
-            if key not in seen_relevance:
-                concept_relevance.append(
-                    {"question_id": row["question_id"], "chunk_id": concept}
-                )
-                seen_relevance.add(key)
-
-    concept_rankings = {}
-    for name in method_names:
-        concept_rankings[name] = {}
-        for question_id, ranked in rankings[name].items():
-            concepts = (
-                ranked
-                if name in OKF_METHODS
-                else project_pages_to_concepts(
-                    [chunk_pages[item] for item in ranked if item in chunk_pages],
-                    page_concepts,
-                )
-            )
-            concept_rankings[name][question_id] = list(dict.fromkeys(concepts))
-    return concept_relevance, concept_rankings
-
-
-def _method_scoring_inputs(
-    *,
-    method_name: str,
-    relevance: list[dict],
-    rankings: dict[str, list[str]],
-    chunk_pages: dict[str, str],
-    page_concepts: dict[str, list[str]],
-) -> tuple[list[dict], dict[str, list[str]]]:
-    if method_name not in OKF_METHODS:
-        return relevance, rankings
-
-    concept_relevance, concept_rankings = _scoring_inputs(
-        relevance=relevance,
-        rankings={method_name: rankings},
-        method_names=[method_name],
-        chunk_pages=chunk_pages,
-        page_concepts=page_concepts,
-    )
-    return concept_relevance, concept_rankings[method_name]
-
-
-def _score_method_rankings(
-    *,
-    relevance: list[dict],
-    rankings: dict[str, dict[str, list[str]]],
-    method_names: list[str],
-    chunk_pages: dict[str, str],
-    page_concepts: dict[str, list[str]],
-) -> tuple[list[str], dict[str, dict[str, float]]]:
-    score_names: list[str] = []
-    scores: dict[str, dict[str, float]] = {}
-    for method_name in method_names:
-        method_relevance, method_rankings = _method_scoring_inputs(
-            method_name=method_name,
-            relevance=relevance,
-            rankings=rankings[method_name],
-            chunk_pages=chunk_pages,
-            page_concepts=page_concepts,
-        )
-        names, method_scores = score_eval_rankings(
-            method_relevance,
-            {method_name: method_rankings},
-            [method_name],
-        )
-        score_names.extend(name for name in names if name not in score_names)
-        scores[method_name] = method_scores[method_name]
-    return score_names, scores
-
-
 def _score_method_categories(
     *,
     questions: list[dict],
     relevance: list[dict],
     rankings: dict[str, dict[str, list[str]]],
     method_names: list[str],
-    chunk_pages: dict[str, str],
-    page_concepts: dict[str, list[str]],
 ) -> tuple[dict[str, str], dict[str, dict[str, float]]]:
     question_type_by_id = {row["id"]: row["question_type"] for row in questions}
     question_types = sorted(set(question_type_by_id.values()))
@@ -1019,13 +787,8 @@ def _score_method_categories(
     metric_names: dict[str, str] = {}
     category_scores: dict[str, dict[str, float]] = {}
     for method_name in method_names:
-        method_relevance, method_rankings = _method_scoring_inputs(
-            method_name=method_name,
-            relevance=relevance,
-            rankings=rankings[method_name],
-            chunk_pages=chunk_pages,
-            page_concepts=page_concepts,
-        )
+        method_relevance = relevance
+        method_rankings = rankings[method_name]
         metric_name = f"hit@{cutoff}"
         metric_names[method_name] = metric_name
         category_scores[method_name] = {}
@@ -1095,8 +858,6 @@ def _write_live_report(
     category: str | None,
     output_path: Path,
     checkpoint_path: Path,
-    chunk_pages: dict[str, str],
-    page_concepts: dict[str, list[str]],
     equivalence_audit=None,
 ) -> None:
     report = _build_live_report(
@@ -1108,8 +869,6 @@ def _write_live_report(
         include_categories=category is None,
         output_path=output_path,
         checkpoint_path=checkpoint_path,
-        chunk_pages=chunk_pages,
-        page_concepts=page_concepts,
         equivalence_audit=equivalence_audit,
     )
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -1127,8 +886,6 @@ def _build_live_report(
     include_categories: bool,
     output_path: Path,
     checkpoint_path: Path,
-    chunk_pages: dict[str, str],
-    page_concepts: dict[str, list[str]],
     equivalence_audit=None,
 ) -> str:
     total_timed = len(timed_questions)
@@ -1139,7 +896,7 @@ def _build_live_report(
 
     header = [
         f"Methods: {', '.join(method_names)}",
-        f"Scoring unit: {_scoring_unit_label(method_names)}",
+        "Scoring unit: chunk",
         f"Warmup: {warmup} queries",
         f"Output: {output_path}",
         f"Checkpoint: {checkpoint_path}",
@@ -1159,22 +916,6 @@ def _build_live_report(
             f"- {name}: {progress_by_method[name]}/{total_timed} timed queries"
         )
     header.append(f"- aligned_for_scoring: {aligned}/{total_timed}")
-    if _has_okf(method_names):
-        concept_count = len(
-            {concept for concepts in page_concepts.values() for concept in concepts}
-        )
-        header.extend(
-            [
-                "",
-                f"OKF coverage: {len(page_concepts)} pages in {concept_count} concepts",
-                "OKF failures: "
-                + ", ".join(
-                    f"{name}={state['methods'][name].get('failures', 0)}"
-                    for name in method_names
-                    if name in OKF_METHODS
-                ),
-            ]
-        )
     if aligned == 0:
         header.extend(
             [
@@ -1196,20 +937,16 @@ def _build_live_report(
         }
         for name in method_names
     }
-    score_names, scores = _score_method_rankings(
-        relevance=partial_relevance,
-        rankings=partial_rankings,
-        method_names=method_names,
-        chunk_pages=chunk_pages,
-        page_concepts=page_concepts,
+    score_names, scores = score_eval_rankings(
+        partial_relevance,
+        partial_rankings,
+        method_names,
     )
     category_metric_names, category_scores = _score_method_categories(
         questions=partial_questions,
         relevance=partial_relevance,
         rankings=partial_rankings,
         method_names=method_names,
-        chunk_pages=chunk_pages,
-        page_concepts=page_concepts,
     )
     timings: dict[str, dict[str, float]] = {}
     for name in method_names:
