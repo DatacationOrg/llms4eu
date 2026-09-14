@@ -33,7 +33,7 @@ def test_tool_agent_is_paired_with_the_plain_agent_by_default():
 
 
 def test_action_log_is_read_from_any_agent_with_batch_stats():
-    """The tool agent is not an AgenticRetriever subclass; duck-typing must find it."""
+    """Agent stats are found by duck-typing, not by the concrete retriever class."""
 
     class Stats:
         action_log = [{"attempt": 1}]

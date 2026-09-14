@@ -13,7 +13,7 @@ from src.okf import generate
 from src.okf.bundle import regenerate_indexes, validate_bundle, write_concept
 from src.okf.document import OKFDocument, OKFDocumentError
 from src.okf import evidence
-from src.okf.paths import concept_path, parse_concept_id
+from src.okf.bundle import concept_path, parse_concept_id
 from src.okf.source import load_source_pages
 from src.eval.metrics import score_rankings
 
@@ -82,26 +82,24 @@ def test_bundle_indexes_and_reports_broken_links(tmp_path):
     assert "destinations/index.md" in (root / "index.md").read_text()
 
 
-def test_source_adapter_reads_only_eligible_complete_pages(tmp_path):
-    db = tmp_path / "pages.db"
-    with sqlite3.connect(db) as conn:
+def test_source_adapter_reads_only_eligible_complete_pages(page_db):
+    with sqlite3.connect(page_db) as conn:
         conn.executescript(
             """
-            create table page_metadata (
-              id text primary key, source text, url text, title text,
-              error text, page_kind text
-            );
-            create table page_markdown_content (page_id text, markdown text);
-            create table page_sources (source text primary key, language text);
             insert into page_sources values ('castle', 'sl');
-            insert into page_metadata values ('ok', 'castle', 'https://a', 'A', null, 'prose');
-            insert into page_metadata values ('bad', 'castle', 'https://b', 'B', 'failed', 'empty');
+            insert into page_metadata (
+              id, source, url, fetched_at, title, error, page_kind
+            )
+            values ('ok', 'castle', 'https://a', '2026-01-01T00:00:00+00:00',
+                    'A', null, 'prose'),
+                   ('bad', 'castle', 'https://b', '2026-01-01T00:00:00+00:00',
+                    'B', 'failed', 'empty');
             insert into page_markdown_content values ('ok', '# Whole page');
             insert into page_markdown_content values ('bad', '');
             """
         )
 
-    pages = load_source_pages(db)
+    pages = load_source_pages(page_db)
 
     assert len(pages) == 1
     assert pages[0].id == "ok"
@@ -142,41 +140,25 @@ class _StubLlm:
         )
 
 
-def test_generation_writes_provenance_and_resumes(monkeypatch, tmp_path):
-    db = tmp_path / "pages.db"
-    with sqlite3.connect(db) as conn:
+def test_generation_writes_provenance_and_resumes(monkeypatch, tmp_path, page_db):
+    with sqlite3.connect(page_db) as conn:
         conn.executescript(
             """
-            create table page_metadata (
-              id text primary key, source text, url text, title text,
-              error text, page_kind text
-            );
-            create table page_markdown_content (page_id text, markdown text);
-            create table page_sources (source text primary key, language text);
             insert into page_sources values ('castle', 'en');
-            insert into page_metadata values ('p1', 'castle', 'https://example.test/castle', 'Castle', null, 'prose');
+            insert into page_metadata (id, source, url, fetched_at, title, page_kind)
+            values ('p1', 'castle', 'https://example.test/castle',
+                    '2026-01-01T00:00:00+00:00', 'Castle', 'prose');
             insert into page_markdown_content values ('p1', '# Complete source page');
             """
         )
-    monkeypatch.setattr(generate, "ROOT", tmp_path)
-    monkeypatch.setattr(
-        generate,
-        "CONFIG",
-        {
-            **generate.CONFIG,
-            "source_db": "pages.db",
-            "bundle_path": "bundle",
-            "checkpoint_path": ".local/checkpoint.json",
-        },
-    )
     monkeypatch.setattr(generate, "_llm_client", lambda: _StubLlm())
 
     first = generate.generate_bundle()
     second = generate.generate_bundle()
     concept = OKFDocument.parse(
-        (tmp_path / "bundle/destinations/rajhenburg.md").read_text()
+        (tmp_path / "okf/tourism/destinations/rajhenburg.md").read_text()
     )
-    checkpoint = json.loads((tmp_path / ".local/checkpoint.json").read_text())
+    checkpoint = json.loads((tmp_path / "okf/state/generation.json").read_text())
 
     assert first["processed_pages"] == 1
     assert second["resumed_pages"] == 1
@@ -651,29 +633,23 @@ def test_navigation_can_read_multiple_concepts_before_answering(tmp_path):
     )
     regenerate_indexes(root)
 
-    class _MultiConceptNavigator:
-        def __init__(self):
-            self.actions = iter(
-                [
-                    NavigationAction(action="open", path="destinations/index.md"),
-                    NavigationAction(action="open", path="destinations/first.md"),
-                    NavigationAction(action="open", path="destinations/second.md"),
-                    NavigationAction(
-                        action="answer",
-                        answer="Supported",
-                        citations=["destinations/second.md"],
-                    ),
-                ]
-            )
-
-        def structured_output(self, _prompt, schema, **_kwargs):
-            assert schema is NavigationAction
-            return next(self.actions)
+    client = _StubNavigator(
+        [
+            NavigationAction(action="open", path="destinations/index.md"),
+            NavigationAction(action="open", path="destinations/first.md"),
+            NavigationAction(action="open", path="destinations/second.md"),
+            NavigationAction(
+                action="answer",
+                answer="Supported",
+                citations=["destinations/second.md"],
+            ),
+        ]
+    )
 
     result = answer_question(
         "Question",
         bundle_root=root,
-        client=_MultiConceptNavigator(),
+        client=client,
     )
 
     assert result.sufficient

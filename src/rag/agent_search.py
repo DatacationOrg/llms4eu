@@ -9,7 +9,6 @@ from src.rag.retry import (
     FallbackEmbeddingModel,
     HigherLimit,
     QueryReformulation,
-    RetryStrategy,
     WiderGeoFilter,
 )
 from src.rag.search import ScoredPlace, search_places_with_model
@@ -108,7 +107,7 @@ def agentic_search_places(question: str, limit: int | None = None) -> AgentSearc
 def _next_state(
     state: AgentSearchState, verdict: ChunkSufficiency
 ) -> AgentSearchState | None:
-    strategies: tuple[RetryStrategy, ...] = (
+    strategies = (
         QueryReformulation(reformulated_query=verdict.reformulated_query),
         HigherLimit(max_limit=AGENT_CONFIG["max_limit"]),
         FallbackEmbeddingModel(tuple(AGENT_CONFIG["fallback_embedding_models"])),

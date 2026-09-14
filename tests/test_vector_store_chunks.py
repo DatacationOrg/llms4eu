@@ -29,12 +29,8 @@ class StubIndexer:
         ]
 
 
-def test_chunk_collection_rebuild_readiness_and_query(monkeypatch, tmp_path):
-    db_path = tmp_path / "raw_pages.db"
-    _write_chunk_fixture(db_path)
-
-    monkeypatch.setenv("CHROMA_PATH", str(tmp_path / "chroma"))
-    monkeypatch.setattr("src.db.pages.raw_pages_db_path", lambda: db_path)
+def test_chunk_collection_rebuild_readiness_and_query(monkeypatch, page_db):
+    _seed_chunks(page_db)
     monkeypatch.setattr(
         "src.vector_store.chunks.build_indexer", lambda *_: StubIndexer()
     )
@@ -66,12 +62,8 @@ def test_chunk_collection_rebuild_readiness_and_query(monkeypatch, tmp_path):
     assert [hit.id for hit in small_batch_hits[1]] == ["chunk-forest"]
 
 
-def test_v2_chunk_collection_is_isolated_and_contains_metadata(monkeypatch, tmp_path):
-    db_path = tmp_path / "raw_pages.db"
-    _write_chunk_fixture(db_path)
-
-    monkeypatch.setenv("CHROMA_PATH", str(tmp_path / "chroma"))
-    monkeypatch.setattr("src.db.pages.raw_pages_db_path", lambda: db_path)
+def test_v2_chunk_collection_is_isolated_and_contains_metadata(monkeypatch, page_db):
+    _seed_chunks(page_db)
     monkeypatch.setattr(
         "src.vector_store.chunks.build_indexer", lambda *_: StubIndexer()
     )
@@ -108,10 +100,8 @@ def test_enabled_provider_names_comes_from_indexing_config(monkeypatch):
     assert enabled_provider_names() == ["english", "qwen"]
 
 
-def test_v2_sparse_indexes_metadata_without_changing_v1(monkeypatch, tmp_path):
-    db_path = tmp_path / "raw_pages.db"
-    _write_chunk_fixture(db_path)
-    monkeypatch.setattr("src.db.pages.raw_pages_db_path", lambda: db_path)
+def test_v2_sparse_indexes_metadata_without_changing_v1(page_db):
+    _seed_chunks(page_db)
     sparse_module._corpus.cache_clear()
 
     legacy_hits = SparseRetriever(chunk_version="v1").retrieve("fixture", limit=2)
@@ -125,33 +115,16 @@ def test_v2_sparse_indexes_metadata_without_changing_v1(monkeypatch, tmp_path):
     sparse_module._corpus.cache_clear()
 
 
-def _write_chunk_fixture(path):
+def _seed_chunks(path):
     with sqlite3.connect(path) as conn:
         conn.executescript(
             """
-            create table page_metadata (
-              id text primary key,
-              title text,
-                            source text not null,
-                            page_kind text not null
-            );
-            create table page_sources (
-              source text primary key,
-              language text not null
-            );
-            create table page_chunks (
-              id text primary key,
-              page_id text not null references page_metadata(id) on delete cascade,
-              chunk_index integer not null,
-              heading_path text,
-              text text not null,
-              char_count integer not null,
-              unique(page_id, chunk_index)
-            );
-                 insert into page_sources (source, language) values ('fixture', 'en');
-                 insert into page_metadata (id, title, source, page_kind)
-                 values ('page-castle', 'Castle Page', 'fixture', 'prose'),
-                     ('page-forest', 'Forest Page', 'fixture', 'prose');
+            insert into page_sources (source, language) values ('fixture', 'en');
+            insert into page_metadata (id, source, url, fetched_at, title, page_kind)
+            values ('page-castle', 'fixture', 'https://example.test/castle',
+                    '2026-01-01T00:00:00+00:00', 'Castle Page', 'prose'),
+                   ('page-forest', 'fixture', 'https://example.test/forest',
+                    '2026-01-01T00:00:00+00:00', 'Forest Page', 'prose');
             insert into page_chunks (
               id, page_id, chunk_index, heading_path, text, char_count
             )

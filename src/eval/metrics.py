@@ -29,7 +29,7 @@ def score_rankings(
         scores[f"recall@{recall_k}"] += len(
             relevant.intersection(ranked[:recall_k])
         ) / len(relevant)
-        first_rank = _first_relevant_rank(ranked[:mrr_k], relevant)
+        first_rank = first_relevant_rank(ranked[:mrr_k], relevant)
         if first_rank:
             scores[f"mrr@{mrr_k}"] += 1 / first_rank
 
@@ -39,73 +39,50 @@ def score_rankings(
     return {name: value / total for name, value in scores.items()}
 
 
-def _first_relevant_rank(ranked: list[str], relevant: set[str]) -> int | None:
+def first_relevant_rank(ranked: list[str], relevant: set[str]) -> int | None:
     for index, chunk_id in enumerate(ranked, start=1):
         if chunk_id in relevant:
             return index
     return None
 
 
+def _render_table(headers: list[str], rows: list[list[str]]) -> str:
+    """Render a markdown table whose raw text stays column-aligned."""
+    widths = [
+        max(len(row[index]) for row in [headers, *rows])
+        for index in range(len(headers))
+    ]
+    row_line = lambda cells: (  # noqa: E731
+        "| " + " | ".join(cell.ljust(widths[i]) for i, cell in enumerate(cells)) + " |"
+    )
+    return "\n".join(
+        [
+            row_line(headers),
+            "|-" + "-|-".join("-" * width for width in widths) + "-|",
+            *(row_line(row) for row in rows),
+        ]
+    )
+
+
 def bold_best_table(headers: list[str], rows: list[list[str | float]]) -> str:
-    numeric_columns = []
+    best_by_column = {}
     for index in range(1, len(headers)):
         values = [row[index] for row in rows if isinstance(row[index], int | float)]
         if values:
-            numeric_columns.append((index, max(values)))
+            best_by_column[index] = max(values)
 
-    rendered_rows: list[list[str]] = []
+    rendered_rows = []
     for row in rows:
         rendered = [str(row[0])]
         for index, value in enumerate(row[1:], start=1):
             text = f"{value:.3f}" if isinstance(value, float) else str(value)
-            if any(
-                index == best_index and value == best
-                for best_index, best in numeric_columns
-            ):
+            if best_by_column.get(index) == value:
                 text = f"**{text}**"
             rendered.append(text)
         rendered_rows.append(rendered)
-    
-    def _plain(text: str) -> str:
-        return text.replace("**", "")
-    
-    widths = [
-        max(len(_plain(row[index]) ) for row in [headers, *rendered_rows])
-        for index in range(len(headers))
-    ]
-    lines = [
-        "| "
-        + " | ".join(cell.ljust(widths[index]) for index, cell in enumerate(headers))
-        + " |",
-        "|-" + "-|-".join("-" * width for width in widths) + "-|",
-    ]
-    lines.extend(
-        "| "
-        + " | ".join(cell.ljust(widths[index]) for index, cell in enumerate(row))
-        + " |"
-        for row in rendered_rows
-    )
 
-    
-    return "\n".join(lines)
+    return _render_table(headers, rendered_rows)
 
 
 def plain_table(headers: list[str], rows: list[list[str | int]]) -> str:
-    rendered_rows = [[str(cell) for cell in row] for row in rows]
-    widths = [
-        max(len(row[index]) for row in [headers, *rendered_rows])
-        for index in range(len(headers))
-    ]
-    lines = [
-        "| "
-        + " | ".join(cell.ljust(widths[index]) for index, cell in enumerate(headers))
-        + " |",
-        "|-" + "-|-".join("-" * width for width in widths) + "-|",
-    ]
-    lines.extend(
-        "| "
-        + " | ".join(cell.ljust(widths[index]) for index, cell in enumerate(row))
-        + " |"
-        for row in rendered_rows
-    )
-    return "\n".join(lines)
+    return _render_table(headers, [[str(cell) for cell in row] for row in rows])

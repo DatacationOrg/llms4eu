@@ -1,7 +1,7 @@
 # Indexing Experiments
 
 Small runnable comparisons for page-chunk retrieval. These scripts use the
-approved eval questions in `data/db/pages.db`, reusable retrievers from
+approved eval questions in `$LLMS4EU_DATA/db/pages.db`, reusable retrievers from
 `src/retrieval`, and metrics from `src/eval`.
 
 ```bash
@@ -129,7 +129,7 @@ OKF is not part of any default benchmark group. Score it with
 
 ## OKF versus chunk-RAG benchmark protocol
 
-A fair comparison freezes one `data/db/pages.db` snapshot and records its hash,
+A fair comparison freezes one `$LLMS4EU_DATA/db/pages.db` snapshot and records its hash,
 selected page IDs, source bytes, languages, and page count. Scraping and
 Markdown extraction are shared preparation and are reported once. Quality,
 cost, build efficiency, and online efficiency remain separate result families;

@@ -339,6 +339,4 @@ def _reranker(name: str, base_retriever: Retriever) -> CrossEncoderRerankRetriev
         max_length=CONFIG["reranker_max_length"],
         local_files_only=CONFIG["reranker_local_files_only"],
         batch_size=CONFIG["reranker_batch_size"],
-        prompt_name=CONFIG["reranker_prompt_name"],
-        prompt=CONFIG["reranker_prompt"],
     )

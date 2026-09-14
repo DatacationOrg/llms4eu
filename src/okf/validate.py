@@ -4,14 +4,14 @@ import argparse
 from pathlib import Path
 
 from src.okf.bundle import validate_bundle
-from src.shared.env import ROOT, load_yaml
+from src.shared.env import load_yaml, okf_bundle
 
 CONFIG = load_yaml(Path(__file__).with_name("config.yaml"))
 
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--bundle", type=Path, default=ROOT / CONFIG["bundle_path"])
+    parser.add_argument("--bundle", type=Path, default=okf_bundle())
     args = parser.parse_args()
     report = validate_bundle(args.bundle)
     for warning in report.warnings:

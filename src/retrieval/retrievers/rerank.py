@@ -24,8 +24,6 @@ class CrossEncoderRerankRetriever:
     max_length: int
     local_files_only: bool
     batch_size: int
-    prompt_name: str | None = None
-    prompt: str | None = None
 
     def retrieve(self, query: str, limit: int) -> list[RankedChunk]:
         candidates = self.base_retriever.retrieve(query, self.candidate_limit)
@@ -37,8 +35,6 @@ class CrossEncoderRerankRetriever:
             self.max_length,
             self.local_files_only,
             self.batch_size,
-            self.prompt_name,
-            self.prompt,
         )
         return [
             RankedChunk(id=chunk.id, score=float(score), text=chunk.text)
@@ -97,16 +93,12 @@ def _rerank(
     max_length: int,
     local_files_only: bool,
     batch_size: int,
-    prompt_name: str | None,
-    prompt: str | None,
 ) -> list[tuple[RankedChunk, float]]:
     scores = _cross_encoder(
         model_name,
         device,
         max_length,
         local_files_only,
-        prompt_name,
-        prompt,
     ).predict(
         [(query, chunk.text) for chunk in candidates],
         batch_size=batch_size,
@@ -124,12 +116,9 @@ def _cross_encoder(
     device: str,
     max_length: int,
     local_files_only: bool,
-    prompt_name: str | None,
-    prompt: str | None,
 ) -> CrossEncoder:
     from sentence_transformers import CrossEncoder
 
-    prompt_kwargs = _prompt_kwargs(prompt_name, prompt)
     with (
         contextlib.redirect_stdout(io.StringIO()),
         contextlib.redirect_stderr(io.StringIO()),
@@ -139,14 +128,4 @@ def _cross_encoder(
             device=device,
             max_length=max_length,
             local_files_only=local_files_only,
-            **prompt_kwargs,
         )
-
-
-def _prompt_kwargs(prompt_name: str | None, prompt: str | None) -> dict:
-    if not prompt_name or not prompt:
-        return {}
-    return {
-        "prompts": {prompt_name: prompt},
-        "default_prompt_name": prompt_name,
-    }

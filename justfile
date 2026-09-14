@@ -16,8 +16,8 @@ scrape *URLS:
 scrape-web:
     uv run python -m src.scraping.web.main
 
-fetch-pages SOURCE="data/brestanica.json" DB="data/db/pages.db":
-    uv run python -m src.scraping.fetch_pages {{SOURCE}} --db {{DB}} --workers 4
+fetch-pages SOURCE="data/brestanica.json":
+    uv run python -m src.scraping.fetch_pages {{SOURCE}} --workers 4
 
 test:
     uv run --extra dev pytest
@@ -37,17 +37,14 @@ eval-generate LIMIT="10":
 eval METHODS="qwen":
     uv run python -m src.eval.evaluate --methods {{METHODS}}
 
-eval-agentic:
-    uv run python -m src.eval.evaluate --agentic-only
-
-eval-agentic-limit LIMIT="100":
-    uv run python -m src.eval.evaluate --agentic-only --limit {{LIMIT}}
+eval-limit LIMIT="100":
+    uv run python -m src.eval.evaluate --limit {{LIMIT}}
 
 eval-agentic-report OUTPUT="docs/retrieval-results.md":
     uv run python experiments/indexing/compare_qwen_modes.py --methods all-agentic --output {{OUTPUT}}
 
-eval-equivalence CHECKPOINT="docs/retrieval-results-chunks-okf.md.checkpoint.json" OUTPUT="docs/retrieval-equivalence-judge.md" K="5":
-    uv run python experiments/indexing/judge_retrieval_equivalence.py --checkpoint {{CHECKPOINT}} --output {{OUTPUT}} -k {{K}}
+eval-equivalence OUTPUT="docs/retrieval-equivalence-judge.md" K="5":
+    uv run python experiments/indexing/judge_retrieval_equivalence.py --output {{OUTPUT}} -k {{K}}
 
 eval-inspect LIMIT="20":
     uv run python -m src.eval.inspect_dataset --limit {{LIMIT}}
@@ -62,7 +59,7 @@ okf-rebuild:
     uv run python -m src.okf.generate --clean
 
 okf-index:
-    uv run python -c "from pathlib import Path; from src.okf.bundle import regenerate_indexes; regenerate_indexes(Path('data/okf/tourism'))"
+    uv run python -c "from src.okf.bundle import regenerate_indexes; from src.shared.env import okf_bundle; regenerate_indexes(okf_bundle())"
 
 okf-validate:
     uv run python -m src.okf.validate

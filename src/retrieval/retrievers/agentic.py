@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 import time
+from typing import Protocol
 
 from pydantic import BaseModel, Field
 
@@ -15,6 +16,20 @@ DEFAULT_JUDGE_NUM_PREDICT = 1024
 DEFAULT_JUDGE_METHOD = "function_calling"
 
 
+class AgentStep(Protocol):
+    """One decision, as the shared retrieval loop reads it."""
+
+    reformulated_query: str | None
+
+    @property
+    def sufficient(self) -> bool: ...
+
+    @property
+    def action(self) -> str: ...
+
+    def verdict_dict(self) -> dict: ...
+
+
 class ChunkSufficiency(BaseModel):
     sufficient: bool = Field(
         description="True only if retrieved chunks are enough to answer the query."
@@ -24,6 +39,24 @@ class ChunkSufficiency(BaseModel):
         default=None,
         description="Optional replacement query when context is insufficient.",
     )
+
+    @property
+    def action(self) -> str:
+        """The plain judge asks for a new query or, failing that, a wider net."""
+        return "reformulate" if (self.reformulated_query or "").strip() else "expand"
+
+    def verdict_dict(self) -> dict:
+        return self.model_dump()
+
+
+@dataclass
+class AgentScratch:
+    """Per-retrieve state the loop carries; only the tool agent fills it."""
+
+    promoted: list[tuple[str, RankedChunk]] = field(default_factory=list)
+    observations: list[str] = field(default_factory=list)
+    attempted: set[tuple[str, str, str]] = field(default_factory=set)
+    tool_calls: int = 0
 
 
 @dataclass
@@ -44,7 +77,7 @@ class AgenticBatchStats:
         attempt: int,
         judge_query: str,
         chunks: list[RankedChunk],
-        verdict: ChunkSufficiency,
+        verdict: AgentStep,
         retrieval_ms: float,
         judge_ms: float,
     ) -> None:
@@ -56,7 +89,7 @@ class AgenticBatchStats:
                 "chunks": [
                     {"id": c.id, "score": c.score, "text": c.text} for c in chunks
                 ],
-                "verdict": verdict.model_dump(),
+                "verdict": verdict.verdict_dict(),
                 "retrieval_ms": retrieval_ms,
                 "judge_ms": judge_ms,
                 "top_up_ms": 0.0,
@@ -97,32 +130,38 @@ class AgenticRetriever:
     )
 
     def retrieve(self, query: str, limit: int) -> list[RankedChunk]:
+        scratch = AgentScratch()
         current_query = query
         current_limit = min(limit, self.initial_limit)
+        chunks: list[RankedChunk] = []
         best_chunks: list[RankedChunk] = []
         attempt_count = 0
 
         for _ in range(max(1, self.max_attempts)):
             attempt_count += 1
             retrieval_started = time.perf_counter()
-            chunks = self.base_retriever.retrieve(current_query, current_limit)
+            # A tool step keeps the current ranking; only a new query or a wider
+            # limit needs a fresh first-stage retrieval.
+            if not chunks:
+                chunks = self.base_retriever.retrieve(current_query, current_limit)
             retrieval_ms = (time.perf_counter() - retrieval_started) * 1000
-            if len(chunks) > len(best_chunks):
-                best_chunks = chunks
+            ranked = self._rank(chunks, scratch)
+            if len(ranked) > len(best_chunks):
+                best_chunks = ranked
 
             judge_started = time.perf_counter()
-            verdict = self._evaluate_sufficiency(current_query, chunks)
+            step = self._next_step(current_query, chunks, scratch)
             judge_ms = (time.perf_counter() - judge_started) * 1000
             self.batch_stats.record_action(
                 original_query=query,
                 attempt=attempt_count,
                 judge_query=current_query,
-                chunks=chunks,
-                verdict=verdict,
+                chunks=ranked,
+                verdict=step,
                 retrieval_ms=retrieval_ms,
                 judge_ms=judge_ms,
             )
-            if verdict.sufficient:
+            if step.sufficient:
                 self.batch_stats.record(attempt_count)
                 # Never return fewer than `limit` just because an early attempt
                 # retrieved a smaller pool; top up so ranking metrics aren't capped.
@@ -134,21 +173,23 @@ class AgenticRetriever:
                     )
                 # Preserve results beyond the requested benchmark cutoff when the
                 # agent expanded its search so that expansion can be scored.
-                return chunks
+                return self._rank(chunks, scratch)
 
-            reformulated = (verdict.reformulated_query or "").strip()
-            if reformulated and reformulated != current_query:
-                current_query = reformulated
+            if self._take_tool_step(step, chunks, scratch):
                 continue
 
-            if current_limit < self.max_limit:
+            reformulated = (step.reformulated_query or "").strip()
+            if step.action == "reformulate" and reformulated != current_query:
+                current_query = reformulated or current_query
+            elif current_limit < self.max_limit:
                 current_limit = min(self.max_limit, current_limit + self.limit_step)
-                continue
-
-            break
+            else:
+                break
+            scratch.observations.clear()
+            chunks = []
 
         self.batch_stats.record(attempt_count)
-        return best_chunks
+        return self._rank(best_chunks, scratch)
 
     def retrieve_batch(
         self,
@@ -163,6 +204,31 @@ class AgenticRetriever:
 
     def total_queries(self) -> int:
         return self.batch_stats.total_queries()
+
+    def _rank(
+        self,
+        chunks: list[RankedChunk],
+        scratch: AgentScratch,
+    ) -> list[RankedChunk]:
+        """The ranking the loop scores and returns; nothing to merge here."""
+        return chunks
+
+    def _next_step(
+        self,
+        query: str,
+        chunks: list[RankedChunk],
+        scratch: AgentScratch,
+    ) -> AgentStep:
+        return self._evaluate_sufficiency(query, chunks)
+
+    def _take_tool_step(
+        self,
+        step: AgentStep,
+        chunks: list[RankedChunk],
+        scratch: AgentScratch,
+    ) -> bool:
+        """Extra action branches; the plain agent has none. True = step handled."""
+        return False
 
     def _evaluate_sufficiency(
         self,

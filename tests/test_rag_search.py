@@ -4,8 +4,7 @@ from src.rag.search import search_places
 
 
 def test_search_returns_forest_walk_for_matching_query(monkeypatch, tmp_path):
-    monkeypatch.setenv("SQLITE_PATH", str(tmp_path / "places.db"))
-    monkeypatch.setenv("CHROMA_PATH", str(tmp_path / "chroma"))
+    monkeypatch.setenv("LLMS4EU_DATA", str(tmp_path))
 
     monkeypatch.setattr(
         "src.preprocess.index.load_embedder",

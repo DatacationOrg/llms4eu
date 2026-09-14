@@ -94,8 +94,6 @@ def test_reranker_uses_discovered_defaults(monkeypatch):
     retriever = methods.build_retriever("stub_rerank")
 
     assert retriever.max_length == 2048
-    assert retriever.prompt_name is None
-    assert retriever.prompt is None
 
 
 def test_nemotron_agent_uses_hybrid_reranked_nemotron_chunks(monkeypatch):

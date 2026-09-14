@@ -1,7 +1,7 @@
 # Open Knowledge Format
 
 Generates and consumes a minimal OKF v0.1 tourism bundle from complete scraped
-pages. Generation reads complete Markdown from `data/db/pages.db`; navigation
+pages. Generation reads complete Markdown from `$LLMS4EU_DATA/db/pages.db`; navigation
 reads only the generated OKF hierarchy and complete concept files.
 
 ## Generation
@@ -14,7 +14,7 @@ The resumable pipeline has three phases:
 3. The model creates or augments coherent Markdown concepts from assigned pages.
 
 Private inventory, catalog, and enrichment checkpoints live under
-`.local/okf/`. Concept and checkpoint writes use temporary sibling files and
+`$LLMS4EU_DATA/okf/state/`. Concept and checkpoint writes use temporary sibling files and
 atomic replacement. Completed pages are skipped on resume.
 
 Pages above 60,000 characters are split at Markdown headings and paragraph
@@ -28,7 +28,7 @@ Generation and navigation both use the local Ollama model named by `model` in
 `config.yaml` (`gpt-oss:20b`). Ollama must be running with that model pulled;
 no credentials or network access are required.
 
-The bundle currently in `data/okf/tourism/` predates this switch and was
+The bundle currently in `$LLMS4EU_DATA/okf/tourism/` predates this switch and was
 generated with a hosted model, as its `manifest.json` records. It is still
 usable as-is; a clean rebuild regenerates it locally.
 
@@ -49,9 +49,9 @@ RAG, use `just okf-benchmark`, or pass `--methods okf-only` to
 
 ### Resume and clean rebuilds
 
-- `just okf-generate` resumes from `.local/okf/` and leaves completed work alone.
-- `just okf-rebuild` uses `--clean`: it deletes `data/okf/tourism/` plus the
-   complete `.local/okf/` state directory, then rebuilds all pages from
+- `just okf-generate` resumes from `$LLMS4EU_DATA/okf/state/` and leaves completed work alone.
+- `just okf-rebuild` uses `--clean`: it deletes `$LLMS4EU_DATA/okf/tourism/` plus the
+   complete `$LLMS4EU_DATA/okf/state/` state directory, then rebuilds all pages from
    `pages.db`. Clean mode rejects source filters and limits to avoid replacing a
    full bundle with a partial one.
 

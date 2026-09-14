@@ -21,9 +21,9 @@ from src.okf.bundle import (
     write_concept,
 )
 from src.okf.document import OKFDocument
-from src.okf.paths import parse_concept_id
+from src.okf.bundle import parse_concept_id
 from src.okf.source import SourcePage, load_source_pages
-from src.shared.env import ROOT, load_local_env, load_yaml
+from src.shared.env import data_path, load_local_env, load_yaml, okf_bundle, pages_db
 from src.shared.llm import LocalOllamaStructuredLlm, StructuredLlm
 
 CONFIG = load_yaml(Path(__file__).with_name("config.yaml"))
@@ -113,10 +113,10 @@ def generate_bundle(
         raise ValueError("Clean generation must rebuild the full corpus")
     load_local_env()
     client = _llm_client()
-    bundle_root = ROOT / CONFIG["bundle_path"]
-    checkpoint_path = ROOT / CONFIG["checkpoint_path"]
-    inventory_path = ROOT / CONFIG["inventory_path"]
-    catalog_path = ROOT / CONFIG["catalog_path"]
+    bundle_root = okf_bundle()
+    checkpoint_path = data_path(CONFIG["checkpoint_path"])
+    inventory_path = data_path(CONFIG["inventory_path"])
+    catalog_path = data_path(CONFIG["catalog_path"])
     if clean:
         _reset_generation(bundle_root, checkpoint_path.parent)
     if clean:
@@ -132,7 +132,7 @@ def generate_bundle(
         CanonicalCatalog() if clean else _load_model(catalog_path, CanonicalCatalog)
     )
     _seed_catalog_from_bundle(bundle_root, catalog)
-    pages = load_source_pages(ROOT / CONFIG["source_db"], source=source, limit=limit)
+    pages = load_source_pages(pages_db(), source=source, limit=limit)
 
     discovered = _discover_pages(client, pages, inventory, inventory_path)
     resolved = _resolve_inventory(client, pages, inventory, catalog, catalog_path)
@@ -169,7 +169,7 @@ def generate_bundle(
     manifest = {
         "okf_version": "0.1",
         "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-        "source_db": CONFIG["source_db"],
+        "source_db": str(pages_db()),
         "source_filter": source,
         "generation_mode": "clean" if clean else "resume",
         "selected_pages": len(pages),

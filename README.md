@@ -14,8 +14,13 @@ derived vector indexes. Both run entirely inside the Python environment.
 
 ```bash
 uv sync --extra dev   # install all dependencies
-cp .env.example .env  # set local paths (defaults work out of the box)
+cp .env.example .env  # set LLMS4EU_DATA, the shared artifact store
 ```
+
+All generated data lives outside the repo in one place, `LLMS4EU_DATA`
+(default `/data/llms4eu`): the page database, the OKF bundle, the Chroma
+vector cache, embedding caches, benchmark checkpoints and judge caches.
+The repo tracks code, SQL schema and the small seed fixtures only.
 
 ```bash
 ollama pull gemma4:e4b
@@ -55,7 +60,7 @@ just eval qwen4b_rerank,qwen4b_hybrid,qwen4b_hybrid_rerank
 ## Shape
 
 ```text
-data/           tracked seed fixture
+data/           tracked seed fixtures (places.jsonl, brestanica.json)
 sql/            one-table schema, portable to SQLite and Postgres
 src/db/         SQLite initialize and place queries
 src/preprocess/ rebuild derived data from SQL rows
@@ -69,11 +74,10 @@ src/shared/     schema, embeddings, env, LLM helper
 tests/          data contract, retrieval, scrape transform
 ```
 
-Durable reference databases live under `data/db/` with descriptive names such
-as `pages.db`. Regenerable vector cache artifacts live under
-`data/cache/chroma/`. SQLite page chunks are the source of truth for chunk text;
-Chroma collections are derived indexes over those chunks. Use `.env` overrides
-for private scratch paths under `.local/`.
+Durable and regenerable artifacts alike live under `LLMS4EU_DATA`
+(`db/pages.db`, `okf/tourism/`, `chroma/`, `embeddings/`, `checkpoints/`,
+`judge-cache/`). SQLite page chunks are the source of truth for chunk text;
+Chroma collections are derived indexes over those chunks.
 
 ---
 
@@ -96,4 +100,4 @@ tools and shared infrastructure are available.
 
 - [docs/architecture-decisions.md](docs/architecture-decisions.md): durable decisions and why they matter.
 - [experiments/indexing/README.md](experiments/indexing/README.md): retrieval experiments and evaluation protocol.
-- [docs/retrieval-results-agentic.md](docs/retrieval-results-agentic.md): current agentic retrieval report.
+- [docs/](docs/): retrieval, OKF and agentic result reports.

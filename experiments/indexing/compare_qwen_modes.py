@@ -7,7 +7,6 @@ import time
 from datetime import datetime
 from typing import Any
 
-from _cli import run_cli
 from src.db.pages import connect_pages, initialize_page_artifacts_db
 from src.eval.agentic_diagnostics import (
     build_agentic_diagnostics,
@@ -36,7 +35,7 @@ from src.retrieval.methods import (
     ensure_retrievers_ready,
     list_retrievers,
 )
-from src.shared.env import ROOT, load_local_env, load_yaml
+from src.shared.env import ROOT, data_path, load_local_env, okf_bundle
 
 DEFAULT_METHODS = (
     "sparse_rerank",
@@ -60,7 +59,7 @@ PHASE2_METHODS = {
 OKF_METHOD = "okf"
 OKF_METHODS = {OKF_METHOD}
 DEFAULT_OUTPUT = Path("docs/retrieval-results-chunks-okf.md")
-CONFIG = load_yaml(ROOT / "experiments" / "indexing" / "config.yaml")
+DEFAULT_WARMUP = 5
 
 
 def main() -> None:
@@ -77,7 +76,7 @@ def main() -> None:
     judge_cache_path = (
         Path(args.judge_cache)
         if args.judge_cache
-        else output_path.with_suffix(output_path.suffix + ".equivalence.json")
+        else data_path("judge-cache", f"{output_path.name}.equivalence.json")
     )
     warmup = _resolve_warmup(args.warmup, limit)
     run, state = _run_eval_with_checkpoint(
@@ -90,7 +89,7 @@ def main() -> None:
         resume=not args.no_resume,
         save_every=max(1, args.save_every),
         log_every=max(1, args.log_every),
-        okf_bundle=Path(args.okf_bundle),
+        okf_bundle_root=Path(args.okf_bundle),
         catch_up_only=args.catch_up_only,
         judge_cutoff=args.judge_k if args.judge_equivalence else None,
         judge_cache_path=judge_cache_path,
@@ -138,7 +137,7 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--okf-bundle",
-        default="data/okf/tourism",
+        default=str(okf_bundle()),
         help="OKF bundle used when the okf method is selected.",
     )
     parser.add_argument("--category")
@@ -149,7 +148,7 @@ def _parse_args() -> argparse.Namespace:
         default=None,
         help=(
             "Optional number of warmup questions. If omitted, defaults to 0 when "
-            "--limit is set and to experiments/indexing/config.yaml:default_warmup "
+            f"--limit is set and to {DEFAULT_WARMUP} "
             "for full runs."
         ),
     )
@@ -398,11 +397,11 @@ def _resolve_warmup(requested_warmup: int | None, limit: int | None) -> int:
         return requested_warmup
     if limit is not None:
         return 0
-    return int(CONFIG["default_warmup"])
+    return DEFAULT_WARMUP
 
 
 def _default_checkpoint_path(output_path: Path) -> Path:
-    return output_path.with_name(f"{output_path.name}.checkpoint.json")
+    return data_path("checkpoints", f"{output_path.name}.checkpoint.json")
 
 
 def _save_action_logs_from_state(
@@ -435,14 +434,14 @@ def _run_eval_with_checkpoint(
     resume: bool,
     save_every: int,
     log_every: int = 1,
-    okf_bundle: Path = Path("data/okf/tourism"),
+    okf_bundle_root: Path = okf_bundle(),
     catch_up_only: bool = False,
     retrievers_out: dict[str, Retriever] | None = None,
     judge_cutoff: int | None = None,
     judge_cache_path: Path | None = None,
 ) -> tuple[EvalRun, dict[str, Any]]:
     initialize_page_artifacts_db()
-    bundle_root = (ROOT / okf_bundle).resolve()
+    bundle_root = (ROOT / okf_bundle_root).resolve()
     questions, relevance, chunk_pages, page_concepts = _load_comparison_rows(
         method_names=method_names,
         limit=limit,
@@ -713,20 +712,6 @@ def _run_timed_round_robin(
                     method_state["rankings"][str(row["id"])],
                 )
 
-            _write_live_report(
-                state=state,
-                method_names=method_names,
-                warmup=warmup,
-                timed_questions=timed_questions,
-                relevance=relevance,
-                category=category,
-                output_path=output_path,
-                checkpoint_path=checkpoint_path,
-                chunk_pages=chunk_pages,
-                page_concepts=page_concepts,
-                equivalence_audit=equivalence_audit,
-            )
-
             completed = int(method_state["next_index"])
             if should_log:
                 print(
@@ -736,6 +721,21 @@ def _run_timed_round_robin(
                 )
             if completed % save_every == 0 or completed == total_timed:
                 _write_state(checkpoint_path, state)
+                # Rescoring the whole run is expensive; refresh the live report on
+                # the checkpoint cadence, not once per question.
+                _write_live_report(
+                    state=state,
+                    method_names=method_names,
+                    warmup=warmup,
+                    timed_questions=timed_questions,
+                    relevance=relevance,
+                    category=category,
+                    output_path=output_path,
+                    checkpoint_path=checkpoint_path,
+                    chunk_pages=chunk_pages,
+                    page_concepts=page_concepts,
+                    equivalence_audit=equivalence_audit,
+                )
 
 
 def _build_incremental_equivalence_audit(
@@ -1258,4 +1258,4 @@ def _build_live_report(
 
 
 if __name__ == "__main__":
-    run_cli(main)
+    main()

@@ -3,6 +3,8 @@ from __future__ import annotations
 from collections import defaultdict
 from typing import Any
 
+from src.eval.metrics import first_relevant_rank, plain_table
+
 
 def build_agentic_diagnostics(
     *,
@@ -104,7 +106,7 @@ def format_agentic_diagnostics(diagnostics: dict[str, Any]) -> str:
     sections = [
         f"Agentic diagnostics (paired at hit@{cutoff})",
         "",
-        _markdown_table(headers, rows),
+        plain_table(headers, rows),
         "",
         "Retry precision is the fraction of retried queries whose first relevant rank improved. "
         "Retry recall is the fraction of baseline misses that were retried.",
@@ -156,7 +158,7 @@ def _format_tool_diagnostics(diagnostics: dict[str, Any]) -> str:
         [
             "Page tool usage",
             "",
-            _markdown_table(headers, rows),
+            plain_table(headers, rows),
             "",
             "Tool questions are questions where the agent called a page tool. "
             f"Tool precision is recovered@{cutoff} over those questions; per-question "
@@ -176,8 +178,8 @@ def _diagnostic_row(
     query_count: float | None,
     cutoff: int,
 ) -> dict[str, Any]:
-    baseline_rank = _first_rank(baseline_ranking, relevant)
-    agent_rank = _first_rank(agent_ranking, relevant)
+    baseline_rank = first_relevant_rank(baseline_ranking, relevant)
+    agent_rank = first_relevant_rank(agent_ranking, relevant)
     fallback_rank = max(len(baseline_ranking), len(agent_ranking), cutoff) + 1
     baseline_value = baseline_rank or fallback_rank
     agent_value = agent_rank or fallback_rank
@@ -339,13 +341,6 @@ def _observations(method_state: dict[str, Any]) -> dict[str, dict[str, Any]]:
         str(question_id): {"actions": actions}
         for question_id, actions in zip(rankings, groups, strict=False)
     }
-
-
-def _first_rank(ranking: list[str], relevant: set[str]) -> int | None:
-    for index, chunk_id in enumerate(ranking, start=1):
-        if chunk_id in relevant:
-            return index
-    return None
 
 
 def _divide(numerator: int, denominator: int) -> float | None:

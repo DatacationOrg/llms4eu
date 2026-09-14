@@ -60,9 +60,9 @@ just eval-index qwen v1
 just eval-index qwen v2
 ```
 
-Durable reference databases belong under `data/db/`. Regenerable Chroma cache
-artifacts belong under `data/cache/chroma/`. Use `.env` overrides when a run
-should write to private scratch paths under `.local/`.
+Durable reference databases belong under `$LLMS4EU_DATA/db/`. Regenerable Chroma
+cache artifacts belong under `$LLMS4EU_DATA/chroma/`. Point `LLMS4EU_DATA` at a
+private path when a run should not touch the shared store.
 
 ## Benchmarking against OKF generation
 

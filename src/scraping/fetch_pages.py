@@ -12,7 +12,7 @@ from src.scraping.page_fetch import (
 )
 from src.scraping.page_store import initialize_raw_pages_db, upsert_fetch_result
 from src.scraping.settings import fetch_pages_config
-from src.shared.env import ROOT, load_local_env
+from src.shared.env import load_local_env, pages_db
 
 
 config = fetch_pages_config()
@@ -75,7 +75,6 @@ def _record_count(counts: dict[str, int], result: FetchResult) -> str:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("source_file", type=Path)
-    parser.add_argument("--db", type=Path, default=Path(config.db_path))
     parser.add_argument("--workers", type=int, default=config.workers)
     parser.add_argument(
         "--domain-delay",
@@ -87,7 +86,7 @@ def main() -> None:
     args = parser.parse_args()
 
     load_local_env()
-    db_path = args.db if args.db.is_absolute() else ROOT / args.db
+    db_path = pages_db()
     counts = scrape_source_file(
         source_path=args.source_file,
         db_path=db_path,

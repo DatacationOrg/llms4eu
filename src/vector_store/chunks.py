@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from contextlib import suppress
-from dataclasses import dataclass
 from functools import cache
 from pathlib import Path
 
@@ -16,6 +15,7 @@ from src.indexing.chunk_text import (
     PageChunk,
     chunk_text_representation,
 )
+from src.retrieval.base import RankedChunk
 from src.shared.env import chroma_path, load_local_env, load_yaml
 from src.shared.indexers import build_indexer
 from src.shared.indexers import provider_names as buildable_provider_names
@@ -26,19 +26,12 @@ DEFAULT_INDEXING_PROVIDER = CONFIG["default_provider"]
 DEFAULT_CHUNK_VERSION = CONFIG["default_chunk_version"]
 
 
-@dataclass(frozen=True)
-class ScoredChunk:
-    id: str
-    score: float
-    text: str
-
-
 def query_chunk_vectors(
     provider: str,
     query: str,
     limit: int,
     version: str = DEFAULT_CHUNK_VERSION,
-) -> list[ScoredChunk]:
+) -> list[RankedChunk]:
     _validate_provider(provider)
     _validate_version(version)
     load_local_env()
@@ -62,12 +55,12 @@ def query_chunk_vectors_batch(
     queries: list[str],
     limit: int,
     version: str = DEFAULT_CHUNK_VERSION,
-) -> dict[int, list[ScoredChunk]]:
+) -> dict[int, list[RankedChunk]]:
     _validate_provider(provider)
     _validate_version(version)
     load_local_env()
     vectors = build_indexer(provider, CONFIG).embed_queries(queries)
-    rankings: dict[int, list[ScoredChunk]] = {}
+    rankings: dict[int, list[RankedChunk]] = {}
     collection = _existing_collection(provider, version)
     batch_size = CONFIG.get("query_batch_size", 128)
 
@@ -241,11 +234,11 @@ def _scored_chunks_from_result(
     result: dict,
     offset: int,
     texts: dict[str, str],
-) -> list[ScoredChunk]:
+) -> list[RankedChunk]:
     chunk_ids = _chunk_ids_from_result(result, offset)
     distances = result.get("distances", [])[offset]
     return [
-        ScoredChunk(
+        RankedChunk(
             id=chunk_id,
             score=1 - distance,
             text=texts.get(chunk_id, ""),

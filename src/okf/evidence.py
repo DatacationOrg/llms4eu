@@ -5,7 +5,7 @@ from pathlib import Path
 from src.okf.answer import OKFAnswer, answer_question
 from src.okf.document import OKFDocument
 from src.retrieval.base import RankedChunk, retrieve_batch_default
-from src.shared.env import ROOT
+from src.shared.env import okf_bundle
 
 
 class OKFConceptRetriever:
@@ -17,16 +17,12 @@ class OKFConceptRetriever:
         self,
         bundle_root: Path | None = None,
     ) -> None:
-        self.bundle_root = (bundle_root or ROOT / "data/okf/tourism").resolve()
+        self.bundle_root = (bundle_root or okf_bundle()).resolve()
         self.page_map = load_bundle_page_map(self.bundle_root)
         self._total_queries = 0
         self._question_count = 0
         self.failures = 0
         self.action_log: list[dict[str, object]] = []
-
-    @property
-    def covered_page_ids(self) -> set[str]:
-        return {page_id for page_ids in self.page_map.values() for page_id in page_ids}
 
     def retrieve(self, query: str, limit: int) -> list[RankedChunk]:
         self._question_count += 1

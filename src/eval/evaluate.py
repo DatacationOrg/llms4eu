@@ -13,7 +13,12 @@ from src.db.pages import (
 from src.db.pages import (
     initialize_page_artifacts_db as initialize_eval_db,
 )
-from src.eval.metrics import bold_best_table, plain_table, score_rankings
+from src.eval.metrics import (
+    bold_best_table,
+    first_relevant_rank,
+    plain_table,
+    score_rankings,
+)
 from src.retrieval.base import Retriever
 from src.retrieval.methods import (
     build_retriever,
@@ -23,7 +28,6 @@ from src.retrieval.methods import (
 from src.shared.env import ROOT, load_local_env, load_yaml
 
 CONFIG = load_yaml(Path(__file__).with_name("config.yaml"))
-AGENTIC_METHODS = ["qwen_agentic", "qwen_hybrid_agentic"]
 REPORTS_DIR = ROOT / ".local" / "reports"
 
 
@@ -455,20 +459,13 @@ def _rank_table(run: EvalRun) -> str:
     for question in run.questions:
         row = [question["question_type"], question["question"][:80]]
         for method_name in run.methods:
-            rank = _first_rank(
+            rank = first_relevant_rank(
                 run.rankings[method_name][question["id"]],
                 relevant_by_question[question["id"]],
             )
             row.append(rank or "-")
         rows.append(row)
     return plain_table(["type", "question", *run.methods], rows)
-
-
-def _first_rank(ranked: list[str], relevant: set[str]) -> int | None:
-    for index, chunk_id in enumerate(ranked, start=1):
-        if chunk_id in relevant:
-            return index
-    return None
 
 
 def _resolve_methods(method_names: list[str]) -> list[str]:
@@ -485,22 +482,13 @@ def _resolve_methods(method_names: list[str]) -> list[str]:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--methods", default=",".join(CONFIG["default_methods"]))
-    parser.add_argument(
-        "--agentic-only",
-        action="store_true",
-        help="Run only agentic retrieval methods (qwen_agentic,qwen_hybrid_agentic).",
-    )
     parser.add_argument("--limit", type=int)
     parser.add_argument("--category")
     parser.add_argument("--show-ranks", action="store_true")
     args = parser.parse_args()
 
     load_local_env()
-    methods = (
-        AGENTIC_METHODS
-        if args.agentic_only
-        else [name.strip() for name in args.methods.split(",") if name.strip()]
-    )
+    methods = [name.strip() for name in args.methods.split(",") if name.strip()]
 
     evaluate(
         methods,

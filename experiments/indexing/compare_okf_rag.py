@@ -16,11 +16,11 @@ from src.okf.evidence import (
     project_pages_to_concepts,
 )
 from src.retrieval.methods import build_retriever, ensure_retrievers_ready
-from src.shared.env import ROOT, load_local_env
+from src.shared.env import data_path, load_local_env, okf_bundle
 
 DEFAULT_METHODS = ("qwen_hybrid", "qwen_hybrid_agentic")
-DEFAULT_BUNDLE = ROOT / "data/okf/tourism"
-REPORTS_DIR = ROOT / ".local/reports"
+DEFAULT_BUNDLE = okf_bundle()
+REPORTS_DIR = data_path("reports")
 
 
 @dataclass(frozen=True)
@@ -216,7 +216,7 @@ def build_report(
             "# OKF vs RAG Evidence Acquisition Pilot",
             (
                 f"Questions: {question_count} approved questions whose gold source "
-                f"pages occur in `{bundle_root.relative_to(ROOT)}`."
+                f"pages occur in `{bundle_root}`."
             ),
             (
                 "This pilot compares evidence acquisition, not final answer quality. "

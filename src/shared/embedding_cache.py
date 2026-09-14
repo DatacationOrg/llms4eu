@@ -5,7 +5,7 @@ import json
 import sqlite3
 from collections.abc import Callable
 
-from src.shared.env import ROOT
+from src.shared.env import data_path
 
 __all__ = ["cached_embeddings"]
 
@@ -21,8 +21,7 @@ def cached_embeddings(
     if not texts:
         return []
 
-    path = ROOT / ".local" / "embedding_cache.sqlite"
-    path.parent.mkdir(parents=True, exist_ok=True)
+    path = data_path("embeddings", "cache.sqlite")
     keys = [_cache_key(provider, model, kind, text) for text in texts]
 
     with sqlite3.connect(path) as conn:

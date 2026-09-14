@@ -1,8 +1,6 @@
-bundle_path: data/okf/tourism
-source_db: data/db/pages.db
-checkpoint_path: .local/okf/generation.json
-inventory_path: .local/okf/inventory.json
-catalog_path: .local/okf/catalog.json
+checkpoint_path: okf/state/generation.json
+inventory_path: okf/state/inventory.json
+catalog_path: okf/state/catalog.json
 max_page_chars: 30000
 page_part_chars: 30000
 model: gpt-oss:20b

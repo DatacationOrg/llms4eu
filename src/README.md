@@ -21,7 +21,10 @@ SQLite ingest, and the small local scrape UI.
 `eval` owns labels, metrics, timing, and reports. It asks `retrieval` for named
 retrievers to compare.
 
-`shared` is not a service. It holds code used by more than one script.
+`shared` is not a service. It holds code used by more than one script, including
+`env.py`, which resolves every generated artifact under `LLMS4EU_DATA`. Use
+`pages_db()`, `okf_bundle()`, `chroma_path()` or `data_path(...)` instead of
+spelling a path in a config file, so the location is stated once.
 
 Orchestration folders can import infrastructure folders (`db`, `vector_store`)
 and shared helpers. Avoid cross-imports between orchestration folders except

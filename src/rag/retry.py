@@ -1,12 +1,10 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Protocol
+from dataclasses import dataclass, replace
 
 
 __all__ = [
     "AgentSearchState",
-    "RetryStrategy",
     "FallbackEmbeddingModel",
     "HigherLimit",
     "QueryReformulation",
@@ -24,12 +22,6 @@ class AgentSearchState:
     strategy: str = "initial"
 
 
-class RetryStrategy(Protocol):
-    name: str
-
-    def apply(self, state: AgentSearchState) -> AgentSearchState | None: ...
-
-
 @dataclass(frozen=True)
 class QueryReformulation:
     reformulated_query: str | None
@@ -39,14 +31,7 @@ class QueryReformulation:
         query = (self.reformulated_query or "").strip()
         if not query or query == state.query:
             return None
-        return AgentSearchState(
-            query=query,
-            limit=state.limit,
-            embedding_model=state.embedding_model,
-            geo_filter=state.geo_filter,
-            attempt=state.attempt + 1,
-            strategy=self.name,
-        )
+        return _advance(state, self.name, query=query)
 
 
 @dataclass(frozen=True)
@@ -59,14 +44,7 @@ class HigherLimit:
         next_limit = min(int(state.limit * self.step_factor), self.max_limit)
         if next_limit <= state.limit:
             return None
-        return AgentSearchState(
-            query=state.query,
-            limit=next_limit,
-            embedding_model=state.embedding_model,
-            geo_filter=state.geo_filter,
-            attempt=state.attempt + 1,
-            strategy=self.name,
-        )
+        return _advance(state, self.name, limit=next_limit)
 
 
 @dataclass(frozen=True)
@@ -77,14 +55,7 @@ class FallbackEmbeddingModel:
     def apply(self, state: AgentSearchState) -> AgentSearchState | None:
         for model in self.fallback_models:
             if model != state.embedding_model:
-                return AgentSearchState(
-                    query=state.query,
-                    limit=state.limit,
-                    embedding_model=model,
-                    geo_filter=state.geo_filter,
-                    attempt=state.attempt + 1,
-                    strategy=self.name,
-                )
+                return _advance(state, self.name, embedding_model=model)
         return None
 
 
@@ -107,11 +78,8 @@ class WiderGeoFilter:
         if next_filter == state.geo_filter:
             return None
 
-        return AgentSearchState(
-            query=state.query,
-            limit=state.limit,
-            embedding_model=state.embedding_model,
-            geo_filter=next_filter or None,
-            attempt=state.attempt + 1,
-            strategy=self.name,
-        )
+        return _advance(state, self.name, geo_filter=next_filter or None)
+
+
+def _advance(state: AgentSearchState, strategy: str, **changes) -> AgentSearchState:
+    return replace(state, attempt=state.attempt + 1, strategy=strategy, **changes)

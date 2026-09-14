@@ -8,7 +8,6 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from _cli import run_cli
 from src.db.pages import connect_pages, initialize_page_artifacts_db
 from src.eval.equivalence import (
     EvidenceDocument,
@@ -19,10 +18,12 @@ from src.okf.evidence import (
     load_bundle_page_map,
     project_pages_to_concepts,
 )
-from src.shared.env import ROOT, load_local_env
+from src.shared.env import ROOT, data_path, load_local_env
 from src.shared.llm import LocalOllamaStructuredLlm
 
-DEFAULT_CHECKPOINT = Path("docs/retrieval-results-chunks-okf.md.checkpoint.json")
+DEFAULT_CHECKPOINT = data_path(
+    "checkpoints", "retrieval-results-chunks-okf.md.checkpoint.json"
+)
 DEFAULT_OUTPUT = Path("docs/retrieval-equivalence-judge.md")
 DEFAULT_LOCAL_MODEL = "gpt-oss:20b"
 
@@ -612,4 +613,4 @@ def _write_json(path: Path, value: dict[str, Any]) -> None:
 
 
 if __name__ == "__main__":
-    run_cli(main)
+    main()

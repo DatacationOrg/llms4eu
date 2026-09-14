@@ -12,27 +12,21 @@ from src.retrieval.retrievers.agentic_tools import (
 
 
 @pytest.fixture
-def pages_db(monkeypatch, tmp_path):
+def pages_db(page_db, monkeypatch):
     """Two pages of chunks, only some of which the base retriever returns."""
-    path = tmp_path / "pages.db"
+    path = page_db
     conn = sqlite3.connect(path)
     conn.executescript(
         """
-        create table page_metadata (
-          id text primary key, source text, url text, title text
-        );
-        create table page_chunks (
-          id text primary key, page_id text, chunk_index integer,
-          heading_path text, text text
-        );
-        insert into page_metadata values
-          ('p1', 'castle', 'https://x.test/castle', 'Rajhenburg Castle'),
-          ('p2', 'other', 'https://x.test/other', 'Other Page');
-        insert into page_chunks values
-          ('p1-0', 'p1', 0, 'Intro', 'The castle stands above Brestanica.'),
-          ('p1-1', 'p1', 1, 'Opening hours', 'Open Tuesday to Sunday 10:00-18:00.'),
-          ('p1-2', 'p1', 2, 'Opening hours', 'Closed on Mondays.'),
-          ('p2-0', 'p2', 0, 'Intro', 'Unrelated content.');
+        insert into page_metadata (id, source, url, fetched_at, title) values
+          ('p1', 'castle', 'https://x.test/castle', '2026-01-01', 'Rajhenburg Castle'),
+          ('p2', 'other', 'https://x.test/other', '2026-01-01', 'Other Page');
+        insert into page_chunks (id, page_id, chunk_index, heading_path, text, char_count)
+        values
+          ('p1-0', 'p1', 0, 'Intro', 'The castle stands above Brestanica.', 35),
+          ('p1-1', 'p1', 1, 'Opening hours', 'Open Tuesday to Sunday 10:00-18:00.', 35),
+          ('p1-2', 'p1', 2, 'Opening hours', 'Closed on Mondays.', 18),
+          ('p2-0', 'p2', 0, 'Intro', 'Unrelated content.', 18);
         """
     )
     conn.commit()

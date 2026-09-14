@@ -10,7 +10,9 @@ qdrant_storage/
 .ruff_cache/
 .mypy_cache/
 *.egg-info/
-data/scraped/
-data/cache/
 *.checkpoint.json
 knowledge-catalog/
+research/
+text/
+data/db/
+data/okf/

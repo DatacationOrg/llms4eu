@@ -8,11 +8,11 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from src.shared.env import ROOT, load_local_env, load_yaml
+from src.okf.bundle import LINK_RE
+from src.shared.env import load_local_env, load_yaml, okf_bundle
 from src.shared.llm import LocalOllamaStructuredLlm, StructuredLlm
 
 CONFIG = load_yaml(Path(__file__).with_name("config.yaml"))
-LINK_RE = re.compile(r"\[[^]]+\]\(([^)]+\.md)(?:#[^)]+)?\)")
 WORD_RE = re.compile(r"[^\W_]{3,}", re.UNICODE)
 EXCERPT_CHUNK_CHARS = 3_000
 
@@ -48,7 +48,7 @@ def answer_question(
     client: StructuredLlm | None = None,
 ) -> OKFAnswer:
     load_local_env()
-    root = (bundle_root or ROOT / CONFIG["bundle_path"]).resolve()
+    root = (bundle_root or okf_bundle()).resolve()
     model = client or _llm_client()
     navigation = CONFIG["navigation"]
     current = (root / "index.md").resolve()

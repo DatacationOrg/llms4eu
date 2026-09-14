@@ -1,5 +1,7 @@
 from dataclasses import dataclass
 
+from functools import cache
+
 import chromadb
 
 from src.shared.env import chroma_path
@@ -66,7 +68,10 @@ def search_place_vectors(
 # ---------- PRIVATE FUNCTIONS ----------
 
 
+@cache
 def _client() -> chromadb.PersistentClient:
+    # Cache the client: a fresh PersistentClient per query leaks connections to the
+    # store and eventually fails readiness checks mid-run.
     return chromadb.PersistentClient(path=str(chroma_path()))
 
 

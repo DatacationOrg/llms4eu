@@ -76,16 +76,12 @@ def test_metadata_context_embedding_text_uses_page_metadata():
     assert chunk_text_representation("v2").name == "metadata_context_chunk"
 
 
-def test_rebuild_page_chunks_appends_new_pages_without_dropping_labels(
-    monkeypatch, tmp_path
-):
-    db_path = tmp_path / "pages.db"
-    _write_existing_labeled_chunk_fixture(db_path)
-    monkeypatch.setattr("src.db.pages.raw_pages_db_path", lambda: db_path)
+def test_rebuild_page_chunks_appends_new_pages_without_dropping_labels(page_db):
+    _seed_labeled_chunk(page_db)
 
     rebuild_page_chunks()
 
-    with sqlite3.connect(db_path) as conn:
+    with sqlite3.connect(page_db) as conn:
         labeled = conn.execute(
             """
             select count(*)
@@ -104,50 +100,15 @@ def test_rebuild_page_chunks_appends_new_pages_without_dropping_labels(
     assert "page-new:0" in chunk_ids
 
 
-def _write_existing_labeled_chunk_fixture(path):
+def _seed_labeled_chunk(path):
     with sqlite3.connect(path) as conn:
         conn.executescript(
             """
-            create table page_metadata (
-              id text primary key,
-              title text,
-              source text not null,
-              page_kind text not null
-            );
-            create table page_markdown_content (
-              page_id text primary key references page_metadata(id) on delete cascade,
-              markdown text not null
-            );
-            create table page_sources (
-              source text primary key,
-              language text not null
-            );
-            create table page_chunks (
-              id text primary key,
-              page_id text not null references page_metadata(id) on delete cascade,
-              chunk_index integer not null,
-              heading_path text,
-              text text not null,
-              char_count integer not null,
-              unique(page_id, chunk_index)
-            );
-            create table eval_questions (
-              id text primary key,
-              question text not null,
-              answer text not null,
-              question_type text not null,
-              question_language text not null,
-              approved integer not null default 1
-            );
-            create table eval_relevant_chunks (
-              question_id text not null references eval_questions(id) on delete cascade,
-              chunk_id text not null references page_chunks(id) on delete cascade,
-              primary key (question_id, chunk_id)
-            );
-
-            insert into page_metadata (id, title, source, page_kind)
-            values ('page-existing', 'Existing', 'fixture', 'ok'),
-                   ('page-new', 'New', 'fixture', 'ok');
+            insert into page_metadata (id, source, url, fetched_at, title, page_kind)
+            values ('page-existing', 'fixture', 'https://example.test/existing',
+                    '2026-01-01T00:00:00+00:00', 'Existing', 'ok'),
+                   ('page-new', 'fixture', 'https://example.test/new',
+                    '2026-01-01T00:00:00+00:00', 'New', 'ok');
             insert into page_markdown_content (page_id, markdown)
             values ('page-existing', '# Existing\n\nExisting page markdown.'),
                    ('page-new', '# New\n\nNew page markdown with enough text.');
