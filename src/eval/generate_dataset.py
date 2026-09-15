@@ -16,42 +16,11 @@ from src.shared.llm import (
 
 CONFIG = load_yaml(Path(__file__).with_name("config.yaml"))
 
-QUESTION_TYPES = (
-    "direct_short",
-    "direct_long",
-    "vague_short",
-    "vague_long",
-    "crosslingual",
-)
+QUESTION_TYPES = tuple(CONFIG["question_target_chars"])
 QUESTION_TARGET_CHARS = CONFIG["question_target_chars"]
 QUESTION_MAX_CHARS = max(QUESTION_TARGET_CHARS.values()) * 2
 ANSWER_TARGET_CHARS = CONFIG["answer_target_chars"]
 ANSWER_MAX_CHARS = ANSWER_TARGET_CHARS + 512
-EU_LANGUAGES = (
-    "bg",
-    "hr",
-    "cs",
-    "da",
-    "nl",
-    "en",
-    "et",
-    "fi",
-    "fr",
-    "de",
-    "el",
-    "hu",
-    "ga",
-    "it",
-    "lv",
-    "lt",
-    "mt",
-    "pl",
-    "pt",
-    "ro",
-    "sk",
-    "es",
-    "sv",
-)
 LANGUAGE_NAMES = {
     "bg": "Bulgarian",
     "hr": "Croatian",
@@ -95,25 +64,13 @@ class QuestionCandidate(BaseModel):
 
 
 class EvalQuestionBatch(BaseModel):
-    direct_short: QuestionCandidate | None = Field(
+    same_language: QuestionCandidate | None = Field(
         default=None,
-        description=f"Source-language direct question, about {QUESTION_TARGET_CHARS['direct_short']} characters.",
+        description=f"Question in the chunk's own language, about {QUESTION_TARGET_CHARS['same_language']} characters.",
     )
-    direct_long: QuestionCandidate | None = Field(
+    cross_language: QuestionCandidate | None = Field(
         default=None,
-        description=f"Source-language direct question with context, about {QUESTION_TARGET_CHARS['direct_long']} characters.",
-    )
-    vague_short: QuestionCandidate | None = Field(
-        default=None,
-        description=f"Source-language indirect question, about {QUESTION_TARGET_CHARS['vague_short']} characters.",
-    )
-    vague_long: QuestionCandidate | None = Field(
-        default=None,
-        description=f"Source-language indirect question with context, about {QUESTION_TARGET_CHARS['vague_long']} characters.",
-    )
-    crosslingual: QuestionCandidate | None = Field(
-        default=None,
-        description=f"Target-language direct question, about {QUESTION_TARGET_CHARS['crosslingual']} characters, with answer in that language.",
+        description=f"Question in the injected target language, about {QUESTION_TARGET_CHARS['cross_language']} characters, answered in that language.",
     )
 
 
@@ -143,7 +100,7 @@ def generate_dataset(
                 f"[{index}/{len(chunks)}] generating questions for {chunk['id']}",
                 flush=True,
             )
-            target_language = _crosslingual_language(chunk["id"])
+            target_language = _cross_language(chunk["id"], chunk["language"])
             result = structured_model.invoke(_messages(chunk, target_language))
             questions = [
                 item for item in _flatten_questions(result) if _valid_question(*item)
@@ -270,18 +227,11 @@ def _system_prompt(chunk: dict, target_language: str | None) -> str:
     target_language = target_language or "en"
     target_language_name = LANGUAGE_NAMES[target_language]
     return f"""
-Generate one question and one answer for each supported question type. Use only facts in the chunk.
+Generate one question and one answer for each question type. Use only facts in the chunk.
 
-Write direct_short, direct_long, vague_short, and vague_long in {source_language_name}.
-Write crosslingual in {target_language_name} and set question_language to "{target_language}".
+Write same_language in {source_language_name}, about {QUESTION_TARGET_CHARS["same_language"]} characters.
+Write cross_language in {target_language_name} and set question_language to "{target_language}", about {QUESTION_TARGET_CHARS["cross_language"]} characters.
 Answers must use the same language as their questions.
-
-Question targets:
-- direct_short: direct wording, about {QUESTION_TARGET_CHARS["direct_short"]} characters.
-- direct_long: direct wording with context, about {QUESTION_TARGET_CHARS["direct_long"]} characters.
-- vague_short: indirect wording, about {QUESTION_TARGET_CHARS["vague_short"]} characters.
-- vague_long: indirect wording with context, about {QUESTION_TARGET_CHARS["vague_long"]} characters.
-- crosslingual: direct wording, about {QUESTION_TARGET_CHARS["crosslingual"]} characters.
 
 Answer target: about {ANSWER_TARGET_CHARS} characters.
 If a type is not supported by the chunk, leave it null.
@@ -299,9 +249,10 @@ Chunk:
 """
 
 
-def _crosslingual_language(chunk_id: str) -> str:
-    index = int(uuid.uuid5(uuid.NAMESPACE_URL, chunk_id).int % len(EU_LANGUAGES))
-    return EU_LANGUAGES[index]
+def _cross_language(chunk_id: str, source_language: str) -> str:
+    """Sample one target language per chunk, never the chunk's own."""
+    targets = tuple(code for code in LANGUAGE_NAMES if code != source_language)
+    return targets[uuid.uuid5(uuid.NAMESPACE_URL, chunk_id).int % len(targets)]
 
 
 def _question_id(chunk_id: str, question: QuestionCandidate) -> str:

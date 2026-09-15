@@ -40,10 +40,9 @@ def score_rankings(
 
 
 def first_relevant_rank(ranked: list[str], relevant: set[str]) -> int | None:
-    for index, chunk_id in enumerate(ranked, start=1):
-        if chunk_id in relevant:
-            return index
-    return None
+    return next(
+        (i for i, chunk_id in enumerate(ranked, 1) if chunk_id in relevant), None
+    )
 
 
 def _render_table(headers: list[str], rows: list[list[str]]) -> str:

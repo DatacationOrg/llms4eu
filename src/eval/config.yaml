@@ -7,11 +7,8 @@ fact_dense_min_chars: 300
 judge_max_document_chars: 12000
 answer_target_chars: 64
 question_target_chars:
-  direct_short: 128
-  direct_long: 512
-  vague_short: 128
-  vague_long: 512
-  crosslingual: 128
+  same_language: 256
+  cross_language: 128
 metric_ks:
   - 1
   - 5
