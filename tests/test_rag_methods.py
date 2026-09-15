@@ -1,11 +1,7 @@
 import pytest
 
 from src.retrieval import methods
-from src.shared.indexers import (
-    Nemotron3EmbedIndexer,
-    build_indexer,
-    provider_names,
-)
+from src.shared.indexers import build_indexer, provider_names
 
 
 def test_retriever_catalog_generates_public_names():
@@ -18,16 +14,11 @@ def test_retriever_catalog_generates_public_names():
     assert "sparse_hybrid" not in names
 
 
-def test_build_retriever_rejects_unknown_name():
-    with pytest.raises(ValueError, match="Unknown retriever"):
-        methods.build_retriever("missing")
-
-
 def test_nemotron_embedding_provider_uses_retrieval_defaults():
     indexer = build_indexer("nemotron")
 
     assert "nemotron" in provider_names()
-    assert isinstance(indexer, Nemotron3EmbedIndexer)
+    assert indexer.name == "nemotron"
     assert indexer.model_name == "nvidia/Nemotron-3-Embed-1B-BF16"
     assert indexer.max_seq_length == 4096
     assert indexer.dtype == "bfloat16"

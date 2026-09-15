@@ -12,7 +12,6 @@ __all__ = [
     "load_local_env",
     "load_yaml",
     "pages_db",
-    "sqlite_path",
 ]
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -39,10 +38,6 @@ def data_path(*parts: str) -> Path:
 def pages_db() -> Path:
     """Canonical raw-page SQLite database."""
     return data_path("db", "pages.db")
-
-
-def sqlite_path() -> Path:
-    return data_path("places.db")
 
 
 def chroma_path() -> Path:

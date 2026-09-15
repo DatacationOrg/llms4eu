@@ -9,7 +9,6 @@ from src.shared.embedding_cache import cached_embeddings
 
 __all__ = [
     "EmbeddingIndexer",
-    "Nemotron3EmbedIndexer",
     "SentenceTransformerIndexer",
     "build_indexer",
     "provider_names",
@@ -83,11 +82,6 @@ class SentenceTransformerIndexer:
         return kind if kind in prompts else None
 
 
-@dataclass(frozen=True)
-class Nemotron3EmbedIndexer(SentenceTransformerIndexer):
-    """Distinct type only so tests/test_rag_methods.py can isinstance-check it."""
-
-
 # field -> (config key, default), or a literal for fields config never sets.
 PROVIDER_FIELDS: dict[str, dict[str, object]] = {
     "qwen": {
@@ -128,5 +122,4 @@ def build_indexer(name: str, config: dict | None = None) -> EmbeddingIndexer:
         field: config.get(*spec) if isinstance(spec, tuple) else spec
         for field, spec in PROVIDER_FIELDS[name].items()
     }
-    cls = Nemotron3EmbedIndexer if name == "nemotron" else SentenceTransformerIndexer
-    return cls(name=name, **kwargs)
+    return SentenceTransformerIndexer(name=name, **kwargs)

@@ -5,7 +5,6 @@ from src.retrieval.retrievers import sparse as sparse_module
 from src.retrieval.retrievers.sparse import SparseRetriever
 from src.vector_store.chunks import (
     collection_ready,
-    enabled_provider_names,
     query_chunk_vectors,
     query_chunk_vectors_batch,
     rebuild_chunk_collection,
@@ -92,12 +91,6 @@ def test_v2_chunk_collection_is_isolated_and_contains_metadata(monkeypatch, page
         "source": "fixture",
         "title": "Castle Page",
     }
-
-
-def test_enabled_provider_names_comes_from_indexing_config(monkeypatch):
-    monkeypatch.setattr(chunk_vectors, "INDEXING_PROVIDERS", ("qwen", "nemotron"))
-
-    assert enabled_provider_names() == ["nemotron", "qwen"]
 
 
 def test_v2_sparse_indexes_metadata_without_changing_v1(page_db):

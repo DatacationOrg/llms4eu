@@ -239,6 +239,8 @@ def _add_equivalence_judgments(
     if cutoff < 1:
         raise ValueError("--judge-k must be at least 1")
 
+    # Sibling script, not a package: this resolves because running
+    # experiments/indexing/*.py puts that directory on sys.path.
     from judge_retrieval_equivalence import (
         _build_client,
         _write_json,

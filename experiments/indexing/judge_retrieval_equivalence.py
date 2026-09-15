@@ -326,8 +326,6 @@ def judge_checkpoint(
                         "retrieved_ids": [document.id for document in retrieved],
                         **result.model_dump(),
                     }
-                    judgments[key] = record
-                    _write_json(cache_path, cache)
                 except Exception as exc:
                     record = {
                         "method": method_name,
@@ -335,8 +333,10 @@ def judge_checkpoint(
                         "question": question["question"],
                         "error": f"{type(exc).__name__}: {exc}",
                     }
-                    judgments[key] = record
-                    _write_json(cache_path, cache)
+                # Cache outside the try: a failed write must not relabel a
+                # successful judgment as a judge failure.
+                judgments[key] = record
+                _write_json(cache_path, cache)
             judged_for_method += 1
             if "error" in record:
                 summary["failures"] += 1

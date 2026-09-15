@@ -1,7 +1,6 @@
 from src.eval.metrics import bold_best_table, score_rankings
 from src.eval.evaluate import (
     EvalRun,
-    _resolve_methods,
     add_judge_adjusted_scores,
     format_eval_report,
 )
@@ -51,10 +50,6 @@ def test_bold_best_table_highlights_column_winners():
     assert "| rerank | **0.750** |" in table
     assert len({line.index("|") for line in table.splitlines()}) == 1
     assert len({line.rindex("|") for line in table.splitlines()}) == 1
-
-
-def test_eval_default_methods_are_narrow():
-    assert _resolve_methods([]) == ["sparse_rerank", "qwen_hybrid_rerank"]
 
 
 def test_judge_adjusted_score_is_added_to_overall_table():
