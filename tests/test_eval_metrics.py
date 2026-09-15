@@ -1,9 +1,4 @@
 from src.eval.metrics import bold_best_table, score_rankings
-from src.eval.evaluate import (
-    EvalRun,
-    add_judge_adjusted_scores,
-    format_eval_report,
-)
 
 
 def test_score_rankings_accepts_multiple_relevant_chunks():
@@ -50,39 +45,3 @@ def test_bold_best_table_highlights_column_winners():
     assert "| rerank | **0.750** |" in table
     assert len({line.index("|") for line in table.splitlines()}) == 1
     assert len({line.rindex("|") for line in table.splitlines()}) == 1
-
-
-def test_judge_adjusted_score_is_added_to_overall_table():
-    run = EvalRun(
-        questions=[],
-        relevance=[],
-        methods=["qwen_hybrid_rerank"],
-        warmup_count=0,
-        rankings={},
-        timings={
-            "qwen_hybrid_rerank": {
-                "seconds": 1.0,
-                "ms_per_query": 100.0,
-                "queries_per_query": 1.0,
-                "total_queries": 4.0,
-            }
-        },
-        score_names=["hit@10"],
-        scores={"qwen_hybrid_rerank": {"hit@10": 0.5}},
-    )
-
-    judged = add_judge_adjusted_scores(
-        run,
-        {
-            "qwen_hybrid_rerank": {
-                "questions": 4,
-                "strict_hits": 2,
-                "equivalent_misses": 1,
-            }
-        },
-        cutoff=10,
-    )
-    report = format_eval_report(judged, include_categories=False)
-
-    assert judged.scores["qwen_hybrid_rerank"]["judge_hit@10"] == 0.75
-    assert "judge_hit@10" in report

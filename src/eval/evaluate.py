@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import argparse
+import json
 import time
 from collections import defaultdict
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
@@ -25,7 +26,7 @@ from src.retrieval.methods import (
     ensure_retrievers_ready,
     list_retrievers,
 )
-from src.shared.env import ROOT, load_local_env, load_yaml
+from src.shared.env import ROOT, data_path, load_local_env, load_yaml
 
 CONFIG = load_yaml(Path(__file__).with_name("config.yaml"))
 REPORTS_DIR = ROOT / ".local" / "reports"
@@ -36,13 +37,10 @@ class EvalRun:
     questions: list[dict]
     relevance: list[dict]
     methods: list[str]
-    warmup_count: int
     rankings: dict[str, dict[str, list[str]]]
     timings: dict[str, dict[str, float]]
     score_names: list[str]
     scores: dict[str, dict[str, float]]
-    category_metric_names: dict[str, str] | None = None
-    category_scores: dict[str, dict[str, float]] | None = None
 
 
 def evaluate(
@@ -50,8 +48,9 @@ def evaluate(
     show_ranks: bool = False,
     limit: int | None = None,
     category: str | None = None,
+    checkpoint: bool = False,
 ) -> None:
-    run = run_eval(method_names, limit=limit, category=category)
+    run = run_eval(method_names, limit=limit, category=category, checkpoint=checkpoint)
     if not run.questions:
         print("No eval questions found. Run src.eval.generate_dataset first.")
         return
@@ -80,13 +79,9 @@ def format_eval_report(
         _timing_table(run),
     ]
     if include_categories:
-        category_title = f"hit@{CONFIG['category_hit_k']} by category"
-        if run.category_metric_names:
-            metric_names = list(dict.fromkeys(run.category_metric_names.values()))
-            category_title = f"{' / '.join(metric_names)} by category"
         sections.extend(
             [
-                category_title,
+                f"hit@{CONFIG['category_hit_k']} by category",
                 _category_table(run),
             ]
         )
@@ -127,56 +122,75 @@ def run_eval(
     method_names: list[str],
     limit: int | None = None,
     category: str | None = None,
-    warmup: int = 0,
+    checkpoint: bool = False,
 ) -> EvalRun:
     initialize_eval_db()
     questions, relevance = load_eval_rows(limit=limit, category=category)
     if not questions:
-        return EvalRun([], [], [], 0, {}, {}, [], {})
+        return EvalRun([], [], [], {}, {}, [], {})
 
     resolved_methods = _resolve_methods(method_names)
     ensure_retrievers_ready(resolved_methods)
     retrievers = {name: build_retriever(name) for name in resolved_methods}
-    warmup = min(warmup, max(len(questions) - 1, 0))
-    warmup_questions = questions[:warmup]
-    timed_questions = questions[warmup:]
-    if warmup_questions:
-        for name in resolved_methods:
-            _retrieve_rankings(retrievers[name], warmup_questions)
+    signature = [row["id"] for row in questions]
+    done = _load_checkpoint(signature) if checkpoint else {}
 
     method_rankings = {}
     timings = {}
     for name in resolved_methods:
+        if name in done:
+            print(f"{name}: resumed from checkpoint")
+            method_rankings[name] = done[name]["rankings"]
+            timings[name] = done[name]["timing"]
+            continue
         started = time.perf_counter()
-        method_rankings[name], effort = _retrieve_rankings(
-            retrievers[name], timed_questions
-        )
+        method_rankings[name], effort = _retrieve_rankings(retrievers[name], questions)
         elapsed = time.perf_counter() - started
         timings[name] = {
             "seconds": elapsed,
-            "ms_per_query": elapsed * 1000 / len(timed_questions),
+            "ms_per_query": elapsed * 1000 / len(questions),
             "queries_per_query": effort["queries_per_query"],
             "total_queries": effort["total_queries"],
         }
+        if checkpoint:
+            done[name] = {"rankings": method_rankings[name], "timing": timings[name]}
+            _save_checkpoint(signature, done)
 
-    timed_question_ids = {row["id"] for row in timed_questions}
-    timed_relevance = [
-        row for row in relevance if row["question_id"] in timed_question_ids
-    ]
     score_names, scores = score_eval_rankings(
-        timed_relevance,
-        method_rankings,
-        resolved_methods,
+        relevance, method_rankings, resolved_methods
     )
     return EvalRun(
-        questions=timed_questions,
-        relevance=timed_relevance,
+        questions=questions,
+        relevance=relevance,
         methods=resolved_methods,
-        warmup_count=warmup,
         rankings=method_rankings,
         timings=timings,
         score_names=score_names,
         scores=scores,
+    )
+
+
+# ponytail: resume is per method, not per question. A crash loses at most the
+# method in flight. Go per question only if one method's run outgrows a sitting.
+def _checkpoint_path() -> Path:
+    return data_path("checkpoints", "eval.json")
+
+
+def _load_checkpoint(signature: list[str]) -> dict:
+    path = _checkpoint_path()
+    if not path.exists():
+        return {}
+    saved = json.loads(path.read_text(encoding="utf-8"))
+    if saved.get("questions") != signature:
+        print("Checkpoint covers a different question set; starting fresh.")
+        return {}
+    return saved["methods"]
+
+
+def _save_checkpoint(signature: list[str], methods: dict) -> None:
+    _checkpoint_path().write_text(
+        json.dumps({"questions": signature, "methods": methods}),
+        encoding="utf-8",
     )
 
 
@@ -278,24 +292,6 @@ def score_eval_rankings(
     return score_names, scores
 
 
-def add_judge_adjusted_scores(
-    run: EvalRun,
-    summaries: dict[str, dict[str, int]],
-    cutoff: int,
-) -> EvalRun:
-    score_name = f"judge_hit@{cutoff}"
-    scores = {name: dict(values) for name, values in run.scores.items()}
-    for method_name in run.methods:
-        summary = summaries[method_name]
-        assessed = summary["questions"]
-        scores[method_name][score_name] = (
-            (summary["strict_hits"] + summary["equivalent_misses"]) / assessed
-            if assessed
-            else 0.0
-        )
-    return replace(run, score_names=[*run.score_names, score_name], scores=scores)
-
-
 def _timing_table(run: EvalRun) -> str:
     return plain_table(
         ["method", "seconds", "ms/query", "queries/query", "queries"],
@@ -333,33 +329,6 @@ def _query_effort(retriever: Retriever, question_count: int) -> dict[str, float]
 def _category_table(run: EvalRun) -> str:
     question_type_by_id = {row["id"]: row["question_type"] for row in run.questions}
     types = sorted(set(question_type_by_id.values()))
-    if run.category_metric_names is not None and run.category_scores is not None:
-        metric_names = set(run.category_metric_names.values())
-        if len(metric_names) == 1:
-            rows = [
-                [
-                    method_name,
-                    *(
-                        run.category_scores[method_name][question_type]
-                        for question_type in types
-                    ),
-                ]
-                for method_name in run.methods
-            ]
-            return bold_best_table(["method", *types], rows)
-        rows = [
-            [
-                method_name,
-                run.category_metric_names[method_name],
-                *(
-                    run.category_scores[method_name][question_type]
-                    for question_type in types
-                ),
-            ]
-            for method_name in run.methods
-        ]
-        return bold_best_table(["method", "metric", *types], rows)
-
     relevance_by_type = defaultdict(list)
     for row in run.relevance:
         relevance_by_type[question_type_by_id[row["question_id"]]].append(row)
@@ -421,6 +390,11 @@ def main() -> None:
     parser.add_argument("--limit", type=int)
     parser.add_argument("--category")
     parser.add_argument("--show-ranks", action="store_true")
+    parser.add_argument(
+        "--checkpoint",
+        action="store_true",
+        help="Resume a long run; finished methods are skipped.",
+    )
     args = parser.parse_args()
 
     load_local_env()
@@ -431,6 +405,7 @@ def main() -> None:
         show_ranks=args.show_ranks,
         limit=args.limit,
         category=args.category,
+        checkpoint=args.checkpoint,
     )
 
 

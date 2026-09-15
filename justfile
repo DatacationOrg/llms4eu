@@ -28,9 +28,6 @@ eval-generate LIMIT="10":
 eval-inspect LIMIT="20":
     uv run python -m src.eval.inspect_dataset --limit {{LIMIT}}
 
-# Full benchmark report over the method catalog.
-eval-report METHODS="all" OUTPUT="docs/retrieval-results.md":
-    uv run python experiments/indexing/compare_qwen_modes.py --methods {{METHODS}} --output {{OUTPUT}}
-
-eval-equivalence OUTPUT="docs/retrieval-equivalence-judge.md" K="5":
-    uv run python experiments/indexing/judge_retrieval_equivalence.py --output {{OUTPUT}} -k {{K}}
+# Long run over the whole catalog; --checkpoint skips finished methods on resume.
+eval-all:
+    uv run python -m src.eval.evaluate --methods all --checkpoint
