@@ -1,6 +1,7 @@
 import pytest
 
 from src.retrieval import methods
+from src.shared import indexers
 from src.shared.indexers import build_indexer, provider_names
 
 
@@ -74,7 +75,9 @@ def test_indexer_refuses_a_model_below_the_shared_sequence_limit(monkeypatch):
     monkeypatch.setattr(
         "src.shared.indexers.load_embedder", lambda *_, **__: ShortModel()
     )
-    indexer = build_indexer("qwen", {"embedding_max_seq_length": 2048})
+    indexer = build_indexer(
+        "qwen", {**indexers.CONFIG, "embedding_max_seq_length": 2048}
+    )
 
     with pytest.raises(ValueError, match="caps out at 256 tokens"):
         indexer._model()
@@ -87,6 +90,8 @@ def test_indexer_applies_the_shared_limit_to_a_model_that_can_reach_it(monkeypat
     monkeypatch.setattr(
         "src.shared.indexers.load_embedder", lambda *_, **__: LongModel()
     )
-    model = build_indexer("nemotron", {"embedding_max_seq_length": 2048})._model()
+    model = build_indexer(
+        "nemotron", {**indexers.CONFIG, "embedding_max_seq_length": 2048}
+    )._model()
 
     assert model.max_seq_length == 2048

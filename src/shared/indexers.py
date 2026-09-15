@@ -4,10 +4,12 @@ from dataclasses import dataclass
 from functools import cache
 from typing import Protocol
 
+
 from src.shared.embed import embed_texts, load_embedder
 from src.shared.embedding_cache import cached_embeddings
+from src.shared.env import ROOT, load_yaml
 
-DEFAULT_MAX_SEQ_LENGTH = 2048
+CONFIG = load_yaml(ROOT / "src" / "indexing" / "config.yaml")
 
 __all__ = [
     "EmbeddingIndexer",
@@ -33,8 +35,8 @@ class SentenceTransformerIndexer:
     model_name: str
     local_files_only: bool = True
     batch_size: int | None = None
-    max_seq_length: int = DEFAULT_MAX_SEQ_LENGTH
-    show_progress_bar: bool = False
+    max_seq_length: int = 0
+    show_progress_bar: bool = True
     dtype: str | None = None
     attn_implementation: str | None = None
 
@@ -92,27 +94,24 @@ class SentenceTransformerIndexer:
         return kind if kind in prompts else None
 
 
-# field -> (config key, default), or a literal for fields config never sets.
-PROVIDER_FIELDS: dict[str, dict[str, object]] = {
+# indexer field -> config key. config.yaml is the only place these values exist.
+PROVIDER_FIELDS: dict[str, dict[str, str]] = {
     "qwen": {
-        "model_name": ("qwen_embedding_model", "Qwen/Qwen3-Embedding-0.6B"),
-        "batch_size": ("qwen_batch_size", 8),
-        "local_files_only": ("qwen_local_files_only", True),
-        "show_progress_bar": True,
+        "model_name": "qwen_embedding_model",
+        "batch_size": "qwen_batch_size",
+        "local_files_only": "qwen_local_files_only",
     },
     "qwen4b": {
-        "model_name": ("qwen4b_embedding_model", "Qwen/Qwen3-Embedding-4B"),
-        "batch_size": ("qwen4b_batch_size", 1),
-        "local_files_only": ("qwen4b_local_files_only", True),
-        "show_progress_bar": True,
+        "model_name": "qwen4b_embedding_model",
+        "batch_size": "qwen4b_batch_size",
+        "local_files_only": "qwen4b_local_files_only",
     },
     "nemotron": {
-        "model_name": ("nemotron_embedding_model", "nvidia/Nemotron-3-Embed-1B-BF16"),
-        "batch_size": ("nemotron_batch_size", 8),
-        "local_files_only": ("nemotron_local_files_only", True),
-        "dtype": ("nemotron_dtype", "bfloat16"),
-        "attn_implementation": ("nemotron_attn_implementation", "sdpa"),
-        "show_progress_bar": True,
+        "model_name": "nemotron_embedding_model",
+        "batch_size": "nemotron_batch_size",
+        "local_files_only": "nemotron_local_files_only",
+        "dtype": "nemotron_dtype",
+        "attn_implementation": "nemotron_attn_implementation",
     },
 }
 
@@ -124,13 +123,9 @@ def provider_names() -> list[str]:
 def build_indexer(name: str, config: dict | None = None) -> EmbeddingIndexer:
     if name not in PROVIDER_FIELDS:
         raise ValueError(f"Unknown indexer: {name}")
-    config = config or {}
-    kwargs = {
-        field: config.get(*spec) if isinstance(spec, tuple) else spec
-        for field, spec in PROVIDER_FIELDS[name].items()
-    }
+    config = CONFIG if config is None else config
     return SentenceTransformerIndexer(
         name=name,
-        max_seq_length=config.get("embedding_max_seq_length", DEFAULT_MAX_SEQ_LENGTH),
-        **kwargs,
+        max_seq_length=config["embedding_max_seq_length"],
+        **{field: config[key] for field, key in PROVIDER_FIELDS[name].items()},
     )

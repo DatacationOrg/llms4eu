@@ -6,8 +6,8 @@ from collections import defaultdict
 def score_rankings(
     rows: list[dict],
     rankings: dict[str, list[str]],
-    ks: tuple[int, ...] = (1, 5, 10),
-    mrr_k: int = 10,
+    ks: tuple[int, ...],
+    mrr_k: int,
     recall_k: int | None = None,
 ) -> dict[str, float]:
     relevant_by_question: dict[str, set[str]] = defaultdict(set)

@@ -6,17 +6,21 @@ from collections import Counter
 from dataclasses import dataclass
 from functools import cache
 
+from pathlib import Path
+
 from src.db.pages import connect_pages as connect
 from src.retrieval.base import RankedChunk, retrieve_batch_default
+from src.shared.env import load_yaml
 
+CONFIG = load_yaml(Path(__file__).parents[1] / "config.yaml")
 TOKEN_RE = re.compile(r"[^\W_]+", re.UNICODE)
 
 
 @dataclass(frozen=True)
 class SparseRetriever:
     name: str = "sparse"
-    k1: float = 1.5
-    b: float = 0.75
+    k1: float = CONFIG["sparse_k1"]
+    b: float = CONFIG["sparse_b"]
 
     def retrieve(self, query: str, limit: int) -> list[RankedChunk]:
         corpus = _corpus()

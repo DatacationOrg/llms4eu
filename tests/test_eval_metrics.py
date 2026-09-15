@@ -17,7 +17,7 @@ def test_score_rankings_accepts_multiple_relevant_chunks():
         "q2": ["x", "y", "z"],
     }
 
-    scores = score_rankings(relevance, rankings, ks=(1, 5))
+    scores = score_rankings(relevance, rankings, ks=(1, 5), mrr_k=10)
 
     assert scores["hit@1"] == 0
     assert scores["hit@5"] == 0.5
@@ -30,7 +30,7 @@ def test_score_rankings_accepts_multiple_relevant_chunks():
 
 
 def test_score_rankings_handles_missing_relevance():
-    scores = score_rankings([], {"q1": ["chunk"]}, ks=(1, 5))
+    scores = score_rankings([], {"q1": ["chunk"]}, ks=(1, 5), mrr_k=10)
 
     assert scores == {
         "hit@1": 0.0,

@@ -73,10 +73,10 @@ def missing_retriever_indexes(names: list[str]) -> dict[str, str]:
 
 def _specs() -> dict[str, RetrieverSpec]:
     specs = {
-        "sparse": RetrieverSpec("sparse", _sparse),
+        "sparse": RetrieverSpec("sparse", SparseRetriever),
         "sparse_rerank": RetrieverSpec(
             "sparse_rerank",
-            lambda: _reranker("sparse_rerank", _sparse()),
+            lambda: _reranker("sparse_rerank", SparseRetriever()),
         ),
     }
     builders = {
@@ -96,10 +96,6 @@ def _specs() -> dict[str, RetrieverSpec]:
     return specs
 
 
-def _sparse() -> SparseRetriever:
-    return SparseRetriever(name="sparse", k1=CONFIG["sparse_k1"], b=CONFIG["sparse_b"])
-
-
 def _vector(provider_name: str) -> Retriever:
     return VectorChunkRetriever(name=provider_name, provider=provider_name)
 
@@ -107,7 +103,7 @@ def _vector(provider_name: str) -> Retriever:
 def _hybrid(provider_name: str) -> WeightedScoreFusionRetriever:
     return WeightedScoreFusionRetriever(
         name=f"{provider_name}_hybrid",
-        retrievers=(_vector(provider_name), _sparse()),
+        retrievers=(_vector(provider_name), SparseRetriever()),
         candidate_limit=CONFIG["rerank_candidate_limit"],
         weights=(CONFIG["hybrid_vector_weight"], CONFIG["hybrid_sparse_weight"]),
     )

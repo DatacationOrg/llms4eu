@@ -52,7 +52,7 @@ def query_chunk_vectors_batch(
     vectors = build_indexer(provider, CONFIG).embed_queries(queries)
     rankings: dict[int, list[RankedChunk]] = {}
     collection = _existing_collection(provider)
-    batch_size = CONFIG.get("query_batch_size", 128)
+    batch_size = CONFIG["query_batch_size"]
 
     for start in range(0, len(vectors), batch_size):
         result = collection.query(
@@ -108,7 +108,7 @@ def rebuild_chunk_collection(provider: str) -> None:
     )
 
     indexer = build_indexer(provider, CONFIG)
-    batch_size = CONFIG.get("index_upsert_batch_size", 128)
+    batch_size = CONFIG["index_upsert_batch_size"]
     print(f"indexing {len(chunks)} chunks into {collection_name} with {indexer.name}")
 
     for start in tqdm(

@@ -699,6 +699,7 @@ def _score_method_categories(
                 typed_relevance,
                 typed_rankings,
                 ks=(cutoff,),
+                mrr_k=cutoff,
             )[f"hit@{cutoff}"]
     return metric_names, category_scores
 

@@ -23,13 +23,7 @@ QUESTION_TYPES = (
     "vague_long",
     "crosslingual",
 )
-QUESTION_TARGET_CHARS = {
-    "direct_short": 128,
-    "direct_long": 512,
-    "vague_short": 128,
-    "vague_long": 512,
-    "crosslingual": 128,
-}
+QUESTION_TARGET_CHARS = CONFIG["question_target_chars"]
 QUESTION_MAX_CHARS = max(QUESTION_TARGET_CHARS.values()) * 2
 ANSWER_TARGET_CHARS = CONFIG["answer_target_chars"]
 ANSWER_MAX_CHARS = ANSWER_TARGET_CHARS + 512
@@ -187,7 +181,7 @@ def _eligible_unprocessed_chunks(limit: int | None) -> list[dict]:
 
 def _is_fact_dense(text: str) -> bool:
     lowered = text.lower()
-    if len(text) < 300:
+    if len(text) < CONFIG["fact_dense_min_chars"]:
         return False
     if any(term in lowered for term in ("privacy", "cookie", "gdpr", "consent")):
         return False

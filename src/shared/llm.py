@@ -16,6 +16,8 @@ __all__ = [
     "structured_local_model",
 ]
 
+DEFAULT_RETRIES = 3
+
 T = TypeVar("T", bound=BaseModel)
 Message = tuple[str, str]
 StructuredPrompt = str | Sequence[Message]
@@ -28,7 +30,7 @@ class StructuredLlm(Protocol):
         prompt: StructuredPrompt,
         output_schema: type[T],
         *,
-        retries: int = 3,
+        retries: int = DEFAULT_RETRIES,
     ) -> T: ...
 
 
@@ -45,7 +47,7 @@ class LocalOllamaStructuredLlm:
         prompt: StructuredPrompt,
         output_schema: type[T],
         *,
-        retries: int = 3,
+        retries: int = DEFAULT_RETRIES,
     ) -> T:
         model = structured_local_model(
             self.model_id,
@@ -92,7 +94,7 @@ def run_structured_outputs(
     output_schema: type[T],
     *,
     workers: int = 4,
-    retries: int = 3,
+    retries: int = DEFAULT_RETRIES,
 ) -> list[T]:
     results: list[T | None] = [None] * len(prompts)
     with ThreadPoolExecutor(max_workers=workers) as pool:

@@ -7,7 +7,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from src.shared.env import load_yaml
-from src.shared.llm import StructuredLlm
+from src.shared.llm import DEFAULT_RETRIES, StructuredLlm
 
 CONFIG = load_yaml(Path(__file__).with_name("config.yaml"))
 
@@ -45,7 +45,7 @@ class EvidenceEquivalence(BaseModel):
 @dataclass(frozen=True)
 class EvidenceEquivalenceJudge:
     client: StructuredLlm
-    retries: int = 3
+    retries: int = DEFAULT_RETRIES
     max_document_chars: int = CONFIG["judge_max_document_chars"]
 
     def evaluate(

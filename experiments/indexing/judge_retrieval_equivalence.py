@@ -14,7 +14,7 @@ from src.eval.equivalence import (
     EvidenceEquivalenceJudge,
 )
 from src.shared.env import ROOT, data_path, load_local_env
-from src.shared.llm import LocalOllamaStructuredLlm
+from src.shared.llm import DEFAULT_RETRIES, LocalOllamaStructuredLlm
 
 DEFAULT_CHECKPOINT = data_path(
     "checkpoints", "retrieval-results-chunks.md.checkpoint.json"
@@ -232,7 +232,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--limit", type=int, help="Maximum strict misses to judge per method."
     )
-    parser.add_argument("--retries", type=int, default=3)
+    parser.add_argument("--retries", type=int, default=DEFAULT_RETRIES)
     parser.add_argument("--max-document-chars", type=int, default=12_000)
     return parser.parse_args()
 
