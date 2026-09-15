@@ -10,8 +10,8 @@ chunk:
     uv run python -m src.preprocess.chunks
 
 # Rebuild one provider's chunk vector index.
-index METHOD="qwen" VERSION="v1":
-    uv run python -m src.indexing.chunks --method {{METHOD}} --chunk-version {{VERSION}}
+index METHOD="qwen":
+    uv run python -m src.indexing.chunks --method {{METHOD}}
 
 test:
     uv run --extra dev pytest
