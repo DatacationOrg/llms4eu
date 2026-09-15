@@ -5,11 +5,9 @@ chunk_versions:
   v2: metadata_context_chunk
 default_provider: qwen
 providers:
-  - english
   - qwen
   - qwen4b
   - nemotron
-english_embedding_model: sentence-transformers/all-MiniLM-L6-v2
 qwen_embedding_model: Qwen/Qwen3-Embedding-0.6B
 qwen_batch_size: 8
 qwen4b_embedding_model: Qwen/Qwen3-Embedding-4B

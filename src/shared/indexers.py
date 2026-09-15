@@ -90,12 +90,6 @@ class Nemotron3EmbedIndexer(SentenceTransformerIndexer):
 
 # field -> (config key, default), or a literal for fields config never sets.
 PROVIDER_FIELDS: dict[str, dict[str, object]] = {
-    "english": {
-        "model_name": (
-            "english_embedding_model",
-            "sentence-transformers/all-MiniLM-L6-v2",
-        ),
-    },
     "qwen": {
         "model_name": ("qwen_embedding_model", "Qwen/Qwen3-Embedding-0.6B"),
         "batch_size": ("qwen_batch_size", 8),

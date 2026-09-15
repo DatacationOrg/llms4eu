@@ -2,7 +2,7 @@
 
 Builds local vector indexes for document chunks.
 
-The indexer boundary is provider-shaped: English MiniLM, Qwen multilingual,
+The indexer boundary is provider-shaped: Qwen multilingual,
 Qwen 4B, and Nemotron 3 Embed 1B all expose the same `embed_documents` /
 `embed_query` methods from `src.shared.indexers`. Every provider runs locally
 through sentence-transformers.
@@ -15,7 +15,7 @@ rebuilds.
 Current chunk collections are storage names, not public retrieval method names:
 
 ```text
-page_chunks_{english,qwen,qwen4b,nemotron}_chunk
+page_chunks_{qwen,qwen4b,nemotron}_chunk
 ```
 
 Two independently stored chunk-representation versions are available:

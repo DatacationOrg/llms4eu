@@ -11,7 +11,7 @@ Reusable chunk retrieval methods.
 retrieval path calls a hosted API.
 
 - `sparse`: local lexical retrieval over page chunks.
-- `{english,qwen,qwen4b,nemotron}`: Chroma vector search over page chunks.
+- `{qwen,qwen4b,nemotron}`: Chroma vector search over page chunks.
 - `*_hybrid`: normalized weighted score fusion over one vector provider plus
   sparse retrieval.
 - `*_rerank`: Qwen3 cross-encoder reranker over first-stage candidates.

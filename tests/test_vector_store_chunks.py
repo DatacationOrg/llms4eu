@@ -95,9 +95,9 @@ def test_v2_chunk_collection_is_isolated_and_contains_metadata(monkeypatch, page
 
 
 def test_enabled_provider_names_comes_from_indexing_config(monkeypatch):
-    monkeypatch.setattr(chunk_vectors, "INDEXING_PROVIDERS", ("qwen", "english"))
+    monkeypatch.setattr(chunk_vectors, "INDEXING_PROVIDERS", ("qwen", "nemotron"))
 
-    assert enabled_provider_names() == ["english", "qwen"]
+    assert enabled_provider_names() == ["nemotron", "qwen"]
 
 
 def test_v2_sparse_indexes_metadata_without_changing_v1(page_db):
