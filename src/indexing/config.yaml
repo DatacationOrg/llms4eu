@@ -1,4 +1,6 @@
 collection_name: page_chunks
+# Shared across every provider; a model that cannot reach it is refused.
+embedding_max_seq_length: 2048
 default_provider: qwen
 providers:
   - qwen
@@ -6,14 +8,11 @@ providers:
   - nemotron
 qwen_embedding_model: Qwen/Qwen3-Embedding-0.6B
 qwen_batch_size: 8
-qwen_max_seq_length: 512
 qwen4b_embedding_model: Qwen/Qwen3-Embedding-4B
 qwen4b_batch_size: 1
-qwen4b_max_seq_length: 512
 qwen4b_local_files_only: true
 nemotron_embedding_model: nvidia/Nemotron-3-Embed-1B-BF16
 nemotron_batch_size: 8
-nemotron_max_seq_length: 4096
 nemotron_dtype: bfloat16
 nemotron_attn_implementation: sdpa
 nemotron_local_files_only: true

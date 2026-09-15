@@ -20,7 +20,7 @@ def test_nemotron_embedding_provider_uses_retrieval_defaults():
     assert "nemotron" in provider_names()
     assert indexer.name == "nemotron"
     assert indexer.model_name == "nvidia/Nemotron-3-Embed-1B-BF16"
-    assert indexer.max_seq_length == 4096
+    assert indexer.max_seq_length == 2048
     assert indexer.dtype == "bfloat16"
     assert indexer.attn_implementation == "sdpa"
 
@@ -63,3 +63,30 @@ def test_hybrid_rerank_wraps_a_vector_and_sparse_pair(monkeypatch):
     assert hybrid.name == "nemotron_hybrid"
     assert vector.provider == "nemotron"
     assert sparse.name == "sparse"
+
+
+def test_indexer_refuses_a_model_below_the_shared_sequence_limit(monkeypatch):
+    """A model that truncates earlier than its rivals would skew every comparison."""
+
+    class ShortModel:
+        max_seq_length = 256
+
+    monkeypatch.setattr(
+        "src.shared.indexers.load_embedder", lambda *_, **__: ShortModel()
+    )
+    indexer = build_indexer("qwen", {"embedding_max_seq_length": 2048})
+
+    with pytest.raises(ValueError, match="caps out at 256 tokens"):
+        indexer._model()
+
+
+def test_indexer_applies_the_shared_limit_to_a_model_that_can_reach_it(monkeypatch):
+    class LongModel:
+        max_seq_length = 32768
+
+    monkeypatch.setattr(
+        "src.shared.indexers.load_embedder", lambda *_, **__: LongModel()
+    )
+    model = build_indexer("nemotron", {"embedding_max_seq_length": 2048})._model()
+
+    assert model.max_seq_length == 2048
