@@ -16,7 +16,7 @@ from src.retrieval.methods import list_retrievers  # noqa: E402
 def test_every_benchmark_group_names_a_real_method():
     """A group naming a deleted method fails the run only after the model loads."""
     catalog = set(list_retrievers())
-    grouped = {*comparison.DEFAULT_METHODS, *comparison.PHASE2_METHODS}
+    grouped = set(comparison.DEFAULT_METHODS)
 
     assert grouped <= catalog, sorted(grouped - catalog)
 

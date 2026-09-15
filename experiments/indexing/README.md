@@ -10,18 +10,13 @@ Runs a set of methods over the same questions, round-robin, and writes a
 Markdown report.
 
 ```bash
-just eval-report                                  # all 36 methods
+just eval-report                                  # the whole 14-method catalog
 uv run python experiments/indexing/compare_qwen_modes.py --limit 100
 uv run python experiments/indexing/compare_qwen_modes.py --category crosslingual
-uv run python experiments/indexing/compare_qwen_modes.py \
-    --methods phase2-nemotron \
-    --output docs/retrieval-results-phase2-nemotron.md
 ```
 
-Method groups: `all` (the whole 36-method catalog) and `phase2`
-(`nemotron_hybrid_rerank` against its `_v2` twin, isolating the chunk
-representation). v2 indexes are separate derived artifacts, so existing
-collections and reports stay valid — build one with `just index nemotron v2`.
+`--methods` takes `all` for the whole catalog or a comma-separated list of
+retriever names.
 
 Runs checkpoint into `$LLMS4EU_DATA/checkpoints/` and resume automatically. A
 checkpoint only extends onto a compatible run; change the scoring shape and it

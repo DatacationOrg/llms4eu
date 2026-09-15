@@ -32,8 +32,6 @@ DEFAULT_METHODS = (
     "nemotron",
     "nemotron_hybrid_rerank",
 )
-# v1 vs v2 chunk representation, same retriever otherwise.
-PHASE2_METHODS = ("nemotron_hybrid_rerank",)
 DEFAULT_OUTPUT = Path("docs/retrieval-results-chunks.md")
 DEFAULT_WARMUP = 5
 
@@ -102,7 +100,7 @@ def _parse_args() -> argparse.Namespace:
         help=(
             "Comma-separated retriever names to compare. Defaults to the primary "
             "sparse, Qwen4B and Nemotron benchmark suite. Use 'all' for the whole "
-            "catalog, or 'phase2' / 'phase2-nemotron' for v1/v2 comparisons."
+            "catalog."
         ),
     )
     parser.add_argument("--category")
@@ -186,8 +184,6 @@ def _resolve_methods(raw_methods: str) -> list[str]:
     group = raw_methods.strip().lower()
     if group == "all":
         return list_retrievers()
-    if group in {"phase2", "phase2-nemotron"}:
-        return list(PHASE2_METHODS)
 
     methods = [name.strip() for name in raw_methods.split(",") if name.strip()]
     if not methods:
