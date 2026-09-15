@@ -55,7 +55,7 @@ def test_judge_scores_share_column_but_use_method_specific_hits():
         scores={"rag-a": {}, "rag-b": {}},
     )
 
-    judged = comparison._add_method_judge_scores(
+    judged = comparison.add_judge_adjusted_scores(
         run,
         summaries={
             "rag-a": {"questions": 2, "strict_hits": 1, "equivalent_misses": 0},

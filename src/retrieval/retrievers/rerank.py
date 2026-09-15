@@ -55,8 +55,6 @@ class CrossEncoderRerankRetriever:
             self.device,
             self.max_length,
             self.local_files_only,
-            self.prompt_name,
-            self.prompt,
         )
         pairs = []
         refs = []

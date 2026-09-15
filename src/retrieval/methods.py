@@ -27,10 +27,6 @@ class RetrieverSpec:
     provider: str | None = None
     chunk_version: str = LEGACY_CHUNK_VERSION
 
-    @property
-    def requires_index(self) -> bool:
-        return self.provider is not None
-
 
 class MissingRetrieverIndexes(RuntimeError):
     def __init__(self, missing: dict[str, str]) -> None:
@@ -113,66 +109,40 @@ def _provider_specs(
     chunk_version: str,
 ) -> dict[str, RetrieverSpec]:
     suffix = _version_suffix(chunk_version)
-    specs = {
-        f"{provider_name}{suffix}": RetrieverSpec(
-            f"{provider_name}{suffix}",
-            lambda provider=provider_name, version=chunk_version: _vector(
-                provider, version
-            ),
-            provider=provider_name,
-            chunk_version=chunk_version,
-        ),
-        f"{provider_name}_hybrid{suffix}": RetrieverSpec(
-            f"{provider_name}_hybrid{suffix}",
-            lambda provider=provider_name, version=chunk_version: _hybrid(
-                provider, version
-            ),
-            provider=provider_name,
-            chunk_version=chunk_version,
-        ),
-        f"{provider_name}_rerank{suffix}": RetrieverSpec(
-            f"{provider_name}_rerank{suffix}",
-            lambda provider=provider_name, version=chunk_version: _vector_rerank(
-                provider, version
-            ),
-            provider=provider_name,
-            chunk_version=chunk_version,
-        ),
-        f"{provider_name}_hybrid_rerank{suffix}": RetrieverSpec(
-            f"{provider_name}_hybrid_rerank{suffix}",
-            lambda provider=provider_name, version=chunk_version: _hybrid_rerank(
-                provider, version
-            ),
-            provider=provider_name,
-            chunk_version=chunk_version,
-        ),
+    builders = {
+        "": _vector,
+        "_hybrid": _hybrid,
+        "_rerank": _vector_rerank,
+        "_hybrid_rerank": _hybrid_rerank,
     }
+    specs = {
+        f"{provider_name}{tag}{suffix}": RetrieverSpec(
+            f"{provider_name}{tag}{suffix}",
+            lambda build=build, provider=provider_name, version=chunk_version: build(
+                provider, version
+            ),
+            provider=provider_name,
+            chunk_version=chunk_version,
+        )
+        for tag, build in builders.items()
+    }
+
+    def add(tag: str, build) -> None:
+        name = f"{provider_name}{tag}{suffix}"
+        specs[name] = RetrieverSpec(
+            name, build, provider=provider_name, chunk_version=chunk_version
+        )
+
     if provider_name == "qwen":
-        name = f"qwen_agentic{suffix}"
-        specs[name] = RetrieverSpec(
-            name,
-            lambda version=chunk_version: _qwen_agentic(version),
-            provider="qwen",
-            chunk_version=chunk_version,
-        )
+        add("_agentic", lambda v=chunk_version: _qwen_agentic(v))
     if provider_name in {"qwen", "nemotron"}:
-        name = f"{provider_name}_hybrid_agentic{suffix}"
-        specs[name] = RetrieverSpec(
-            name,
-            lambda provider=provider_name, version=chunk_version: _hybrid_agentic(
-                provider, version
-            ),
-            provider=provider_name,
-            chunk_version=chunk_version,
+        add(
+            "_hybrid_agentic",
+            lambda p=provider_name, v=chunk_version: _hybrid_agentic(p, v),
         )
-        name = f"{provider_name}_hybrid_agentic_tools{suffix}"
-        specs[name] = RetrieverSpec(
-            name,
-            lambda provider=provider_name, version=chunk_version: _hybrid_agentic_tools(
-                provider, version
-            ),
-            provider=provider_name,
-            chunk_version=chunk_version,
+        add(
+            "_hybrid_agentic_tools",
+            lambda p=provider_name, v=chunk_version: _hybrid_agentic_tools(p, v),
         )
     return specs
 

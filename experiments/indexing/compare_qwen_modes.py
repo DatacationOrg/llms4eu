@@ -322,21 +322,13 @@ def _add_equivalence_judgments(
     audit_path = output_path.with_name(f"{output_path.stem}-equivalence.md")
     audit_path.write_text(judge_report + "\n", encoding="utf-8")
 
-    judged_run = _add_method_judge_scores(run, summaries, cutoff)
+    judged_run = add_judge_adjusted_scores(run, summaries, cutoff)
     return judged_run, {
         "model_id": model_id,
         "cutoff": cutoff,
         "cache_path": cache_path,
         "audit_path": audit_path,
     }
-
-
-def _add_method_judge_scores(
-    run: EvalRun,
-    summaries: dict[str, dict[str, int]],
-    cutoff: int,
-) -> EvalRun:
-    return add_judge_adjusted_scores(run, summaries, cutoff)
 
 
 def _resolve_warmup(requested_warmup: int | None, limit: int | None) -> int:
@@ -709,19 +701,7 @@ def _load_or_initialize_state(
 
     state = {
         "signature": signature,
-        "methods": {
-            name: {
-                "warmup_index": 0,
-                "next_index": 0,
-                "elapsed_seconds": 0.0,
-                "timed_total_queries": 0.0,
-                "rankings": {},
-                "action_log": [],
-                "observations": {},
-                "failures": 0,
-            }
-            for name in method_names
-        },
+        "methods": {name: _empty_method_state() for name in method_names},
     }
     _write_state(checkpoint_path, state)
     return state
@@ -838,9 +818,11 @@ def _write_state(checkpoint_path: Path, state: dict[str, Any]) -> None:
 
 
 def _read_total_queries(retriever: Retriever) -> float | None:
-    if hasattr(retriever, "total_queries"):
-        return float(retriever.total_queries())
-    return None
+    return (
+        float(retriever.total_queries())
+        if hasattr(retriever, "total_queries")
+        else None
+    )
 
 
 def _retriever_action_log(retriever: Retriever) -> list | None:
@@ -966,7 +948,7 @@ def _build_live_report(
             method_names,
             [str(row["id"]) for row in partial_questions],
         )
-        partial_run = _add_method_judge_scores(
+        partial_run = add_judge_adjusted_scores(
             partial_run,
             summaries,
             equivalence_audit.cutoff,

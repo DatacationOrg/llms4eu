@@ -31,7 +31,7 @@ def main() -> None:
         default=DEFAULT_CHUNK_VERSION,
     )
     args = parser.parse_args()
-    rebuild_chunk_vector_index(args.method, chunk_version=args.chunk_version)
+    rebuild_chunk_collection(args.method, chunk_version=args.chunk_version)
 
 
 if __name__ == "__main__":

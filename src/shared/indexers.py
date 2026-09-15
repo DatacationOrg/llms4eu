@@ -46,7 +46,7 @@ class SentenceTransformerIndexer:
             embed_missing=lambda missing: embed_texts(
                 self._model(),
                 missing,
-                prompt_name=self._document_prompt(),
+                prompt_name=self._prompt_name("document"),
                 batch_size=self.batch_size,
                 show_progress_bar=self.show_progress_bar,
             ),
@@ -62,7 +62,7 @@ class SentenceTransformerIndexer:
             kind="query",
             texts=texts,
             embed_missing=lambda missing: embed_texts(
-                self._model(), missing, prompt_name=self._query_prompt()
+                self._model(), missing, prompt_name=self._prompt_name("query")
             ),
         )
 
@@ -78,13 +78,9 @@ class SentenceTransformerIndexer:
             model.max_seq_length = int(self.max_seq_length)
         return model
 
-    def _query_prompt(self) -> str | None:
+    def _prompt_name(self, kind: str) -> str | None:
         prompts = self._model().prompts or {}
-        return "query" if "query" in prompts else None
-
-    def _document_prompt(self) -> str | None:
-        prompts = self._model().prompts or {}
-        return "document" if "document" in prompts else None
+        return kind if kind in prompts else None
 
 
 @dataclass(frozen=True)

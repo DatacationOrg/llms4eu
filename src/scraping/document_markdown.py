@@ -164,11 +164,7 @@ def _looks_like_document_url(url: str) -> bool:
 
 
 def _deduplicate_links(links: list[DocumentLink]) -> list[DocumentLink]:
-    seen: set[str] = set()
-    unique_links: list[DocumentLink] = []
+    seen: dict[str, DocumentLink] = {}
     for link in links:
-        if link.url in seen:
-            continue
-        seen.add(link.url)
-        unique_links.append(link)
-    return unique_links
+        seen.setdefault(link.url, link)
+    return list(seen.values())

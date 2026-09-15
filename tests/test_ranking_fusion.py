@@ -22,27 +22,25 @@ class StaticMethod:
         }
 
 
-def test_weighted_score_fusion_normalizes_each_method_before_combining():
-    vector = StaticMethod(
-        "vector",
-        [
-            RankedChunk("a", 0.9, "a"),
-            RankedChunk("b", 0.8, "b"),
-        ],
-    )
-    sparse = StaticMethod(
-        "sparse",
-        [
-            RankedChunk("b", 100.0, "b"),
-            RankedChunk("a", 10.0, "a"),
-        ],
-    )
-    method = WeightedScoreFusionRetriever(
+def _fusion() -> WeightedScoreFusionRetriever:
+    """Vector and sparse disagree on order and use wildly different score scales."""
+    return WeightedScoreFusionRetriever(
         "hybrid",
-        retrievers=(vector, sparse),
+        retrievers=(
+            StaticMethod(
+                "vector", [RankedChunk("a", 0.9, "a"), RankedChunk("b", 0.8, "b")]
+            ),
+            StaticMethod(
+                "sparse", [RankedChunk("b", 100.0, "b"), RankedChunk("a", 10.0, "a")]
+            ),
+        ),
         candidate_limit=30,
         weights=(0.7, 0.3),
     )
+
+
+def test_weighted_score_fusion_normalizes_each_method_before_combining():
+    method = _fusion()
 
     result = method.retrieve("query", 2)
 
@@ -52,26 +50,7 @@ def test_weighted_score_fusion_normalizes_each_method_before_combining():
 
 
 def test_weighted_score_fusion_batches_queries():
-    vector = StaticMethod(
-        "vector",
-        [
-            RankedChunk("a", 0.9, "a"),
-            RankedChunk("b", 0.8, "b"),
-        ],
-    )
-    sparse = StaticMethod(
-        "sparse",
-        [
-            RankedChunk("b", 100.0, "b"),
-            RankedChunk("a", 10.0, "a"),
-        ],
-    )
-    method = WeightedScoreFusionRetriever(
-        "hybrid",
-        retrievers=(vector, sparse),
-        candidate_limit=30,
-        weights=(0.7, 0.3),
-    )
+    method = _fusion()
 
     result = method.retrieve_batch(["first", "second"], 2)
 

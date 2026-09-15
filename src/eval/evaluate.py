@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 import time
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from pathlib import Path
 
@@ -322,16 +322,7 @@ def add_judge_adjusted_scores(
             if assessed
             else 0.0
         )
-    return EvalRun(
-        questions=run.questions,
-        relevance=run.relevance,
-        methods=run.methods,
-        warmup_count=run.warmup_count,
-        rankings=run.rankings,
-        timings=run.timings,
-        score_names=[*run.score_names, score_name],
-        scores=scores,
-    )
+    return replace(run, score_names=[*run.score_names, score_name], scores=scores)
 
 
 def count_chunk_expansions(action_log: list[dict]) -> int:

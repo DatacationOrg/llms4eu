@@ -5,12 +5,8 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from src.db.pages import (
-    connect_pages as connect,
-)
-from src.db.pages import (
-    initialize_page_artifacts_db,
-)
+from src.db.pages import connect_pages as connect
+from src.db.pages import initialize_page_artifacts_db
 from src.shared.env import load_yaml
 
 CONFIG = load_yaml(Path(__file__).with_name("config.yaml"))
@@ -72,20 +68,18 @@ def rebuild_page_chunks() -> None:
             """
         ).fetchall()
 
-        rows = []
-        for page in pages:
-            chunks = chunk_markdown(page["markdown"])
-            for index, chunk in enumerate(chunks):
-                rows.append(
-                    (
-                        f"{page['id']}:{index}",
-                        page["id"],
-                        index,
-                        chunk.heading_path or None,
-                        chunk.text,
-                        len(chunk.text),
-                    )
-                )
+        rows = [
+            (
+                f"{page['id']}:{index}",
+                page["id"],
+                index,
+                chunk.heading_path or None,
+                chunk.text,
+                len(chunk.text),
+            )
+            for page in pages
+            for index, chunk in enumerate(chunk_markdown(page["markdown"]))
+        ]
 
         conn.executemany(
             """
