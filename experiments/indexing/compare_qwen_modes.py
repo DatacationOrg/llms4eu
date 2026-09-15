@@ -33,7 +33,7 @@ DEFAULT_METHODS = (
     "nemotron_hybrid_rerank",
 )
 # v1 vs v2 chunk representation, same retriever otherwise.
-PHASE2_METHODS = ("nemotron_hybrid_rerank", "nemotron_hybrid_rerank_v2")
+PHASE2_METHODS = ("nemotron_hybrid_rerank",)
 DEFAULT_OUTPUT = Path("docs/retrieval-results-chunks.md")
 DEFAULT_WARMUP = 5
 

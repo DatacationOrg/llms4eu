@@ -16,11 +16,6 @@ retrieval path calls a hosted API.
   sparse retrieval.
 - `*_rerank`: Qwen3 cross-encoder reranker over first-stage candidates.
 - `*_hybrid_rerank`: Qwen3 reranker over hybrid candidates.
-- Every dense, hybrid and reranked method also has a `_v2` variant, such as
-  `nemotron_hybrid_rerank_v2`. These use isolated metadata-context dense and
-  sparse indexes; unsuffixed names retain the legacy v1 behavior.
-- `sparse_v2` and `sparse_rerank_v2` use the same metadata-context text as v2
-  dense retrieval; v1 sparse methods continue to index raw chunk text.
 
 Hybrid + rerank is the strongest measured configuration. The agentic
 sufficiency and query-reformulation loop was removed after it measured below

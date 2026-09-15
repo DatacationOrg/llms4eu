@@ -4,7 +4,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
-from src.indexing.chunk_text import CONTEXTUAL_CHUNK_VERSION, LEGACY_CHUNK_VERSION
 from src.retrieval.base import Retriever
 from src.retrieval.retrievers.fusion import WeightedScoreFusionRetriever
 from src.retrieval.retrievers.rerank import CrossEncoderRerankRetriever
@@ -23,20 +22,18 @@ class RetrieverSpec:
     name: str
     build: Callable[[], Retriever]
     provider: str | None = None
-    chunk_version: str = LEGACY_CHUNK_VERSION
 
 
 class MissingRetrieverIndexes(RuntimeError):
     def __init__(self, missing: dict[str, str]) -> None:
         self.missing = missing
-        requirements = sorted(set(missing.values()))
         commands = "\n".join(
-            _index_build_command(requirement) for requirement in requirements
+            f"  uv run python -m src.indexing.chunks --method {provider}"
+            for provider in sorted(set(missing.values()))
         )
-        methods = ", ".join(sorted(missing))
         super().__init__(
             "Missing vector indexes for retrieval methods: "
-            f"{methods}\nBuild them first:\n{commands}"
+            f"{', '.join(sorted(missing))}\nBuild them first:\n{commands}"
         )
 
 
@@ -67,15 +64,11 @@ def missing_retriever_indexes(names: list[str]) -> dict[str, str]:
     if unknown:
         raise ValueError(f"Unknown retriever: {', '.join(unknown)}")
 
-    missing = {}
-    for name in names:
-        spec = specs[name]
-        if spec.provider is not None and not _collection_ready(
-            spec.provider,
-            spec.chunk_version,
-        ):
-            missing[name] = _index_requirement(spec.provider, spec.chunk_version)
-    return missing
+    return {
+        name: specs[name].provider
+        for name in names
+        if specs[name].provider and not collection_ready(specs[name].provider)
+    }
 
 
 def _specs() -> dict[str, RetrieverSpec]:
@@ -83,136 +76,49 @@ def _specs() -> dict[str, RetrieverSpec]:
         "sparse": RetrieverSpec("sparse", _sparse),
         "sparse_rerank": RetrieverSpec(
             "sparse_rerank",
-            _build_sparse_rerank,
-        ),
-        "sparse_v2": RetrieverSpec(
-            "sparse_v2",
-            lambda: _sparse(CONTEXTUAL_CHUNK_VERSION),
-            chunk_version=CONTEXTUAL_CHUNK_VERSION,
-        ),
-        "sparse_rerank_v2": RetrieverSpec(
-            "sparse_rerank_v2",
-            lambda: _build_sparse_rerank(CONTEXTUAL_CHUNK_VERSION),
-            chunk_version=CONTEXTUAL_CHUNK_VERSION,
+            lambda: _reranker("sparse_rerank", _sparse()),
         ),
     }
-    for provider_name in enabled_provider_names():
-        specs.update(_provider_specs(provider_name, LEGACY_CHUNK_VERSION))
-        specs.update(_provider_specs(provider_name, CONTEXTUAL_CHUNK_VERSION))
-    return specs
-
-
-def _provider_specs(
-    provider_name: str,
-    chunk_version: str,
-) -> dict[str, RetrieverSpec]:
-    suffix = _version_suffix(chunk_version)
     builders = {
         "": _vector,
         "_hybrid": _hybrid,
         "_rerank": _vector_rerank,
         "_hybrid_rerank": _hybrid_rerank,
     }
-    return {
-        f"{provider_name}{tag}{suffix}": RetrieverSpec(
-            f"{provider_name}{tag}{suffix}",
-            lambda build=build, provider=provider_name, version=chunk_version: build(
-                provider, version
-            ),
-            provider=provider_name,
-            chunk_version=chunk_version,
-        )
-        for tag, build in builders.items()
-    }
+    for provider in enabled_provider_names():
+        for tag, build in builders.items():
+            name = f"{provider}{tag}"
+            specs[name] = RetrieverSpec(
+                name,
+                lambda build=build, provider=provider: build(provider),
+                provider=provider,
+            )
+    return specs
 
 
-def _sparse(chunk_version: str = LEGACY_CHUNK_VERSION) -> SparseRetriever:
-    return SparseRetriever(
-        name=f"sparse{_version_suffix(chunk_version)}",
-        k1=CONFIG["sparse_k1"],
-        b=CONFIG["sparse_b"],
-        chunk_version=chunk_version,
-    )
+def _sparse() -> SparseRetriever:
+    return SparseRetriever(name="sparse", k1=CONFIG["sparse_k1"], b=CONFIG["sparse_b"])
 
 
-def _build_sparse_rerank(
-    chunk_version: str = LEGACY_CHUNK_VERSION,
-) -> CrossEncoderRerankRetriever:
-    suffix = _version_suffix(chunk_version)
-    return _reranker(f"sparse_rerank{suffix}", _sparse(chunk_version))
+def _vector(provider_name: str) -> Retriever:
+    return VectorChunkRetriever(name=provider_name, provider=provider_name)
 
 
-def _vector(
-    provider_name: str,
-    chunk_version: str = LEGACY_CHUNK_VERSION,
-) -> Retriever:
-    return VectorChunkRetriever(
-        name=f"{provider_name}{_version_suffix(chunk_version)}",
-        provider=provider_name,
-        chunk_version=chunk_version,
-    )
-
-
-def _hybrid(
-    provider_name: str,
-    chunk_version: str = LEGACY_CHUNK_VERSION,
-) -> WeightedScoreFusionRetriever:
-    suffix = _version_suffix(chunk_version)
+def _hybrid(provider_name: str) -> WeightedScoreFusionRetriever:
     return WeightedScoreFusionRetriever(
-        name=f"{provider_name}_hybrid{suffix}",
-        retrievers=(
-            _vector(provider_name, chunk_version),
-            _sparse(chunk_version),
-        ),
+        name=f"{provider_name}_hybrid",
+        retrievers=(_vector(provider_name), _sparse()),
         candidate_limit=CONFIG["rerank_candidate_limit"],
         weights=(CONFIG["hybrid_vector_weight"], CONFIG["hybrid_sparse_weight"]),
     )
 
 
-def _vector_rerank(
-    provider_name: str,
-    chunk_version: str = LEGACY_CHUNK_VERSION,
-) -> CrossEncoderRerankRetriever:
-    suffix = _version_suffix(chunk_version)
-    return _reranker(
-        f"{provider_name}_rerank{suffix}",
-        _vector(provider_name, chunk_version),
-    )
+def _vector_rerank(provider_name: str) -> CrossEncoderRerankRetriever:
+    return _reranker(f"{provider_name}_rerank", _vector(provider_name))
 
 
-def _hybrid_rerank(
-    provider_name: str,
-    chunk_version: str = LEGACY_CHUNK_VERSION,
-) -> CrossEncoderRerankRetriever:
-    suffix = _version_suffix(chunk_version)
-    return _reranker(
-        f"{provider_name}_hybrid_rerank{suffix}",
-        _hybrid(provider_name, chunk_version),
-    )
-
-
-def _version_suffix(chunk_version: str) -> str:
-    return "" if chunk_version == LEGACY_CHUNK_VERSION else f"_{chunk_version}"
-
-
-def _collection_ready(provider: str, chunk_version: str) -> bool:
-    if chunk_version == LEGACY_CHUNK_VERSION:
-        return collection_ready(provider)
-    return collection_ready(provider, chunk_version)
-
-
-def _index_requirement(provider: str, chunk_version: str) -> str:
-    if chunk_version == LEGACY_CHUNK_VERSION:
-        return provider
-    return f"{provider}@{chunk_version}"
-
-
-def _index_build_command(requirement: str) -> str:
-    provider, _, chunk_version = requirement.partition("@")
-    command = f"  uv run python -m src.indexing.chunks --method {provider}"
-    if chunk_version:
-        command += f" --chunk-version {chunk_version}"
-    return command
+def _hybrid_rerank(provider_name: str) -> CrossEncoderRerankRetriever:
+    return _reranker(f"{provider_name}_hybrid_rerank", _hybrid(provider_name))
 
 
 def _reranker(name: str, base_retriever: Retriever) -> CrossEncoderRerankRetriever:

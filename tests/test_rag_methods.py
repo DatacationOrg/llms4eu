@@ -10,7 +10,7 @@ def test_retriever_catalog_generates_public_names():
 
     assert "sparse" in names
     assert "qwen_hybrid_rerank" in names
-    assert "nemotron_hybrid_rerank_v2" in names
+    assert "nemotron_hybrid_rerank" in names
     assert "sparse_hybrid" not in names
 
 
@@ -43,20 +43,6 @@ def test_ensure_retriever_ready_reports_missing_index(monkeypatch):
     assert "uv run python -m src.indexing.chunks --method stub" in str(exc.value)
 
 
-def test_v2_retriever_reports_versioned_index_command(monkeypatch):
-    monkeypatch.setattr(methods, "collection_ready", lambda *_: False)
-    monkeypatch.setattr(methods, "enabled_provider_names", lambda: ["stub"])
-
-    with pytest.raises(methods.MissingRetrieverIndexes) as exc:
-        methods.ensure_retriever_ready("stub_hybrid_rerank_v2")
-
-    assert exc.value.missing == {"stub_hybrid_rerank_v2": "stub@v2"}
-    assert (
-        "uv run python -m src.indexing.chunks --method stub --chunk-version v2"
-        in str(exc.value)
-    )
-
-
 def test_reranker_uses_discovered_defaults(monkeypatch):
     monkeypatch.setattr(methods, "enabled_provider_names", lambda: ["stub"])
 
@@ -65,14 +51,15 @@ def test_reranker_uses_discovered_defaults(monkeypatch):
     assert retriever.max_length == 2048
 
 
-def test_v2_method_uses_v2_dense_and_sparse_representations(monkeypatch):
+def test_hybrid_rerank_wraps_a_vector_and_sparse_pair(monkeypatch):
+    """The compound name must match what it actually composes."""
     monkeypatch.setattr(methods, "enabled_provider_names", lambda: ["nemotron"])
 
-    retriever = methods.build_retriever("nemotron_hybrid_rerank_v2")
+    retriever = methods.build_retriever("nemotron_hybrid_rerank")
     hybrid = retriever.base_retriever
     vector, sparse = hybrid.retrievers
 
-    assert retriever.name == "nemotron_hybrid_rerank_v2"
-    assert hybrid.name == "nemotron_hybrid_v2"
-    assert vector.chunk_version == "v2"
-    assert sparse.chunk_version == "v2"
+    assert retriever.name == "nemotron_hybrid_rerank"
+    assert hybrid.name == "nemotron_hybrid"
+    assert vector.provider == "nemotron"
+    assert sparse.name == "sparse"

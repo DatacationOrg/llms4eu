@@ -61,25 +61,20 @@ def test_chunk_collection_rebuild_readiness_and_query(monkeypatch, page_db):
     assert [hit.id for hit in small_batch_hits[1]] == ["chunk-forest"]
 
 
-def test_v2_chunk_collection_is_isolated_and_contains_metadata(monkeypatch, page_db):
+def test_chunk_collection_stores_page_metadata(monkeypatch, page_db):
     _seed_chunks(page_db)
     monkeypatch.setattr(
         "src.vector_store.chunks.build_indexer", lambda *_: StubIndexer()
     )
 
     rebuild_chunk_collection("qwen")
-    rebuild_chunk_collection("qwen", "v2")
 
     assert collection_ready("qwen")
-    assert collection_ready("qwen", "v2")
-    assert chunk_vectors._collection_name("qwen", "v1") != (
-        chunk_vectors._collection_name("qwen", "v2")
-    )
-    hits = query_chunk_vectors("qwen", "castle history", limit=1, version="v2")
+    hits = query_chunk_vectors("qwen", "castle history", limit=1)
     assert [hit.id for hit in hits] == ["chunk-castle"]
 
     collection = chunk_vectors._client().get_collection(
-        chunk_vectors._collection_name("qwen", "v2")
+        chunk_vectors._collection_name("qwen")
     )
     stored = collection.get(ids=["chunk-castle"], include=["metadatas"])
     assert stored["metadatas"][0] == {
@@ -93,18 +88,15 @@ def test_v2_chunk_collection_is_isolated_and_contains_metadata(monkeypatch, page
     }
 
 
-def test_v2_sparse_indexes_metadata_without_changing_v1(page_db):
+def test_sparse_indexes_chunk_text_not_page_metadata(page_db):
+    """BM25 must not match on a source name; only dense retrieval sees metadata."""
     _seed_chunks(page_db)
     sparse_module._corpus.cache_clear()
 
-    legacy_hits = SparseRetriever(chunk_version="v1").retrieve("fixture", limit=2)
-    contextual_hits = SparseRetriever(chunk_version="v2").retrieve(
-        "fixture",
-        limit=2,
-    )
-
-    assert legacy_hits == []
-    assert {hit.id for hit in contextual_hits} == {"chunk-castle", "chunk-forest"}
+    assert SparseRetriever().retrieve("fixture", limit=2) == []
+    assert {hit.id for hit in SparseRetriever().retrieve("castle", limit=2)} == {
+        "chunk-castle"
+    }
     sparse_module._corpus.cache_clear()
 
 

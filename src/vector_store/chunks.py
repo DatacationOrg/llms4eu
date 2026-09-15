@@ -9,12 +9,7 @@ from tqdm import tqdm
 
 from src.db.pages import connect_pages as connect
 from src.db.pages import initialize_page_artifacts_db
-from src.indexing.chunk_text import (
-    CHUNK_VERSIONS,
-    LEGACY_CHUNK_VERSION,
-    PageChunk,
-    chunk_text_representation,
-)
+from src.indexing.chunk_text import PageChunk, text_for_embedding
 from src.retrieval.base import RankedChunk
 from src.shared.env import chroma_path, load_local_env, load_yaml
 from src.shared.indexers import build_indexer
@@ -23,20 +18,17 @@ from src.shared.indexers import provider_names as buildable_provider_names
 CONFIG = load_yaml(Path(__file__).parents[1] / "indexing" / "config.yaml")
 INDEXING_PROVIDERS = tuple(CONFIG["providers"])
 DEFAULT_INDEXING_PROVIDER = CONFIG["default_provider"]
-DEFAULT_CHUNK_VERSION = CONFIG["default_chunk_version"]
 
 
 def query_chunk_vectors(
     provider: str,
     query: str,
     limit: int,
-    version: str = DEFAULT_CHUNK_VERSION,
 ) -> list[RankedChunk]:
     _validate_provider(provider)
-    _validate_version(version)
     load_local_env()
     vector = build_indexer(provider, CONFIG).embed_query(query)
-    result = _existing_collection(provider, version).query(
+    result = _existing_collection(provider).query(
         query_embeddings=[vector],
         n_results=limit,
         include=["metadatas", "distances"],
@@ -54,14 +46,12 @@ def query_chunk_vectors_batch(
     provider: str,
     queries: list[str],
     limit: int,
-    version: str = DEFAULT_CHUNK_VERSION,
 ) -> dict[int, list[RankedChunk]]:
     _validate_provider(provider)
-    _validate_version(version)
     load_local_env()
     vectors = build_indexer(provider, CONFIG).embed_queries(queries)
     rankings: dict[int, list[RankedChunk]] = {}
-    collection = _existing_collection(provider, version)
+    collection = _existing_collection(provider)
     batch_size = CONFIG.get("query_batch_size", 128)
 
     for start in range(0, len(vectors), batch_size):
@@ -82,59 +72,41 @@ def query_chunk_vectors_batch(
 
 def collection_exists(
     provider: str,
-    version: str = DEFAULT_CHUNK_VERSION,
 ) -> bool:
     _validate_provider(provider)
-    _validate_version(version)
     load_local_env()
     client = _client()
-    return _collection_name(provider, version) in {
+    return _collection_name(provider) in {
         collection.name for collection in client.list_collections()
     }
 
 
 def collection_ready(
     provider: str,
-    version: str = DEFAULT_CHUNK_VERSION,
 ) -> bool:
     _validate_provider(provider)
-    _validate_version(version)
     load_local_env()
-    if not collection_exists(provider, version):
+    if not collection_exists(provider):
         return False
-    collection = _client().get_collection(_collection_name(provider, version))
-    if collection.count() != _chunk_count():
-        return False
-    if version == LEGACY_CHUNK_VERSION:
-        return True
-    metadata = collection.metadata or {}
-    return metadata.get("chunk_version") == version
+    collection = _client().get_collection(_collection_name(provider))
+    return collection.count() == _chunk_count()
 
 
-def rebuild_chunk_collection(
-    provider: str,
-    version: str = DEFAULT_CHUNK_VERSION,
-) -> None:
+def rebuild_chunk_collection(provider: str) -> None:
     _validate_provider(provider)
-    _validate_version(version)
     load_local_env()
     initialize_page_artifacts_db()
     chunks = _load_chunks()
 
     client = _client()
-    collection_name = _collection_name(provider, version)
+    collection_name = _collection_name(provider)
     with suppress(Exception):
         client.delete_collection(collection_name)
     collection = client.create_collection(
         collection_name,
-        metadata={
-            "hnsw:space": "cosine",
-            "chunk_version": version,
-            "representation": CONFIG["chunk_versions"][version],
-        },
+        metadata={"hnsw:space": "cosine"},
     )
 
-    representation = chunk_text_representation(version)
     indexer = build_indexer(provider, CONFIG)
     batch_size = CONFIG.get("index_upsert_batch_size", 128)
     print(f"indexing {len(chunks)} chunks into {collection_name} with {indexer.name}")
@@ -146,7 +118,7 @@ def rebuild_chunk_collection(
     ):
         batch_chunks = chunks[start : start + batch_size]
         vectors = indexer.embed_documents(
-            [representation.text_for_embedding(chunk) for chunk in batch_chunks]
+            [text_for_embedding(chunk) for chunk in batch_chunks]
         )
         collection.upsert(
             ids=[chunk.id for chunk in batch_chunks],
@@ -254,19 +226,17 @@ def _client() -> chromadb.PersistentClient:
     return chromadb.PersistentClient(path=str(chroma_path()))
 
 
-def _existing_collection(provider: str, version: str):
-    if not collection_ready(provider, version):
+def _existing_collection(provider: str):
+    if not collection_ready(provider):
         raise RuntimeError(
-            f"Chunk vector collection for {provider}/{version} is missing or stale. "
-            "Run `uv run python -m src.indexing.chunks "
-            f"--method {provider} --chunk-version {version}`."
+            f"Chunk vector collection for {provider} is missing or stale. Run "
+            f"`uv run python -m src.indexing.chunks --method {provider}`."
         )
-    return _client().get_collection(_collection_name(provider, version))
+    return _client().get_collection(_collection_name(provider))
 
 
-def _collection_name(provider: str, version: str) -> str:
-    suffix = "" if version == LEGACY_CHUNK_VERSION else f"_{version}"
-    return f"{CONFIG['collection_name']}{suffix}_{provider}_chunk"
+def _collection_name(provider: str) -> str:
+    return f"{CONFIG['collection_name']}_{provider}_chunk"
 
 
 def _validate_provider(provider: str) -> None:
@@ -274,8 +244,3 @@ def _validate_provider(provider: str) -> None:
         raise ValueError(f"Unknown embedding provider: {provider}")
     if provider not in INDEXING_PROVIDERS:
         raise ValueError(f"Unknown chunk vector provider: {provider}")
-
-
-def _validate_version(version: str) -> None:
-    if version not in CHUNK_VERSIONS or version not in CONFIG["chunk_versions"]:
-        raise ValueError(f"Unknown chunk representation version: {version}")
