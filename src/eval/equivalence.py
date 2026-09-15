@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from src.shared.env import load_yaml
 from src.shared.llm import StructuredLlm
+
+CONFIG = load_yaml(Path(__file__).with_name("config.yaml"))
 
 __all__ = [
     "EvidenceDocument",
@@ -42,7 +46,7 @@ class EvidenceEquivalence(BaseModel):
 class EvidenceEquivalenceJudge:
     client: StructuredLlm
     retries: int = 3
-    max_document_chars: int = 12_000
+    max_document_chars: int = CONFIG["judge_max_document_chars"]
 
     def evaluate(
         self,

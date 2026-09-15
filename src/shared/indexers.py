@@ -87,14 +87,14 @@ PROVIDER_FIELDS: dict[str, dict[str, object]] = {
     "qwen": {
         "model_name": ("qwen_embedding_model", "Qwen/Qwen3-Embedding-0.6B"),
         "batch_size": ("qwen_batch_size", 8),
-        "max_seq_length": ("embedding_max_seq_length", 512),
+        "max_seq_length": ("qwen_max_seq_length", 512),
         "local_files_only": ("qwen_local_files_only", True),
         "show_progress_bar": True,
     },
     "qwen4b": {
         "model_name": ("qwen4b_embedding_model", "Qwen/Qwen3-Embedding-4B"),
         "batch_size": ("qwen4b_batch_size", 1),
-        "max_seq_length": ("embedding_max_seq_length", 512),
+        "max_seq_length": ("qwen4b_max_seq_length", 512),
         "local_files_only": ("qwen4b_local_files_only", True),
         "show_progress_bar": True,
     },

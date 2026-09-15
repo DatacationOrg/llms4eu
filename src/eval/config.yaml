@@ -3,6 +3,8 @@ default_methods:
   - sparse_rerank
   - qwen_hybrid_rerank
 result_limit: 10
+judge_max_document_chars: 12000
+answer_target_chars: 64
 metric_ks:
   - 1
   - 5

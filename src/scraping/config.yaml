@@ -8,13 +8,13 @@ fetch_pages:
   listing_min_context_words: 2
   max_document_bytes: 20971520
   max_document_pages: 100
+  # Formats trafilatura cannot read at all. HTML is deliberately absent:
+  # docling lost the extractor benchmark on HTML pages (research log, session 6).
   document_extensions:
     - .pdf
     - .docx
     - .pptx
     - .xlsx
-    - .html
-    - .htm
     - .md
     - .txt
     - .csv
