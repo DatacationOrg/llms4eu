@@ -13,7 +13,7 @@ def test_retriever_catalog_generates_public_names():
     names = methods.list_retrievers()
 
     assert "sparse" in names
-    assert "qwen_hybrid_agentic" in names
+    assert "qwen_hybrid_rerank" in names
     assert "nemotron_hybrid_rerank_v2" in names
     assert "sparse_hybrid" not in names
 
@@ -74,48 +74,14 @@ def test_reranker_uses_discovered_defaults(monkeypatch):
     assert retriever.max_length == 2048
 
 
-def test_nemotron_agent_uses_hybrid_reranked_nemotron_chunks(monkeypatch):
+def test_v2_method_uses_v2_dense_and_sparse_representations(monkeypatch):
     monkeypatch.setattr(methods, "enabled_provider_names", lambda: ["nemotron"])
 
-    retriever = methods.build_retriever("nemotron_hybrid_agentic")
-
-    assert retriever.name == "nemotron_hybrid_agentic"
-    assert retriever.initial_limit == 10
-    assert retriever.limit_step == 5
-    assert retriever.base_retriever.name == "nemotron_hybrid_rerank"
-    assert retriever.base_retriever.base_retriever.name == "nemotron_hybrid"
-
-
-def test_qwen_agent_uses_internal_qwen_embedding_index(monkeypatch):
-    monkeypatch.setattr(methods, "enabled_provider_names", lambda: ["qwen"])
-
-    retriever = methods.build_retriever("qwen_hybrid_agentic")
-
-    assert retriever.name == "qwen_hybrid_agentic"
-    assert retriever.base_retriever.name == "qwen_hybrid_rerank"
-    hybrid = retriever.base_retriever.base_retriever
-    assert hybrid.name == "qwen_hybrid"
-    assert hybrid.retrievers[0].provider == "qwen"
-
-
-def test_agentic_retrievers_use_the_configured_local_judge(monkeypatch):
-    monkeypatch.setattr(methods, "enabled_provider_names", lambda: ["nemotron"])
-
-    retriever = methods.build_retriever("nemotron_hybrid_agentic")
-
-    assert retriever.judge is not None
-    assert retriever.judge.model_id == methods.CONFIG["agentic_judge_model"]
-    assert retriever.judge.method == methods.CONFIG["agentic_judge_structured_method"]
-
-
-def test_v2_agent_uses_v2_dense_and_sparse_representations(monkeypatch):
-    monkeypatch.setattr(methods, "enabled_provider_names", lambda: ["nemotron"])
-
-    retriever = methods.build_retriever("nemotron_hybrid_agentic_v2")
-    hybrid = retriever.base_retriever.base_retriever
+    retriever = methods.build_retriever("nemotron_hybrid_rerank_v2")
+    hybrid = retriever.base_retriever
     vector, sparse = hybrid.retrievers
 
-    assert retriever.name == "nemotron_hybrid_agentic_v2"
+    assert retriever.name == "nemotron_hybrid_rerank_v2"
     assert hybrid.name == "nemotron_hybrid_v2"
     assert vector.chunk_version == "v2"
     assert sparse.chunk_version == "v2"

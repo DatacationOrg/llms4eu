@@ -9,7 +9,7 @@ Python environment.
 - [uv](https://docs.astral.sh/uv/)
 - [just](https://just.systems/)
 - [Ollama](https://ollama.com/) — needed for `just eval-generate` and for the
-  agentic retrieval methods
+  evidence-equivalence judge
 
 ## Setup
 

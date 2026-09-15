@@ -8,16 +8,11 @@ from datetime import datetime
 from typing import Any
 
 from src.db.pages import initialize_page_artifacts_db
-from src.eval.agentic_diagnostics import (
-    build_agentic_diagnostics,
-    format_agentic_diagnostics,
-)
 from src.eval.equivalence import EvidenceEquivalenceJudge
 from src.eval.evaluate import CONFIG as EVAL_CONFIG
 from src.eval.evaluate import (
     EvalRun,
     add_judge_adjusted_scores,
-    count_chunk_expansions,
     format_eval_report,
     load_eval_rows,
     score_eval_rankings,
@@ -36,20 +31,9 @@ DEFAULT_METHODS = (
     "qwen4b_hybrid_rerank",
     "nemotron",
     "nemotron_hybrid_rerank",
-    "qwen_hybrid_agentic",
-    "nemotron_hybrid_agentic",
-    # Paired with qwen_hybrid_agentic so the page tools are measured against the
-    # same agent without them.
-    "qwen_hybrid_agentic_tools",
 )
-PHASE2_METHODS = {
-    "phase2-nemotron": (
-        "nemotron_hybrid_rerank",
-        "nemotron_hybrid_rerank_v2",
-        "nemotron_hybrid_agentic",
-        "nemotron_hybrid_agentic_v2",
-    ),
-}
+# v1 vs v2 chunk representation, same retriever otherwise.
+PHASE2_METHODS = ("nemotron_hybrid_rerank", "nemotron_hybrid_rerank_v2")
 DEFAULT_OUTPUT = Path("docs/retrieval-results-chunks.md")
 DEFAULT_WARMUP = 5
 
@@ -99,14 +83,11 @@ def main() -> None:
         method_names=method_names,
         output_path=output_path,
         include_categories=args.category is None,
-        state=state,
         judge_details=judge_details,
     )
     print(report)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(report + "\n", encoding="utf-8")
-    _save_action_logs_from_state(state, method_names, output_path)
-    _save_agentic_diagnostics(run, state, method_names, output_path)
     if checkpoint_path.exists() and not args.keep_checkpoint:
         checkpoint_path.unlink()
 
@@ -120,9 +101,8 @@ def _parse_args() -> argparse.Namespace:
         default=",".join(DEFAULT_METHODS),
         help=(
             "Comma-separated retriever names to compare. Defaults to the primary "
-            "sparse, Qwen4B, Nemotron, and agentic benchmark suite. Use "
-            "'all-agentic' to include every registered agentic method, or "
-            "'phase2' / 'phase2-nemotron' for v1/v2 comparisons."
+            "sparse, Qwen4B and Nemotron benchmark suite. Use 'all' for the whole "
+            "catalog, or 'phase2' / 'phase2-nemotron' for v1/v2 comparisons."
         ),
     )
     parser.add_argument("--category")
@@ -202,23 +182,17 @@ def _parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def _agentic_retrievers() -> list[str]:
-    return sorted(name for name in list_retrievers() if "agentic" in name)
-
-
 def _resolve_methods(raw_methods: str) -> list[str]:
     group = raw_methods.strip().lower()
-    if group in {"all", "all-agentic"}:
-        return _agentic_retrievers()
-    if group == "phase2":
-        return list(dict.fromkeys(sum(PHASE2_METHODS.values(), ())))
-    if group in PHASE2_METHODS:
-        return list(PHASE2_METHODS[group])
+    if group == "all":
+        return list_retrievers()
+    if group in {"phase2", "phase2-nemotron"}:
+        return list(PHASE2_METHODS)
 
     methods = [name.strip() for name in raw_methods.split(",") if name.strip()]
     if not methods:
         raise ValueError(
-            "No methods provided. Use --methods all-agentic or a comma-separated list."
+            "No methods provided. Use --methods all or a comma-separated list."
         )
 
     available = set(list_retrievers())
@@ -233,7 +207,6 @@ def _format_report(
     method_names: list[str],
     output_path: Path,
     include_categories: bool,
-    state: dict[str, Any],
     judge_details: dict[str, Any] | None = None,
 ) -> str:
     lines = [
@@ -252,44 +225,7 @@ def _format_report(
         )
     formatted_run = format_eval_report(run, include_categories=include_categories)
     lines.extend(["", formatted_run])
-    diagnostics = _agentic_diagnostics(run, state, method_names)
-    formatted_diagnostics = format_agentic_diagnostics(diagnostics)
-    if formatted_diagnostics:
-        lines.extend(["", formatted_diagnostics])
     return "\n".join(lines)
-
-
-def _agentic_diagnostics(
-    run: EvalRun,
-    state: dict[str, Any],
-    method_names: list[str],
-) -> dict[str, Any]:
-    return build_agentic_diagnostics(
-        questions=run.questions,
-        relevance=run.relevance,
-        rankings=run.rankings,
-        method_states=state.get("methods", {}),
-        method_names=method_names,
-        cutoff=int(EVAL_CONFIG["category_hit_k"]),
-    )
-
-
-def _save_agentic_diagnostics(
-    run: EvalRun,
-    state: dict[str, Any],
-    method_names: list[str],
-    output_path: Path,
-) -> None:
-    diagnostics = _agentic_diagnostics(run, state, method_names)
-    if not diagnostics.get("summaries"):
-        return
-    path = output_path.with_name(f"{output_path.stem}-agentic-diagnostics.json")
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        json.dumps(diagnostics, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
-    print(f"Agentic diagnostics saved to: {path}")
 
 
 def _add_equivalence_judgments(
@@ -341,26 +277,6 @@ def _resolve_warmup(requested_warmup: int | None, limit: int | None) -> int:
 
 def _default_checkpoint_path(output_path: Path) -> Path:
     return data_path("checkpoints", f"{output_path.name}.checkpoint.json")
-
-
-def _save_action_logs_from_state(
-    state: dict[str, Any],
-    method_names: list[str],
-    output_path: Path,
-) -> None:
-    log = {
-        name: state["methods"][name].get("action_log", [])
-        for name in method_names
-        if state["methods"][name].get("action_log")
-    }
-    if not log:
-        return
-    log_path = output_path.with_name(
-        output_path.stem.replace(".", "_") + "-judge-actions.json"
-    )
-    log_path.parent.mkdir(parents=True, exist_ok=True)
-    log_path.write_text(json.dumps(log, ensure_ascii=False, indent=2), encoding="utf-8")
-    print(f"Judge action log saved to: {log_path}")
 
 
 def _run_eval_with_checkpoint(
@@ -513,9 +429,6 @@ def _build_eval_run(
             "ms_per_query": elapsed * 1000 / count if count else 0.0,
             "queries_per_query": total_queries / count if count else 0.0,
             "total_queries": total_queries,
-            "chunk_expansions": count_chunk_expansions(
-                state["methods"][name].get("action_log", [])
-            ),
         }
     score_names, scores = score_eval_rankings(relevance, rankings, method_names)
     category_metric_names, category_scores = _score_method_categories(
@@ -593,34 +506,16 @@ def _run_timed_round_robin(
                     flush=True,
                 )
             before_queries = _read_total_queries(retriever)
-            before_failures = int(getattr(retriever, "failures", 0))
-            action_log = _retriever_action_log(retriever)
-            prev_log_len = len(action_log) if action_log is not None else 0
             started = time.perf_counter()
             chunks = retriever.retrieve(row["question"], EVAL_CONFIG["result_limit"])
             elapsed = time.perf_counter() - started
             after_queries = _read_total_queries(retriever)
-            after_failures = int(getattr(retriever, "failures", 0))
-
-            if action_log is not None:
-                new_entries = [dict(entry) for entry in action_log[prev_log_len:]]
-                for entry in new_entries:
-                    entry["question_id"] = str(row["id"])
-                method_state.setdefault("action_log", []).extend(new_entries)
 
             method_state["elapsed_seconds"] += elapsed
             method_state["timed_total_queries"] += _query_delta(
                 before_queries, after_queries
             )
-            method_state["failures"] = int(method_state.get("failures", 0)) + max(
-                after_failures - before_failures, 0
-            )
             method_state["rankings"][str(row["id"])] = [chunk.id for chunk in chunks]
-            method_state.setdefault("observations", {})[str(row["id"])] = {
-                "elapsed_seconds": elapsed,
-                "query_count": _query_delta(before_queries, after_queries),
-                "actions": new_entries if action_log is not None else [],
-            }
             method_state["next_index"] = next_index + 1
             if equivalence_audit is not None:
                 equivalence_audit.judge_prediction(
@@ -743,9 +638,6 @@ def _empty_method_state() -> dict[str, Any]:
         "elapsed_seconds": 0.0,
         "timed_total_queries": 0.0,
         "rankings": {},
-        "action_log": [],
-        "observations": {},
-        "failures": 0,
     }
 
 
@@ -823,18 +715,6 @@ def _read_total_queries(retriever: Retriever) -> float | None:
         if hasattr(retriever, "total_queries")
         else None
     )
-
-
-def _retriever_action_log(retriever: Retriever) -> list | None:
-    # Duck-typed on purpose: every agent that keeps an AgenticBatchStats reports
-    # here, including agents that are not AgenticRetriever subclasses.
-    batch_stats = getattr(retriever, "batch_stats", None)
-    if batch_stats is not None and isinstance(
-        getattr(batch_stats, "action_log", None), list
-    ):
-        return batch_stats.action_log
-    action_log = getattr(retriever, "action_log", None)
-    return action_log if isinstance(action_log, list) else None
 
 
 def _query_delta(before: float | None, after: float | None) -> float:
@@ -955,10 +835,6 @@ def _build_live_report(
         )
 
     body = format_eval_report(partial_run, include_categories=include_categories)
-    diagnostics = _agentic_diagnostics(partial_run, state, method_names)
-    formatted_diagnostics = format_agentic_diagnostics(diagnostics)
-    if formatted_diagnostics:
-        body = f"{body}\n\n{formatted_diagnostics}"
     header.extend(["", body])
     return "\n".join(header)
 

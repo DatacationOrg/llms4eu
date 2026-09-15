@@ -10,37 +10,15 @@ sys.path.insert(0, str(INDEXING_EXPERIMENTS))
 
 comparison = importlib.import_module("compare_qwen_modes")
 
-
-def test_default_benchmark_methods_are_all_local():
-    """The Azure-embedded methods are no longer part of any bench group."""
-    grouped = set(comparison.DEFAULT_METHODS)
-    for group in comparison.PHASE2_METHODS.values():
-        grouped.update(group)
-
-    assert not any("embed_v4" in name for name in grouped)
-    assert not any("cohere" in name for name in grouped)
+from src.retrieval.methods import list_retrievers  # noqa: E402
 
 
-def test_tool_agent_is_paired_with_the_plain_agent_by_default():
-    assert "qwen_hybrid_agentic" in comparison.DEFAULT_METHODS
-    assert "qwen_hybrid_agentic_tools" in comparison.DEFAULT_METHODS
+def test_every_benchmark_group_names_a_real_method():
+    """A group naming a deleted method fails the run only after the model loads."""
+    catalog = set(list_retrievers())
+    grouped = {*comparison.DEFAULT_METHODS, *comparison.PHASE2_METHODS}
 
-
-def test_action_log_is_read_from_any_agent_with_batch_stats():
-    """Agent stats are found by duck-typing, not by the concrete retriever class."""
-
-    class Stats:
-        action_log = [{"attempt": 1}]
-
-    class ToolAgent:
-        name = "qwen_hybrid_agentic_tools"
-        batch_stats = Stats()
-
-    class Plain:
-        name = "sparse_rerank"
-
-    assert comparison._retriever_action_log(ToolAgent()) == [{"attempt": 1}]
-    assert comparison._retriever_action_log(Plain()) is None
+    assert grouped <= catalog, sorted(grouped - catalog)
 
 
 def test_judge_scores_share_column_but_use_method_specific_hits():

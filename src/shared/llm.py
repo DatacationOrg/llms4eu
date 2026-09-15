@@ -21,6 +21,7 @@ Message = tuple[str, str]
 StructuredPrompt = str | Sequence[Message]
 
 
+# Kept deliberately: the shared structured-output path for local models, not tied to any one experiment.
 class StructuredLlm(Protocol):
     def structured_output(
         self,

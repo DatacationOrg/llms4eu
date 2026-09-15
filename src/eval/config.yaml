@@ -1,7 +1,7 @@
 question_model: gemma4:26b-a4b-it-q4_K_M
 default_methods:
-  - qwen_agentic
-  - qwen_hybrid_agentic
+  - sparse_rerank
+  - qwen_hybrid_rerank
 result_limit: 10
 metric_ks:
   - 1

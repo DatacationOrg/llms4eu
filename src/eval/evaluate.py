@@ -275,35 +275,6 @@ def score_eval_rankings(
         for name in method_names
     }
 
-    expanded_k = max(
-        (
-            len(ranked)
-            for name in method_names
-            if "agentic" in name
-            for ranked in rankings[name].values()
-        ),
-        default=standard_k,
-    )
-    if expanded_k <= standard_k:
-        return score_names, scores
-
-    expanded_names = [
-        f"hit@{expanded_k}",
-        f"recall@{expanded_k}",
-        f"mrr@{expanded_k}",
-    ]
-    score_names.extend(expanded_names)
-    for name in method_names:
-        if "agentic" not in name:
-            continue
-        expanded_scores = score_rankings(
-            relevance,
-            rankings[name],
-            ks=(expanded_k,),
-            mrr_k=expanded_k,
-            recall_k=expanded_k,
-        )
-        scores[name].update(expanded_scores)
     return score_names, scores
 
 
@@ -325,45 +296,19 @@ def add_judge_adjusted_scores(
     return replace(run, score_names=[*run.score_names, score_name], scores=scores)
 
 
-def count_chunk_expansions(action_log: list[dict]) -> int:
-    expansions = 0
-    previous_count: int | None = None
-    for entry in action_log:
-        attempt = int(entry.get("attempt", 1))
-        chunk_count = len(entry.get("chunks", []))
-        if attempt <= 1:
-            previous_count = chunk_count
-            continue
-        if previous_count is not None and chunk_count > previous_count:
-            expansions += 1
-        previous_count = chunk_count
-    return expansions
-
-
 def _timing_table(run: EvalRun) -> str:
-    show_chunk_expansions = any(
-        "chunk_expansions" in run.timings[name] for name in run.methods
-    )
-    headers = ["method", "seconds", "ms/query", "queries/query", "queries"]
-    if show_chunk_expansions:
-        headers.append("chunk expansions")
-
-    rows = []
-    for name in run.methods:
-        row = [
-            name,
-            f"{run.timings[name]['seconds']:.2f}",
-            f"{run.timings[name]['ms_per_query']:.1f}",
-            f"{run.timings[name]['queries_per_query']:.2f}",
-            int(run.timings[name]["total_queries"]),
-        ]
-        if show_chunk_expansions:
-            row.append(int(run.timings[name].get("chunk_expansions", 0)))
-        rows.append(row)
-
     return plain_table(
-        headers,
-        rows,
+        ["method", "seconds", "ms/query", "queries/query", "queries"],
+        [
+            [
+                name,
+                f"{run.timings[name]['seconds']:.2f}",
+                f"{run.timings[name]['ms_per_query']:.1f}",
+                f"{run.timings[name]['queries_per_query']:.2f}",
+                int(run.timings[name]["total_queries"]),
+            ]
+            for name in run.methods
+        ],
     )
 
 

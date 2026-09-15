@@ -6,8 +6,6 @@ from typing import Callable
 
 from src.indexing.chunk_text import CONTEXTUAL_CHUNK_VERSION, LEGACY_CHUNK_VERSION
 from src.retrieval.base import Retriever
-from src.retrieval.retrievers.agentic import AgenticRetriever, default_judge
-from src.retrieval.retrievers.agentic_tools import AgenticToolRetriever
 from src.retrieval.retrievers.fusion import WeightedScoreFusionRetriever
 from src.retrieval.retrievers.rerank import CrossEncoderRerankRetriever
 from src.retrieval.retrievers.sparse import SparseRetriever
@@ -115,7 +113,7 @@ def _provider_specs(
         "_rerank": _vector_rerank,
         "_hybrid_rerank": _hybrid_rerank,
     }
-    specs = {
+    return {
         f"{provider_name}{tag}{suffix}": RetrieverSpec(
             f"{provider_name}{tag}{suffix}",
             lambda build=build, provider=provider_name, version=chunk_version: build(
@@ -126,25 +124,6 @@ def _provider_specs(
         )
         for tag, build in builders.items()
     }
-
-    def add(tag: str, build) -> None:
-        name = f"{provider_name}{tag}{suffix}"
-        specs[name] = RetrieverSpec(
-            name, build, provider=provider_name, chunk_version=chunk_version
-        )
-
-    if provider_name == "qwen":
-        add("_agentic", lambda v=chunk_version: _qwen_agentic(v))
-    if provider_name in {"qwen", "nemotron"}:
-        add(
-            "_hybrid_agentic",
-            lambda p=provider_name, v=chunk_version: _hybrid_agentic(p, v),
-        )
-        add(
-            "_hybrid_agentic_tools",
-            lambda p=provider_name, v=chunk_version: _hybrid_agentic_tools(p, v),
-        )
-    return specs
 
 
 def _sparse(chunk_version: str = LEGACY_CHUNK_VERSION) -> SparseRetriever:
@@ -209,69 +188,6 @@ def _hybrid_rerank(
     return _reranker(
         f"{provider_name}_hybrid_rerank{suffix}",
         _hybrid(provider_name, chunk_version),
-    )
-
-
-def _qwen_agentic(
-    chunk_version: str = LEGACY_CHUNK_VERSION,
-) -> AgenticRetriever:
-    suffix = _version_suffix(chunk_version)
-    return AgenticRetriever(
-        name=f"qwen_agentic{suffix}",
-        base_retriever=_vector_rerank("qwen", chunk_version),
-        judge_retries=CONFIG["agentic_judge_retries"],
-        max_attempts=CONFIG["agentic_max_attempts"],
-        min_sufficient_chunks=CONFIG["agentic_min_sufficient_chunks"],
-        initial_limit=CONFIG["agentic_initial_limit"],
-        limit_step=CONFIG["agentic_limit_step"],
-        max_limit=CONFIG["agentic_max_limit"],
-        judge=default_judge(CONFIG),
-    )
-
-
-def _hybrid_agentic(
-    provider_name: str,
-    chunk_version: str = LEGACY_CHUNK_VERSION,
-) -> AgenticRetriever:
-    suffix = _version_suffix(chunk_version)
-    return AgenticRetriever(
-        name=f"{provider_name}_hybrid_agentic{suffix}",
-        base_retriever=_hybrid_rerank(provider_name, chunk_version),
-        judge_retries=CONFIG["agentic_judge_retries"],
-        max_attempts=CONFIG["agentic_max_attempts"],
-        min_sufficient_chunks=CONFIG["agentic_min_sufficient_chunks"],
-        initial_limit=CONFIG["agentic_initial_limit"],
-        limit_step=CONFIG["agentic_limit_step"],
-        max_limit=CONFIG["agentic_max_limit"],
-        judge=default_judge(CONFIG),
-    )
-
-
-def _hybrid_agentic_tools(
-    provider_name: str,
-    chunk_version: str = LEGACY_CHUNK_VERSION,
-) -> AgenticToolRetriever:
-    suffix = _version_suffix(chunk_version)
-    return AgenticToolRetriever(
-        name=f"{provider_name}_hybrid_agentic_tools{suffix}",
-        base_retriever=_hybrid_rerank(provider_name, chunk_version),
-        judge_retries=CONFIG["agentic_judge_retries"],
-        max_attempts=CONFIG["agentic_tools_max_attempts"],
-        min_sufficient_chunks=CONFIG["agentic_min_sufficient_chunks"],
-        initial_limit=CONFIG["agentic_initial_limit"],
-        limit_step=CONFIG["agentic_limit_step"],
-        max_limit=CONFIG["agentic_max_limit"],
-        max_tool_calls=CONFIG["agentic_tools_max_tool_calls"],
-        section_limit=CONFIG["agentic_tools_section_limit"],
-        search_limit=CONFIG["agentic_tools_search_limit"],
-        judge=default_judge(
-            {
-                **CONFIG,
-                "agentic_judge_structured_method": CONFIG[
-                    "agentic_tools_structured_method"
-                ],
-            }
-        ),
     )
 
 

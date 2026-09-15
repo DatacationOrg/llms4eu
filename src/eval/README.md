@@ -24,11 +24,10 @@ uv run python -m src.eval.evaluate --methods qwen --category crosslingual
 ```
 
 Chunk summaries are historical retrieval experiments, not steady-state eval
-inputs. Current results live in
-[`docs/retrieval-results-agentic.md`](../../docs/retrieval-results-agentic.md).
+inputs. Result reports live in [`docs/`](../../docs/).
 
-All inference is local: embeddings, reranking, question generation, and the
-agentic sufficiency judge run through sentence-transformers and Ollama.
+All inference is local: embeddings, reranking, question generation and the
+evidence-equivalence judge run through sentence-transformers and Ollama.
 Eval checks that requested vector indexes already exist and reports the build
 commands when they are missing; it does not build indexes while measuring.
 
