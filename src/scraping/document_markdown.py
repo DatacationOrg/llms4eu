@@ -76,12 +76,7 @@ def document_url_to_markdown(url: str, timeout: float) -> DocumentMarkdownResult
     try:
         content = _download_document(url, timeout=timeout, max_bytes=max_bytes)
     except Exception as exc:
-        return DocumentMarkdownResult(
-            markdown="",
-            url=url,
-            bytes_read=0,
-            error=f"document download failed: {type(exc).__name__}: {exc}",
-        )
+        return _failed(url, 0, f"document download failed: {type(exc).__name__}: {exc}")
 
     suffix = Path(urlparse(url).path).suffix.lower() or ".pdf"
     try:
@@ -95,22 +90,18 @@ def document_url_to_markdown(url: str, timeout: float) -> DocumentMarkdownResult
                 max_num_pages=config.max_document_pages,
             )
     except Exception as exc:
-        return DocumentMarkdownResult(
-            markdown="",
-            url=url,
-            bytes_read=len(content),
-            error=f"document conversion failed: {type(exc).__name__}: {exc}",
+        return _failed(
+            url,
+            len(content),
+            f"document conversion failed: {type(exc).__name__}: {exc}",
         )
 
     if result.status not in {
         ConversionStatus.SUCCESS,
         ConversionStatus.PARTIAL_SUCCESS,
     }:
-        return DocumentMarkdownResult(
-            markdown="",
-            url=url,
-            bytes_read=len(content),
-            error=f"document conversion status: {result.status}",
+        return _failed(
+            url, len(content), f"document conversion status: {result.status}"
         )
 
     markdown = clean_markdown(result.document.export_to_markdown())
@@ -155,6 +146,12 @@ def _document_converter() -> DocumentConverter:
         format_options={
             InputFormat.PDF: PdfFormatOption(pipeline_options=pdf_options),
         },
+    )
+
+
+def _failed(url: str, bytes_read: int, error: str) -> DocumentMarkdownResult:
+    return DocumentMarkdownResult(
+        markdown="", url=url, bytes_read=bytes_read, error=error
     )
 
 

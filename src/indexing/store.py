@@ -25,16 +25,7 @@ def query_chunk_vectors(
     query: str,
     limit: int,
 ) -> list[RankedChunk]:
-    _validate_provider(provider)
-    load_local_env()
-    vector = build_indexer(provider, CONFIG).embed_query(query)
-    result = _existing_collection(provider).query(
-        query_embeddings=[vector],
-        n_results=limit,
-        include=["metadatas", "distances"],
-    )
-    chunk_ids = _chunk_ids_from_result(result, offset=0)
-    return _scored_chunks_from_result(result, offset=0, texts=_chunk_texts(chunk_ids))
+    return query_chunk_vectors_batch(provider, [query], limit)[0]
 
 
 def enabled_provider_names() -> list[str]:
