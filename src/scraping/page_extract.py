@@ -12,7 +12,7 @@ from src.scraping.extract_markdown import (
     markdown_looks_like_contact_footer,
     markdown_needs_browser_render,
 )
-from src.scraping.page_fetch import FetchedPage
+from src.scraping.page_fetch import FetchedPage, extract_language
 from src.scraping.render import RenderedPage, render_html
 from src.scraping.settings import fetch_pages_config
 from src.scraping.structured_markdown import (
@@ -83,6 +83,7 @@ def _extract_or_render(
 def _extract_from_html(
     metadata: PageMetadata, html: str, markdown: str, timeout: float
 ) -> FetchResult | None:
+    metadata = metadata.model_copy(update={"language": extract_language(html)})
     if markdown_looks_like_contact_footer(markdown):
         document_result = _document_result_from_html(metadata, html, timeout)
         if document_result:

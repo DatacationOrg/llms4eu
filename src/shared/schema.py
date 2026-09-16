@@ -19,6 +19,7 @@ class PageMetadata(BaseModel):
     raw_bytes: int = 0
     fetch_method: str = "httpx"
     extractor: str = "trafilatura"
+    language: str | None = None
     page_kind: str = "prose"
     markdown_chars: int = 0
     error: str | None = None

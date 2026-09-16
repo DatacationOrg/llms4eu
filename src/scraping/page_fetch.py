@@ -1,5 +1,6 @@
 import json
 import random
+import re
 import threading
 import time
 import uuid
@@ -219,6 +220,21 @@ def _extract_title(html: str) -> str | None:
     if soup.title and soup.title.string:
         return soup.title.string.strip()
     return None
+
+
+def extract_language(html: str) -> str | None:
+    """The page's own declared language: <html lang>, else a content-language meta."""
+    soup = BeautifulSoup(html, "lxml")
+    declared = soup.html.get("lang") if soup.html else None
+    if not declared:
+        meta = soup.find(
+            "meta", attrs={"http-equiv": re.compile("^content-language$", re.I)}
+        )
+        declared = meta.get("content") if meta else None
+    if not declared:
+        return None
+    # "sl-SI", "sl_SI" and "SL" all mean the same language.
+    return re.split(r"[-_]", declared.strip())[0].lower() or None
 
 
 def _is_html(content_type: str | None) -> bool:

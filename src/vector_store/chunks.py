@@ -145,7 +145,8 @@ def _load_chunks() -> list[PageChunk]:
             for row in conn.execute(
                 """
                 select c.id, c.page_id, c.chunk_index, c.heading_path, c.text,
-                       m.title, m.source, s.language, m.page_kind
+                       m.title, m.source, m.page_kind,
+                       coalesce(m.language, s.language) as language
                 from page_chunks c
                 join page_metadata m on m.id = c.page_id
                 left join page_sources s on s.source = m.source

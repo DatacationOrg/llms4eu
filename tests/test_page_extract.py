@@ -44,3 +44,21 @@ def test_nav_only_page_is_rejected_rather_than_stored():
     result = _extract_from_html(_metadata(), chrome, markdown, timeout=5.0)
 
     assert result is None
+
+
+def test_extracted_page_records_the_language_the_site_declares():
+    """The cross-language question must exclude the page's real language, not a default."""
+    html = """
+    <html lang="hu-HU"><head><title>Vár</title></head><body><main>
+    <p>A vár 895-ben epult, a Sava folyo felett all, es ma is latogathato.</p>
+    <p>A kiallitas a helyi tortenelmet mutatja be reszletes leirasokkal.</p>
+    </main></body></html>
+    """
+
+    metadata = _metadata()
+    markdown = extract_markdown(html, url=metadata.url)
+
+    result = _extract_from_html(metadata, html, markdown, timeout=5.0)
+
+    assert result is not None
+    assert result.metadata.language == "hu"

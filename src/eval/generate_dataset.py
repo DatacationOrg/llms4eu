@@ -119,7 +119,8 @@ def _eligible_unprocessed_chunks(limit: int | None) -> list[dict]:
             dict(row)
             for row in conn.execute(
                 """
-                select c.id, c.text, c.heading_path, m.title, s.language
+                select c.id, c.text, c.heading_path, m.title,
+                       coalesce(m.language, s.language) as language
                 from page_chunks c
                 join page_metadata m on m.id = c.page_id
                 join page_sources s on s.source = m.source

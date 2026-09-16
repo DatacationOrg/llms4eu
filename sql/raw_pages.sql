@@ -11,6 +11,7 @@ create table if not exists page_metadata (
   raw_bytes integer not null default 0,
   fetch_method text not null default 'httpx',
   extractor text not null default 'trafilatura',
+  language text,
   page_kind text not null default 'prose',
   markdown_chars integer not null default 0,
   error text
