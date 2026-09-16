@@ -1,8 +1,8 @@
 import pytest
 
 from src.retrieval import methods
-from src.shared import indexers
-from src.shared.indexers import build_indexer, provider_names
+from src.indexing import embedders
+from src.indexing.embedders import build_indexer, provider_names
 
 
 def test_retriever_catalog_generates_public_names():
@@ -41,7 +41,7 @@ def test_ensure_retriever_ready_reports_missing_index(monkeypatch):
         methods.ensure_retriever_ready("stub")
 
     assert exc.value.missing == {"stub": "stub"}
-    assert "uv run python -m src.indexing.chunks --method stub" in str(exc.value)
+    assert "uv run python -m src.indexing --method stub" in str(exc.value)
 
 
 def test_reranker_uses_discovered_defaults(monkeypatch):
@@ -73,10 +73,10 @@ def test_indexer_refuses_a_model_below_the_shared_sequence_limit(monkeypatch):
         max_seq_length = 256
 
     monkeypatch.setattr(
-        "src.shared.indexers.load_embedder", lambda *_, **__: ShortModel()
+        "src.indexing.embedders.load_embedder", lambda *_, **__: ShortModel()
     )
     indexer = build_indexer(
-        "qwen", {**indexers.CONFIG, "embedding_max_seq_length": 2048}
+        "qwen", {**embedders.CONFIG, "embedding_max_seq_length": 2048}
     )
 
     with pytest.raises(ValueError, match="caps out at 256 tokens"):
@@ -88,10 +88,10 @@ def test_indexer_applies_the_shared_limit_to_a_model_that_can_reach_it(monkeypat
         max_seq_length = 32768
 
     monkeypatch.setattr(
-        "src.shared.indexers.load_embedder", lambda *_, **__: LongModel()
+        "src.indexing.embedders.load_embedder", lambda *_, **__: LongModel()
     )
     model = build_indexer(
-        "nemotron", {**indexers.CONFIG, "embedding_max_seq_length": 2048}
+        "nemotron", {**embedders.CONFIG, "embedding_max_seq_length": 2048}
     )._model()
 
     assert model.max_seq_length == 2048

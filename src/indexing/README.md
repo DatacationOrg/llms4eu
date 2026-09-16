@@ -4,11 +4,11 @@ Builds local vector indexes for document chunks.
 
 The indexer boundary is provider-shaped: Qwen multilingual,
 Qwen 4B, and Nemotron 3 Embed 1B all expose the same `embed_documents` /
-`embed_query` methods from `src.shared.indexers`. Every provider runs locally
+`embed_query` methods from `src.indexing.embedders`. Every provider runs locally
 through sentence-transformers.
 
 Chunk vector collections are derived state in Chroma. SQLite remains the source
-of truth for page metadata, chunk text, and eval labels. `src.vector_store.chunks`
+of truth for page metadata, chunk text, and eval labels. `src.indexing.store`
 owns Chroma mechanics and query-time vector search; indexing only orchestrates
 rebuilds.
 
@@ -26,7 +26,7 @@ Model and collection settings live in `config.yaml`.
 Rebuild one collection:
 
 ```bash
-uv run python -m src.indexing.chunks --method qwen
+uv run python -m src.indexing --method qwen
 ```
 
 The Nemotron collection uses `nvidia/Nemotron-3-Embed-1B-BF16`, its saved
@@ -35,7 +35,7 @@ limit. It requires a CUDA-capable NVIDIA GPU for practical inference. Once the
 model is cached, rebuild the independent 2048-dimensional collection with:
 
 ```bash
-uv run python -m src.indexing.chunks --method nemotron
+uv run python -m src.indexing --method nemotron
 ```
 
 Rebuild the default regenerable vector cache:

@@ -21,7 +21,7 @@ from src.scraping.structured_markdown import (
     classify_page,
     extract_listing_markdown,
 )
-from src.shared.schema import PageMarkdownContent, PageMetadata
+from src.scraping.schema import PageMarkdownContent, PageMetadata
 
 
 config = fetch_pages_config()

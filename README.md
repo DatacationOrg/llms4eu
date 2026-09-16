@@ -57,7 +57,7 @@ src/scraping/   fetch pages, extract Markdown, store in SQLite
 src/db/         page-database connection and schema helpers
 src/preprocess/ heading-aware page chunking
 src/indexing/   provider-shaped vector indexing
-src/vector_store/  Chroma collection, upsert, vector search
+src/indexing/  Chroma collection, upsert, vector search
 src/retrieval/  chunk retrieval methods and catalog
 src/eval/       retrieval evaluation over labelled questions
 src/shared/     schema, embeddings, env, LLM helper

@@ -11,7 +11,7 @@ SQLite.
 
 `indexing` orchestrates chunk vector index rebuilds.
 
-`vector_store` owns Chroma mechanics for chunk vectors.
+`indexing` owns embedding providers and the Chroma collections they fill.
 
 `retrieval` owns reusable chunk retrievers and the public retrieval catalog.
 

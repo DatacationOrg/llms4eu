@@ -1,4 +1,4 @@
-from src.shared.embedding_cache import cached_embeddings
+from src.indexing.cache import cached_embeddings
 
 
 def test_cache_returns_vectors_in_input_order_and_reuses_hits(monkeypatch, tmp_path):

@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from src.retrieval.base import RankedChunk
-from src.vector_store.chunks import query_chunk_vectors, query_chunk_vectors_batch
+from src.indexing.store import query_chunk_vectors, query_chunk_vectors_batch
 
 
 @dataclass(frozen=True)

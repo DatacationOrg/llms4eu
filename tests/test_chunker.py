@@ -1,7 +1,7 @@
 import sqlite3
 
-from src.indexing.chunk_text import PageChunk, text_for_embedding
-from src.preprocess.chunks import chunk_markdown, rebuild_page_chunks
+from src.indexing.documents import PageChunk, text_for_embedding
+from src.preprocess.chunker import chunk_markdown, rebuild_page_chunks
 
 
 def test_chunk_markdown_preserves_heading_path():

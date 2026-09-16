@@ -1,6 +1,6 @@
 import sqlite3
 
-from src.shared.schema import PageMetadata
+from src.scraping.schema import PageMetadata
 
 
 def test_page_metadata_fields_match_the_table_columns(page_db):

@@ -7,11 +7,11 @@ fetch-pages SOURCE="data/brestanica.json":
 
 # Rebuild page chunks from the fetched Markdown.
 chunk:
-    uv run python -m src.preprocess.chunks
+    uv run python -m src.preprocess.chunker
 
 # Rebuild one provider's chunk vector index.
 index METHOD="qwen":
-    uv run python -m src.indexing.chunks --method {{METHOD}}
+    uv run python -m src.indexing --method {{METHOD}}
 
 test:
     uv run --extra dev pytest

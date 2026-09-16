@@ -11,7 +11,7 @@ classification.
 
 Retrieval architecture tests stay local: `test_rag_methods.py` checks public
 method names and readiness wiring, `test_ranking_fusion.py` checks weighted
-score fusion, and `test_vector_store_chunks.py` checks chunk vector rebuild/query
+score fusion, and `test_indexing_store.py` checks chunk vector rebuild/query
 behavior with a stub indexer.
 
 Eval tests cover metric math only; they do not run model inference.

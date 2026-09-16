@@ -2,14 +2,17 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from functools import cache
+from pathlib import Path
 from typing import Protocol
 
 
-from src.shared.embed import embed_texts, load_embedder
-from src.shared.embedding_cache import cached_embeddings
-from src.shared.env import ROOT, load_yaml
+import torch
+from sentence_transformers import SentenceTransformer
 
-CONFIG = load_yaml(ROOT / "src" / "indexing" / "config.yaml")
+from src.indexing.cache import cached_embeddings
+from src.shared.env import load_yaml
+
+CONFIG = load_yaml(Path(__file__).with_name("config.yaml"))
 
 __all__ = [
     "EmbeddingIndexer",
@@ -129,3 +132,46 @@ def build_indexer(name: str, config: dict | None = None) -> EmbeddingIndexer:
         max_seq_length=config["embedding_max_seq_length"],
         **{field: config[key] for field, key in PROVIDER_FIELDS[name].items()},
     )
+
+
+def load_embedder(
+    model_name: str,
+    *,
+    local_files_only: bool = True,
+    dtype: str | None = None,
+    attn_implementation: str | None = None,
+) -> SentenceTransformer:
+    """Load a SentenceTransformers model from the local cache by default.
+
+    Use local_files_only=False only for explicit model download/cache warmup.
+    """
+    model_kwargs = {}
+    if dtype is not None:
+        model_kwargs["dtype"] = getattr(torch, dtype)
+    if attn_implementation is not None:
+        model_kwargs["attn_implementation"] = attn_implementation
+    return SentenceTransformer(
+        model_name,
+        local_files_only=local_files_only,
+        model_kwargs=model_kwargs,
+    )
+
+
+def embed_texts(
+    model: SentenceTransformer,
+    texts: list[str],
+    prompt_name: str | None = None,
+    batch_size: int | None = None,
+    show_progress_bar: bool = False,
+) -> list[list[float]]:
+    # Normalized vectors make Qdrant cosine scores comparable across queries.
+    # prompt_name can be e.g. "query" for instruction-aware models like Qwen3-Embedding.
+    kwargs: dict = {
+        "normalize_embeddings": True,
+        "show_progress_bar": show_progress_bar,
+    }
+    if prompt_name is not None:
+        kwargs["prompt_name"] = prompt_name
+    if batch_size is not None:
+        kwargs["batch_size"] = batch_size
+    return model.encode(texts, **kwargs).tolist()

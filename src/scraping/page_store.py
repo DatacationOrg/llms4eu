@@ -3,7 +3,7 @@ from pathlib import Path
 
 from src.scraping.page_extract import FetchResult
 from src.shared.env import ROOT
-from src.shared.schema import PageMetadata
+from src.scraping.schema import PageMetadata
 
 
 def initialize_raw_pages_db(db_path: Path) -> None:

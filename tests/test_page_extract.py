@@ -2,7 +2,7 @@ from datetime import UTC, datetime
 
 from src.scraping.extract_markdown import extract_markdown
 from src.scraping.page_extract import _extract_from_html
-from src.shared.schema import PageMetadata
+from src.scraping.schema import PageMetadata
 
 ARTICLE = """
 <html><body><article>

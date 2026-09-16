@@ -15,7 +15,7 @@ import httpx
 from bs4 import BeautifulSoup
 
 from src.scraping.settings import fetch_pages_config
-from src.shared.schema import PageMetadata
+from src.scraping.schema import PageMetadata
 
 
 config = fetch_pages_config()

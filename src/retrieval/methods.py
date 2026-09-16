@@ -8,9 +8,9 @@ from src.retrieval.base import Retriever
 from src.retrieval.retrievers.fusion import WeightedScoreFusionRetriever
 from src.retrieval.retrievers.rerank import CrossEncoderRerankRetriever
 from src.retrieval.retrievers.sparse import SparseRetriever
-from src.retrieval.retrievers.vector_chunks import VectorChunkRetriever
+from src.retrieval.retrievers.vector import VectorChunkRetriever
 from src.shared.env import load_yaml
-from src.vector_store.chunks import collection_ready, enabled_provider_names
+from src.indexing.store import collection_ready, enabled_provider_names
 
 CONFIG = load_yaml(Path(__file__).with_name("config.yaml"))
 
@@ -28,7 +28,7 @@ class MissingRetrieverIndexes(RuntimeError):
     def __init__(self, missing: dict[str, str]) -> None:
         self.missing = missing
         commands = "\n".join(
-            f"  uv run python -m src.indexing.chunks --method {provider}"
+            f"  uv run python -m src.indexing --method {provider}"
             for provider in sorted(set(missing.values()))
         )
         super().__init__(

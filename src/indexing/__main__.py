@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import argparse
 
-from src.vector_store.chunks import (
+from src.indexing.store import (
     DEFAULT_INDEXING_PROVIDER,
     INDEXING_PROVIDERS,
     rebuild_chunk_collection,

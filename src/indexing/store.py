@@ -9,13 +9,13 @@ from tqdm import tqdm
 
 from src.db.pages import connect_pages as connect
 from src.db.pages import initialize_page_artifacts_db
-from src.indexing.chunk_text import PageChunk, text_for_embedding
+from src.indexing.documents import PageChunk, text_for_embedding
 from src.retrieval.base import RankedChunk
 from src.shared.env import chroma_path, load_local_env, load_yaml
-from src.shared.indexers import build_indexer
-from src.shared.indexers import provider_names as buildable_provider_names
+from src.indexing.embedders import build_indexer
+from src.indexing.embedders import provider_names as buildable_provider_names
 
-CONFIG = load_yaml(Path(__file__).parents[1] / "indexing" / "config.yaml")
+CONFIG = load_yaml(Path(__file__).with_name("config.yaml"))
 INDEXING_PROVIDERS = tuple(CONFIG["providers"])
 DEFAULT_INDEXING_PROVIDER = CONFIG["default_provider"]
 
@@ -231,7 +231,7 @@ def _existing_collection(provider: str):
     if not collection_ready(provider):
         raise RuntimeError(
             f"Chunk vector collection for {provider} is missing or stale. Run "
-            f"`uv run python -m src.indexing.chunks --method {provider}`."
+            f"`uv run python -m src.indexing --method {provider}`."
         )
     return _client().get_collection(_collection_name(provider))
 

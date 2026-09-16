@@ -1,9 +1,9 @@
 import sqlite3
 
-import src.vector_store.chunks as chunk_vectors
+import src.indexing.store as chunk_vectors
 from src.retrieval.retrievers import sparse as sparse_module
 from src.retrieval.retrievers.sparse import SparseRetriever
-from src.vector_store.chunks import (
+from src.indexing.store import (
     collection_ready,
     query_chunk_vectors,
     query_chunk_vectors_batch,
@@ -30,9 +30,7 @@ class StubIndexer:
 
 def test_chunk_collection_rebuild_readiness_and_query(monkeypatch, page_db):
     _seed_chunks(page_db)
-    monkeypatch.setattr(
-        "src.vector_store.chunks.build_indexer", lambda *_: StubIndexer()
-    )
+    monkeypatch.setattr("src.indexing.store.build_indexer", lambda *_: StubIndexer())
 
     assert not collection_ready("qwen")
 
@@ -63,9 +61,7 @@ def test_chunk_collection_rebuild_readiness_and_query(monkeypatch, page_db):
 
 def test_chunk_collection_stores_page_metadata(monkeypatch, page_db):
     _seed_chunks(page_db)
-    monkeypatch.setattr(
-        "src.vector_store.chunks.build_indexer", lambda *_: StubIndexer()
-    )
+    monkeypatch.setattr("src.indexing.store.build_indexer", lambda *_: StubIndexer())
 
     rebuild_chunk_collection("qwen")
 
