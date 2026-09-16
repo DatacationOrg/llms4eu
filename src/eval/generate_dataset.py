@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 from src.db.pages import connect_pages as connect
 from src.db.pages import initialize_page_artifacts_db as initialize_eval_db
 from src.shared.env import load_yaml
+from src.shared.prompts import render
 from src.shared.llm import (
     structured_local_model,
 )
@@ -224,30 +225,26 @@ def _messages(chunk: dict, target_language: str | None) -> list[tuple[str, str]]
 
 
 def _system_prompt(chunk: dict, target_language: str | None) -> str:
-    source_language_name = LANGUAGE_NAMES.get(chunk["language"], chunk["language"])
     target_language = target_language or "en"
-    target_language_name = LANGUAGE_NAMES[target_language]
-    return f"""
-Generate one question and one answer for each question type. Use only facts in the chunk.
-
-Write same_language in {source_language_name}, about {QUESTION_TARGET_CHARS["same_language"]} characters.
-Write cross_language in {target_language_name} and set question_language to "{target_language}", about {QUESTION_TARGET_CHARS["cross_language"]} characters.
-Answers must use the same language as their questions.
-
-Answer target: about {ANSWER_TARGET_CHARS} characters.
-If a type is not supported by the chunk, leave it null.
-"""
+    return render(
+        "question_generation.system",
+        source_language_name=LANGUAGE_NAMES.get(chunk["language"], chunk["language"]),
+        target_language=target_language,
+        target_language_name=LANGUAGE_NAMES[target_language],
+        same_language_chars=QUESTION_TARGET_CHARS["same_language"],
+        cross_language_chars=QUESTION_TARGET_CHARS["cross_language"],
+        answer_chars=ANSWER_TARGET_CHARS,
+    )
 
 
 def _human_prompt(chunk: dict) -> str:
-    return f"""
-Title: {chunk["title"] or ""}
-Heading: {chunk["heading_path"] or ""}
-Content language: {chunk["language"]}
-
-Chunk:
-{chunk["text"]}
-"""
+    return render(
+        "question_generation.human",
+        title=chunk["title"] or "",
+        heading_path=chunk["heading_path"] or "",
+        language=chunk["language"],
+        text=chunk["text"],
+    )
 
 
 def _cross_language(chunk_id: str, source_language: str) -> str:

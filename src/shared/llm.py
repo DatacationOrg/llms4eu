@@ -8,6 +8,8 @@ from typing import Protocol, TypeVar
 from langchain_ollama import ChatOllama
 from pydantic import BaseModel
 
+from src.shared.prompts import render
+
 __all__ = [
     "LocalOllamaStructuredLlm",
     "StructuredLlm",
@@ -147,11 +149,10 @@ def _with_correction(
 ) -> StructuredPrompt:
     """Tell the model what it got wrong so the retry differs from the attempt."""
     required = output_schema.model_json_schema().get("required", [])
-    instruction = (
-        "The previous response was rejected: "
-        f"{type(error).__name__}: {error}. "
-        "Answer again by calling the tool with every required field present"
-        + (f": {', '.join(required)}." if required else ".")
+    instruction = render(
+        "structured_retry",
+        error=f"{type(error).__name__}: {error}",
+        required_fields=f": {', '.join(required)}." if required else ".",
     )
     if isinstance(prompt, str):
         return f"{prompt}\n\n{instruction}"
