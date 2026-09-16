@@ -27,6 +27,3 @@ Retrieval tuning lives in `config.yaml`. Enabled vector providers come from
 
 Sparse retrieval uses BM25. `sparse_k1` controls repeated-term saturation, and
 `sparse_b` controls length normalization.
-
-See [`experiments/indexing/README.md`](../../experiments/indexing/README.md) for
-workload, latency, quality, and statistical requirements.

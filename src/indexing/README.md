@@ -41,24 +41,9 @@ uv run python -m src.indexing --method nemotron
 Rebuild the default regenerable vector cache:
 
 ```bash
-just eval-index qwen v1
-just eval-index qwen v2
+just index qwen
 ```
 
 Durable reference databases belong under `$LLMS4EU_DATA/db/`. Regenerable Chroma
 cache artifacts belong under `$LLMS4EU_DATA/chroma/`. Point `LLMS4EU_DATA` at a
 private path when a run should not touch the shared store.
-
-## Benchmarking against OKF generation
-
-A Chroma build and an OKF bundle build have different products. Compare them
-from the same frozen full-page corpus using clean-build wall time, pages and
-source MiB per second, coverage, retries, model calls/tokens/cost, peak memory,
-artifact size, and storage amplification. Keep chunking, embedding, persistence,
-OKF discovery, canonicalization, enrichment, index generation, and validation
-as separately timed stages. Also run incremental updates and attach retrieval
-and answer quality to every efficiency result.
-
-See [`experiments/indexing/README.md`](../../experiments/indexing/README.md) for the full
-protocol derived from BEIR, ANN benchmark, RAG evaluation, and production search
-benchmark practices.

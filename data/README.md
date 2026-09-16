@@ -5,7 +5,7 @@
 
 Everything derived lives outside the repo under `$LLMS4EU_DATA` (default
 `/data/llms4eu`): `db/pages.db` holds scraped pages, chunks and eval labels;
-`chroma/` holds regenerable vector indexes; `embeddings/`, `checkpoints/` and
-`judge-cache/` hold run caches.
+`chroma/` holds regenerable vector indexes; `embeddings/` and `checkpoints/`
+hold run caches.
 
 Reviewed aggregate reports belong under `docs/`.

@@ -8,8 +8,7 @@ Python environment.
 
 - [uv](https://docs.astral.sh/uv/)
 - [just](https://just.systems/)
-- [Ollama](https://ollama.com/) — needed for `just eval-generate` and for the
-  evidence-equivalence judge
+- [Ollama](https://ollama.com/) — needed for `just eval-generate`
 
 ## Setup
 
@@ -20,7 +19,7 @@ cp .env.example .env  # set LLMS4EU_DATA, the shared artifact store
 
 All generated data lives outside the repo in one place, `LLMS4EU_DATA`
 (default `/data/llms4eu`): the page database, the Chroma vector cache,
-embedding caches, benchmark checkpoints and judge caches. The repo tracks
+embedding caches and benchmark checkpoints. The repo tracks
 code, SQL schema and the source URL list only.
 
 ```bash
@@ -42,10 +41,10 @@ just test          # run the non-LLM test suite
 Retrieval evaluation over the scraped pages:
 
 ```bash
-just eval-generate 10        # generate labelled questions
-just eval qwen,sparse        # compare named retrieval methods
-just eval-report             # full benchmark report into docs/
-just eval-inspect            # look at the labelled dataset
+just eval-generate 10                 # generate labelled questions
+just eval --methods qwen,sparse       # compare named retrieval methods
+just eval-all                         # whole catalog, resumable
+just eval-inspect                     # look at the labelled dataset
 ```
 
 ## Shape
@@ -56,17 +55,17 @@ sql/            page and eval schema, portable to SQLite and Postgres
 src/scraping/   fetch pages, extract Markdown, store in SQLite
 src/db/         page-database connection and schema helpers
 src/preprocess/ heading-aware page chunking
-src/indexing/   provider-shaped vector indexing
-src/indexing/  Chroma collection, upsert, vector search
+src/indexing/   embedding providers, embedding cache, Chroma collections
 src/retrieval/  chunk retrieval methods and catalog
 src/eval/       retrieval evaluation over labelled questions
-src/shared/     schema, embeddings, env, LLM helper
-experiments/    benchmark orchestration over the method catalog
+src/shared/     env and artifact paths, prompt loading, LLM helper
+prompts/        LLM prompt templates, loaded by src.shared.prompts
 tests/          schema contract, retrieval, extraction
 ```
 
 Durable and regenerable artifacts alike live under `LLMS4EU_DATA`
-(`db/pages.db`, `chroma/`, `embeddings/`, `checkpoints/`, `judge-cache/`). SQLite page chunks are the source of truth for chunk text;
+(`db/pages.db`, `chroma/`, `embeddings/`, `checkpoints/`). SQLite page chunks
+are the source of truth for chunk text;
 Chroma collections are derived indexes over those chunks.
 
 ---
@@ -89,6 +88,5 @@ tools and shared infrastructure are available.
 ## Docs
 
 - [docs/architecture-decisions.md](docs/architecture-decisions.md): durable decisions and why they matter.
-- [experiments/indexing/README.md](experiments/indexing/README.md): retrieval experiments and evaluation protocol.
 - [docs/](docs/): retrieval, OKF and agentic result reports, including the
   findings from experiments whose code has since been removed.

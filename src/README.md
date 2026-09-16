@@ -23,7 +23,7 @@ retrievers to compare.
 `pages_db()`, `chroma_path()` or `data_path(...)` instead of spelling a path in
 a config file, so the location is stated once.
 
-Orchestration folders can import infrastructure folders (`db`, `vector_store`)
+Orchestration folders can import infrastructure folders (`db`, `indexing`)
 and shared helpers. Avoid cross-imports between orchestration folders except
 when a later pipeline stage consumes an earlier artifact.
 

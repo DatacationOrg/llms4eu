@@ -18,7 +18,7 @@ Reason: eval should compare application retrieval methods, not own them.
 User-facing names describe method intent, not storage details.
 
 - `sparse`: lexical retrieval, currently BM25 internally.
-- `english`, `qwen`, `qwen4b`, `nemotron`: dense/vector providers.
+- `qwen`, `qwen4b`, `nemotron`: dense/vector providers.
 - `*_hybrid`: dense provider plus sparse retrieval.
 - `*_rerank`: rerank candidates from one base retriever.
 - `*_hybrid_rerank`: rerank hybrid candidates.
@@ -70,11 +70,11 @@ title, heading path, and chunk text.
 
 ## Indexing Boundary
 
-`src.indexing` orchestrates rebuilds. `src.vector_store` owns Chroma mechanics
-and query-time vector search.
+`src.indexing` owns the whole indexing side: `embedders` builds the provider,
+`cache` memoizes vectors, `store` owns Chroma mechanics and query-time search,
+and `__main__` is the rebuild CLI.
 
-Provider-shaped embedding implementations live in `src.shared.indexers`.
-`src.indexing/config.yaml` owns which embedding providers are enabled for this
+`src/indexing/config.yaml` owns which embedding providers are enabled for this
 project. Retrieval builds `VectorChunkRetriever` instances from the enabled
 provider list and checks Chroma readiness without owning provider definitions.
 
@@ -95,14 +95,18 @@ not project policy.
 
 Tracked durable artifacts use descriptive paths:
 
-- `data/db/pages.db`: page SQLite DB.
-- `data/cache/chroma/`: regenerable shared vector cache.
+- `$LLMS4EU_DATA/db/pages.db`: page SQLite DB.
+- `$LLMS4EU_DATA/chroma/`: regenerable shared vector cache.
 
-`.local/` is private scratch and can be overridden through `.env`.
+`LLMS4EU_DATA` defaults to `/data/llms4eu` and is set in `.env`. Point it at a
+private path when a run should not touch the shared store.
 
-`just eval-index qwen` rebuilds the default production chunk-vector provider.
+`just index qwen` rebuilds the default chunk-vector provider.
 
-## Open Knowledge Format
+## Open Knowledge Format (removed 2026-09-14, kept as a record)
+
+> The code described below was deleted. Nothing in `src/` implements it
+> today; the results are in `docs/comprehensive-okf-results.md`.
 
 The OKF experiment is a second knowledge representation over the same canonical
 raw pages, not another chunk retriever.
@@ -150,8 +154,8 @@ quality. There is no composite OKF-versus-RAG score.
   intervals accompany material quality claims.
 
 Reason: industry IR and search benchmarks report effectiveness together with
-latency, throughput, build cost, and storage. The complete protocol and sources
-are in [`experiments/indexing/README.md`](../experiments/indexing/README.md).
+latency, throughput, build cost, and storage. The protocol that ran these is
+archived in [`okf-benchmark-protocol.md`](okf-benchmark-protocol.md).
 
 ## Agentic Page Tools
 
@@ -192,6 +196,10 @@ Repeated identical tool calls are answered from the prompt instead of rerunning
 the query: the first version burned its whole budget re-searching one term.
 
 ## Local-Only Inference
+
+> Still true for what remains: embeddings, reranking and question
+> generation. The agentic sufficiency judge, the OKF navigator and the
+> evidence-equivalence judge named below have since been deleted.
 
 Every model call in the repo runs on local hardware. There is no hosted-model
 or credential path in the tree.
