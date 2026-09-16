@@ -286,4 +286,187 @@ def test_tool_actions_cover_the_documented_action_set():
         "expand",
         "list_sections",
         "search_in_page",
+        "find_pages_near",
+        "pages_in_region",
     }
+
+
+def test_find_pages_near_promotes_located_pages(pages_db, monkeypatch):
+    from src.retrieval.retrievers.page_tools import LocatedPage
+    from src.shared.geo_scope import GeoScope
+
+    class StubGazetteer:
+        default_radius_km = 25.0
+
+        def lookup(self, place, granularity="point", radius_km=None):
+            assert place == "Brestanica"
+            return GeoScope(latitude=45.99, longitude=15.47, radius_km=radius_km)
+
+    def fake_near(coordinates, radius_km, limit, variant):
+        assert radius_km == 10.0 and variant == "tok512"
+        return [
+            LocatedPage(
+                "p1",
+                "Rajhenburg Castle",
+                "Grad Rajhenburg",
+                "SI036",
+                1.2,
+                "p1-0",
+                "The castle stands above Brestanica.",
+            )
+        ]
+
+    monkeypatch.setattr(agentic_tools, "located_pages_near", fake_near)
+    base = StubRetriever([[RankedChunk(id="p2-0", score=0.9, text="unrelated")]])
+    judge = ScriptedJudge(
+        [
+            ToolAction(action="find_pages_near", place="Brestanica", radius_km=10),
+            ToolAction(action="sufficient", reason="found it"),
+        ]
+    )
+    retriever = AgenticToolRetriever(
+        name="qwen_hybrid_agentic_tools",
+        base_retriever=base,
+        max_attempts=4,
+        min_sufficient_chunks=1,
+        judge=judge,
+        gazetteer=StubGazetteer(),
+        variant="tok512",
+    )
+
+    chunks = retriever.retrieve("gradovi blizu Brestanice", 10)
+
+    assert [chunk.id for chunk in chunks] == ["p2-0", "p1-0"]
+    assert 'find_pages_near("Brestanica", 10 km)' in judge.prompts[1]
+    assert "1.2 km away" in judge.prompts[1]
+
+
+def test_geo_tools_without_a_gazetteer_explain_themselves(pages_db):
+    base = StubRetriever([[RankedChunk(id="p2-0", score=0.9, text="unrelated")]])
+    judge = ScriptedJudge(
+        [
+            ToolAction(action="find_pages_near", place="Brestanica"),
+            ToolAction(action="sufficient", reason="give up"),
+        ]
+    )
+    retriever = AgenticToolRetriever(
+        name="qwen_hybrid_agentic_tools",
+        base_retriever=base,
+        max_attempts=4,
+        min_sufficient_chunks=1,
+        judge=judge,
+    )
+
+    retriever.retrieve("query", 10)
+
+    assert "not available" in judge.prompts[1]
+
+
+def test_judge_and_geo_suffixes_pair_with_the_right_baseline():
+    from src.eval.agentic_diagnostics import baseline_for_agent, strip_reasoning_suffix
+
+    assert strip_reasoning_suffix("qwen_hybrid_agentic_tools_gptoss") == (
+        "qwen_hybrid_agentic_tools",
+        "gptoss",
+    )
+    assert baseline_for_agent("qwen_hybrid_agentic_gemma_v2") == "qwen_hybrid_rerank_v2"
+    assert baseline_for_agent("qwen_hybrid_agentic_geo") == "qwen_hybrid_rerank_geo"
+    assert (
+        baseline_for_agent("qwen_hybrid_agentic_tools_geo") == "qwen_hybrid_rerank_geo"
+    )
+
+
+def test_wider_radius_is_a_new_call_not_a_repeat(monkeypatch):
+    from src.shared.geo_scope import GeoScope
+
+    class StubGazetteer:
+        default_radius_km = 25.0
+
+        def lookup(self, place, granularity="point", radius_km=None):
+            return GeoScope(latitude=45.99, longitude=15.47, radius_km=radius_km)
+
+    radii = []
+
+    def fake_near(coordinates, radius_km, limit, variant):
+        radii.append(radius_km)
+        return []
+
+    monkeypatch.setattr(agentic_tools, "located_pages_near", fake_near)
+    base = StubRetriever([[RankedChunk(id="p2-0", score=0.9, text="unrelated")]])
+    judge = ScriptedJudge(
+        [
+            ToolAction(action="find_pages_near", place="Brestanica", radius_km=5),
+            ToolAction(action="find_pages_near", place="Brestanica", radius_km=30),
+            ToolAction(action="find_pages_near", place="Brestanica", radius_km=30),
+            ToolAction(action="sufficient"),
+        ]
+    )
+    retriever = AgenticToolRetriever(
+        name="t",
+        base_retriever=base,
+        max_attempts=5,
+        min_sufficient_chunks=1,
+        judge=judge,
+        gazetteer=StubGazetteer(),
+    )
+
+    retriever.retrieve("q", 10)
+
+    assert radii == [5.0, 30.0]
+    assert "You already ran find_pages_near" in judge.prompts[3]
+
+
+def test_tool_agent_without_gazetteer_neither_offers_nor_runs_geo_tools():
+    base = StubRetriever([[RankedChunk(id="p2-0", score=0.9, text="unrelated")]])
+    judge = ScriptedJudge(
+        [
+            ToolAction(action="pages_in_region", region_code="SI036"),
+            ToolAction(action="sufficient"),
+        ]
+    )
+    retriever = AgenticToolRetriever(
+        name="t",
+        base_retriever=base,
+        max_attempts=3,
+        min_sufficient_chunks=1,
+        judge=judge,
+    )
+
+    retriever.retrieve("q", 10)
+
+    assert "find_pages_near" not in judge.prompts[0]
+    assert "pages_in_region" not in judge.prompts[0]
+    assert "not available in this configuration" in judge.prompts[1]
+
+
+def test_unsupported_region_code_shape_is_named_not_reported_as_empty(monkeypatch):
+    class StubGazetteer:
+        default_radius_km = 25.0
+
+    calls = []
+    monkeypatch.setattr(
+        agentic_tools,
+        "located_pages_in_region",
+        lambda code, limit, variant: calls.append(code) or [],
+    )
+    base = StubRetriever([[RankedChunk(id="p2-0", score=0.9, text="unrelated")]])
+    judge = ScriptedJudge(
+        [
+            ToolAction(action="pages_in_region", region_code="SI0"),
+            ToolAction(action="pages_in_region", region_code="Posavje"),
+            ToolAction(action="sufficient"),
+        ]
+    )
+    retriever = AgenticToolRetriever(
+        name="t",
+        base_retriever=base,
+        max_attempts=4,
+        min_sufficient_chunks=1,
+        judge=judge,
+        gazetteer=StubGazetteer(),
+    )
+
+    retriever.retrieve("q", 10)
+
+    assert calls == ["SI0"]  # NUTS-1 is a supported shape
+    assert "give a NUTS code" in judge.prompts[2]

@@ -115,3 +115,40 @@ def test_agentic_search_retries_until_sufficient(monkeypatch):
     assert result.attempts[0].state.strategy == "initial"
     assert result.attempts[1].state.strategy == "query_reformulation"
     assert result.places[0].id == "p2"
+
+
+def test_wider_geo_filter_drops_nuts2_then_country_then_stops():
+    from src.rag.retry import WiderGeoFilter
+
+    state = AgentSearchState(
+        query="q",
+        limit=3,
+        embedding_model="m1",
+        geo_filter={"nuts2_region": "SI03", "country_code": "SI"},
+    )
+
+    wider = WiderGeoFilter().apply(state)
+    assert wider is not None and wider.geo_filter == {"country_code": "SI"}
+    assert wider.strategy == "wider_geo_filter"
+
+    widest = WiderGeoFilter().apply(wider)
+    assert widest is not None and widest.geo_filter is None
+
+    assert WiderGeoFilter().apply(widest) is None
+    assert WiderGeoFilter().apply(AgentSearchState("q", 3, "m1")) is None
+
+
+def test_wider_geo_filter_carries_foreign_keys_and_drops_them_last():
+    from src.rag.retry import WiderGeoFilter
+
+    state = AgentSearchState(
+        query="q",
+        limit=3,
+        embedding_model="m1",
+        geo_filter={"country_code": "SI", "extra": "x"},
+    )
+    wider = WiderGeoFilter().apply(state)
+    assert wider is not None and wider.geo_filter == {"extra": "x"}
+    widest = WiderGeoFilter().apply(wider)
+    assert widest is not None and widest.geo_filter is None
+    assert WiderGeoFilter().apply(widest) is None

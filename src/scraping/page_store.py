@@ -14,6 +14,27 @@ def initialize_raw_pages_db(db_path: Path) -> None:
         conn.executescript(schema)
 
 
+def record_source_languages(db_path: Path, languages: dict[str, str]) -> None:
+    """Store each source's language from the seed file.
+
+    `page_sources` is otherwise filled with the configured default when the
+    eval schema is initialised, which is right for the Slovenian corpus and
+    wrong for every other country's seed.
+    """
+    if not languages:
+        return
+    with sqlite3.connect(db_path) as conn:
+        conn.execute(
+            "create table if not exists page_sources "
+            "(source text primary key, language text not null)"
+        )
+        conn.executemany(
+            "insert into page_sources (source, language) values (?, ?) "
+            "on conflict(source) do update set language = excluded.language",
+            sorted(languages.items()),
+        )
+
+
 def upsert_fetch_result(db_path: Path, result: FetchResult) -> None:
     metadata = result.metadata
     columns = PageMetadata.db_columns()

@@ -6,8 +6,13 @@ import time
 from pydantic import BaseModel, Field
 
 from src.retrieval.base import RankedChunk, Retriever, retrieve_batch_default
-from src.shared.llm import LocalOllamaStructuredLlm, StructuredLlm
+from src.shared.llm import (
+    AzureFoundryStructuredLlm,
+    LocalOllamaStructuredLlm,
+    StructuredLlm,
+)
 
+DEFAULT_JUDGE_PROVIDER = "ollama"
 DEFAULT_JUDGE_MODEL = "gpt-oss:20b"
 DEFAULT_JUDGE_REASONING = "low"
 DEFAULT_JUDGE_NUM_CTX = 32_768
@@ -180,15 +185,41 @@ class AgenticRetriever:
         return _judge_locally(prompt, retries=self.judge_retries, judge=self.judge)
 
 
-def default_judge(config: dict | None = None) -> LocalOllamaStructuredLlm:
-    """Local Ollama judge used when a retriever does not inject its own."""
+def default_judge(config: dict | None = None) -> StructuredLlm:
+    """The judge every agent uses unless a retriever injects its own.
+
+    `agentic_judge_provider` picks the backend. `azure` is the Azure AI Foundry
+    deployment named by `AZURE_AI_MODEL` (DeepSeek); the `agentic_judge_model` /
+    reasoning / structured-method settings are Ollama-only and ignored for it.
+    `ollama` is the local judge those settings describe. Both share retries,
+    the retry temperature and the circuit breaker.
+    """
     config = config or {}
+    provider = str(config.get("agentic_judge_provider", DEFAULT_JUDGE_PROVIDER))
+    if provider == "azure":
+        return AzureFoundryStructuredLlm.from_env(
+            max_tokens=config.get(
+                "agentic_judge_num_predict", DEFAULT_JUDGE_NUM_PREDICT
+            ),
+            timeout_seconds=config.get("agentic_judge_azure_timeout_seconds", 90),
+            retry_temperature=config.get("agentic_judge_retry_temperature", 0.3),
+            max_failure_rate=config.get("agentic_judge_max_failure_rate"),
+            breaker_min_calls=config.get("agentic_judge_breaker_min_calls", 20),
+        )
+    if provider != "ollama":
+        raise ValueError(
+            f"agentic_judge_provider must be 'azure' or 'ollama', got {provider!r}"
+        )
     return LocalOllamaStructuredLlm(
         model_id=config.get("agentic_judge_model", DEFAULT_JUDGE_MODEL),
         reasoning=config.get("agentic_judge_reasoning", DEFAULT_JUDGE_REASONING),
         num_ctx=config.get("agentic_judge_num_ctx", DEFAULT_JUDGE_NUM_CTX),
         num_predict=config.get("agentic_judge_num_predict", DEFAULT_JUDGE_NUM_PREDICT),
         method=config.get("agentic_judge_structured_method", DEFAULT_JUDGE_METHOD),
+        retry_temperature=config.get("agentic_judge_retry_temperature", 0.3),
+        keep_alive=config.get("agentic_judge_keep_alive"),
+        max_failure_rate=config.get("agentic_judge_max_failure_rate"),
+        breaker_min_calls=config.get("agentic_judge_breaker_min_calls", 20),
     )
 
 

@@ -1,7 +1,8 @@
 import sqlite3
 
+import pytest
+
 from src.indexing.chunk_text import (
-    MetadataContextChunkText,
     PageChunk,
     TitleHeadingChunkText,
     chunk_text_representation,
@@ -37,6 +38,26 @@ def test_chunk_markdown_splits_long_paragraph():
     assert all(len(chunk.text) <= 500 for chunk in chunks)
 
 
+def test_chunk_markdown_hard_split_can_overshoot_by_one_without_overlap():
+    text = "x" * 21
+
+    chunks = chunk_markdown(
+        f"# Title\n\n{text}", target_chars=10, max_chars=10, min_chars=1
+    )
+
+    assert [chunk.text for chunk in chunks] == ["x" * 11, "x" * 10]
+    assert "".join(chunk.text for chunk in chunks) == text
+
+
+def test_chunk_markdown_drops_short_fragments_only_for_multi_chunk_pages():
+    markdown = "# One\n\nLong enough text.\n\n# Two\n\nTiny"
+
+    chunks = chunk_markdown(markdown, target_chars=20, max_chars=30, min_chars=10)
+
+    assert [chunk.text for chunk in chunks] == ["Long enough text."]
+    assert chunk_markdown("# One\n\nTiny", min_chars=10)[0].text == "Tiny"
+
+
 def test_embedding_text_uses_chunk_context():
     text = TitleHeadingChunkText().text_for_embedding(
         PageChunk(
@@ -51,29 +72,10 @@ def test_embedding_text_uses_chunk_context():
     assert text == "Castle\nHistory\nFull chunk text."
 
 
-def test_metadata_context_embedding_text_uses_page_metadata():
-    text = MetadataContextChunkText().text_for_embedding(
-        PageChunk(
-            id="chunk-1",
-            page_id="page-1",
-            title="Castle",
-            heading_path="History",
-            text="Full chunk text.",
-            source="encyclopedia",
-            language="sl",
-            page_kind="prose",
-        )
-    )
-
-    assert text == (
-        "Document: Castle\n"
-        "Section: History\n"
-        "Source language: sl\n"
-        "Source collection: encyclopedia\n"
-        "Document type: prose\n"
-        "Content:\nFull chunk text."
-    )
-    assert chunk_text_representation("v2").name == "metadata_context_chunk"
+def test_only_v1_is_registered():
+    assert chunk_text_representation("v1").name == "title_heading_chunk"
+    with pytest.raises(ValueError, match="Unknown chunk representation"):
+        chunk_text_representation("v2")
 
 
 def test_rebuild_page_chunks_appends_new_pages_without_dropping_labels(
@@ -126,10 +128,13 @@ def _write_existing_labeled_chunk_fixture(path):
               id text primary key,
               page_id text not null references page_metadata(id) on delete cascade,
               chunk_index integer not null,
+              variant text not null default 'base',
               heading_path text,
               text text not null,
               char_count integer not null,
-              unique(page_id, chunk_index)
+              start_char integer,
+              end_char integer,
+              unique(page_id, variant, chunk_index)
             );
             create table eval_questions (
               id text primary key,

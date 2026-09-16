@@ -44,8 +44,9 @@ just okf-benchmark
 ```
 
 OKF is not part of the default retrieval benchmark. To score it against chunk
-RAG, use `just okf-benchmark`, or pass `--methods okf-only` to
-`experiments/indexing/compare_qwen_modes.py` for concept-level scoring.
+RAG, use `just okf-benchmark` (`experiments/indexing/compare_okf_rag.py`);
+the concept-level `--methods okf-only` mode of `compare_qwen_modes.py` was
+removed when OKF was measured out.
 
 ### Resume and clean rebuilds
 

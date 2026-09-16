@@ -9,8 +9,40 @@ metric_ks:
   - 10
 mrr_k: 10
 category_hit_k: 5
+
+# Context allowances, in characters, for the span metrics in src/eval/metrics.py.
+# Comparing chunkings at a fixed k rewards large chunks for their size; comparing
+# them at a fixed budget asks the question that decides the indexing choice — with
+# this much room in the prompt, which cut delivers more of the answer? The lower
+# figure holds roughly one 1,024-token Slovenian chunk (~0.41 tokens per
+# character), so every variant can place at least one.
+char_budgets:
+  - 4000
 model_aliases:
   gemma4:26b: gemma4:26b-a4b-it-q4_K_M
 question_model_num_ctx: 8192
 question_model_num_predict: 4096
 question_model_reasoning: false
+
+# Density-normalised question generation (`generate_dataset.py --density`).
+# One question per this many of a chunk's own tokens, which is what makes the
+# question set comparable across chunkings: 256 gets one question, 512 two, 1024
+# four, so every variant covers the same corpus at the same question density and
+# their totals match. The alternative — one question per type per chunk, whatever
+# its size — probed tok256 4x more densely than tok1024 (7,801 questions against
+# 1,451) and gave the large cut the more salient facts as well.
+# The provider is whose tokenizer counts: the same one the token-sized variants
+# were cut with, so the budget and the chunk boundaries agree.
+question_density_tokens: 256
+question_density_provider: qwen
+
+# Answer anchoring (src/eval/anchors.py). Measured, not assumed: gemma4 returns a
+# bare string instead of the object for a single-field schema via json_schema —
+# 15/100 quotes placed. gpt-oss through tool calls is the combination this repo
+# has already validated for Slovenian structured output. Re-measure on ~10
+# questions before changing either value.
+anchor_model: gpt-oss:20b
+anchor_structured_method: function_calling
+anchor_num_ctx: 8192
+anchor_num_predict: 512
+anchor_reasoning: low

@@ -25,6 +25,9 @@ config = fetch_pages_config()
 class SourceUrl:
     source: str
     url: str
+    # Optional in the seed file: the source's language for `page_sources`,
+    # so a non-Slovenian source does not fall back to the configured default.
+    language: str | None = None
 
 
 @dataclass(frozen=True)
@@ -68,8 +71,9 @@ def read_source_urls(path: Path) -> list[SourceUrl]:
     for row in rows:
         source = str(row["source"]).strip()
         url = str(row["url"]).strip()
+        language = str(row.get("language") or "").strip() or None
         if source and url:
-            source_urls.append(SourceUrl(source=source, url=url))
+            source_urls.append(SourceUrl(source=source, url=url, language=language))
     return source_urls
 
 

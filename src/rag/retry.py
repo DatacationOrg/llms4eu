@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Protocol
 
+from src.shared.geo_scope import GeoScope
+
 
 __all__ = [
     "AgentSearchState",
@@ -88,22 +90,35 @@ class FallbackEmbeddingModel:
         return None
 
 
+_SCOPE_KEYS = frozenset({"nuts2_region", "country_code"})
+
+
 @dataclass(frozen=True)
 class WiderGeoFilter:
+    """Drop the most specific geographic criterion: NUTS-2, then country.
+
+    The filter dict is `GeoScope.to_legacy_filter()`; widening is the scope's
+    own `widen()`, so this strategy and the geo retrievers agree on the order.
+    """
+
     name: str = "wider_geo_filter"
 
     def apply(self, state: AgentSearchState) -> AgentSearchState | None:
         if not state.geo_filter:
             return None
-
-        next_filter = dict(state.geo_filter)
-        if "nuts2_region" in next_filter:
-            next_filter.pop("nuts2_region")
-        elif "country_code" in next_filter:
-            next_filter.pop("country_code")
+        scope = GeoScope.from_legacy_filter(state.geo_filter)
+        # Keys the scope does not know (a caller's own filter) ride along
+        # untouched; once only those are left, the filter is dropped whole.
+        extras = {
+            key: value
+            for key, value in state.geo_filter.items()
+            if key not in _SCOPE_KEYS
+        }
+        if scope is not None and scope.filters:
+            wider = scope.widen()
+            next_filter = {**(wider.to_legacy_filter() if wider else {}), **extras}
         else:
             next_filter = {}
-
         if next_filter == state.geo_filter:
             return None
 

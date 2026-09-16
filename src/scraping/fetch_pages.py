@@ -10,7 +10,11 @@ from src.scraping.page_fetch import (
     fetch_page,
     read_source_urls,
 )
-from src.scraping.page_store import initialize_raw_pages_db, upsert_fetch_result
+from src.scraping.page_store import (
+    initialize_raw_pages_db,
+    record_source_languages,
+    upsert_fetch_result,
+)
 from src.scraping.settings import fetch_pages_config
 from src.shared.env import ROOT, load_local_env
 
@@ -27,6 +31,9 @@ def scrape_source_file(
 ) -> dict[str, int]:
     source_urls = read_source_urls(source_path)
     initialize_raw_pages_db(db_path)
+    record_source_languages(
+        db_path, {s.source: s.language for s in source_urls if s.language}
+    )
 
     throttle = DomainThrottle(domain_delay_seconds)
     counts = {"total": len(source_urls), "ok": 0, "failed": 0, "non_html": 0}

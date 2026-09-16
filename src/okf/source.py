@@ -26,7 +26,7 @@ def load_source_pages(
         conn.row_factory = sqlite3.Row
         sql = """
             select m.id, m.source, m.url, coalesce(m.title, '') as title,
-                   coalesce(s.language, '') as language, c.markdown
+                   coalesce(m.language, s.language, '') as language, c.markdown
             from page_metadata m
             join page_markdown_content c on c.page_id = m.id
             left join page_sources s on s.source = m.source

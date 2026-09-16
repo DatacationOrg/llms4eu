@@ -89,13 +89,13 @@ def test_source_adapter_reads_only_eligible_complete_pages(tmp_path):
             """
             create table page_metadata (
               id text primary key, source text, url text, title text,
-              error text, page_kind text
+              error text, page_kind text, language text
             );
             create table page_markdown_content (page_id text, markdown text);
             create table page_sources (source text primary key, language text);
             insert into page_sources values ('castle', 'sl');
-            insert into page_metadata values ('ok', 'castle', 'https://a', 'A', null, 'prose');
-            insert into page_metadata values ('bad', 'castle', 'https://b', 'B', 'failed', 'empty');
+            insert into page_metadata values ('ok', 'castle', 'https://a', 'A', null, 'prose', null);
+            insert into page_metadata values ('bad', 'castle', 'https://b', 'B', 'failed', 'empty', null);
             insert into page_markdown_content values ('ok', '# Whole page');
             insert into page_markdown_content values ('bad', '');
             """
@@ -149,12 +149,12 @@ def test_generation_writes_provenance_and_resumes(monkeypatch, tmp_path):
             """
             create table page_metadata (
               id text primary key, source text, url text, title text,
-              error text, page_kind text
+              error text, page_kind text, language text
             );
             create table page_markdown_content (page_id text, markdown text);
             create table page_sources (source text primary key, language text);
             insert into page_sources values ('castle', 'en');
-            insert into page_metadata values ('p1', 'castle', 'https://example.test/castle', 'Castle', null, 'prose');
+            insert into page_metadata values ('p1', 'castle', 'https://example.test/castle', 'Castle', null, 'prose', null);
             insert into page_markdown_content values ('p1', '# Complete source page');
             """
         )
