@@ -20,13 +20,12 @@ config = fetch_pages_config()
 
 def scrape_source_file(
     source_path: Path,
-    db_path: Path,
     workers: int = config.workers,
     domain_delay_seconds: float = config.domain_delay_seconds,
     timeout: float = config.timeout_seconds,
 ) -> dict[str, int]:
     source_urls = read_source_urls(source_path)
-    initialize_raw_pages_db(db_path)
+    initialize_raw_pages_db()
 
     throttle = DomainThrottle(domain_delay_seconds)
     counts = {"total": len(source_urls), "ok": 0, "failed": 0, "non_html": 0}
@@ -48,7 +47,7 @@ def scrape_source_file(
                     timeout,
                 )
 
-            upsert_fetch_result(db_path, result)
+            upsert_fetch_result(result)
             status = _record_count(counts, result)
             print(f"{status}: {source_url.url}", flush=True)
 
@@ -86,10 +85,8 @@ def main() -> None:
     args = parser.parse_args()
 
     load_local_env()
-    db_path = pages_db()
     counts = scrape_source_file(
         source_path=args.source_file,
-        db_path=db_path,
         workers=args.workers,
         domain_delay_seconds=args.domain_delay,
         timeout=args.timeout,
@@ -97,7 +94,7 @@ def main() -> None:
     print(
         "finished: "
         f"total={counts['total']} ok={counts['ok']} "
-        f"failed={counts['failed']} non_html={counts['non_html']} db={db_path}"
+        f"failed={counts['failed']} non_html={counts['non_html']} db={pages_db()}"
     )
 
 
