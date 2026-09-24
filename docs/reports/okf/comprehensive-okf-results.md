@@ -1,7 +1,7 @@
 # Comprehensive OKF and Chunk Retrieval Results
 
 This document combines the results from [okf_benchmark.md](okf_benchmark.md) and
-[retrieval-results-chunks-okf.md](retrieval-results-chunks-okf.md). Empty cells
+[retrieval-results-chunks-okf.md](../retrieval/retrieval-results-comprehensive-2026-09-07.md). Empty cells
 mean that the source report did not provide the metric.
 
 The two runs should not be compared as if they were one evaluation:
@@ -67,7 +67,7 @@ quality scoring.
 
 | field | OKF benchmark | Chunk/agentic benchmark |
 |---|---|---|
-| Source report | [okf_benchmark.md](okf_benchmark.md) | [retrieval-results-chunks-okf.md](retrieval-results-chunks-okf.md) |
+| Source report | [okf_benchmark.md](okf_benchmark.md) | [retrieval-results-chunks-okf.md](../retrieval/retrieval-results-comprehensive-2026-09-07.md) |
 | Evaluation status |  | In progress |
 | Evaluated/aligned questions | 396 | 264 |
 | Planned questions |  | 3,471 |

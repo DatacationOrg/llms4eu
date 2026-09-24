@@ -20,7 +20,7 @@ retrieval path calls a hosted API.
 Hybrid + rerank is the strongest measured configuration. The agentic
 sufficiency and query-reformulation loop was removed after it measured below
 that baseline while spending an LLM call per attempt; the findings are in
-[`docs/agentic-findings.md`](../../docs/agentic-findings.md).
+[`docs/reports/agentic/agentic-findings.md`](../../docs/reports/agentic/agentic-findings.md).
 
 Retrieval tuning lives in `config.yaml`. Enabled vector providers come from
 `src/indexing/config.yaml`; eval defaults come from `src/eval/config.yaml`.

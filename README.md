@@ -88,5 +88,6 @@ tools and shared infrastructure are available.
 ## Docs
 
 - [docs/architecture-decisions.md](docs/architecture-decisions.md): durable decisions and why they matter.
-- [docs/](docs/): retrieval, OKF and agentic result reports, including the
-  findings from experiments whose code has since been removed.
+- [docs/README.md](docs/README.md): index of the dated research reports, including
+  experiments whose code has since been removed. Start with
+  [docs/reports/all-runs-unified-2026-09-14.md](docs/reports/all-runs-unified-2026-09-14.md).

@@ -106,7 +106,7 @@ private path when a run should not touch the shared store.
 ## Open Knowledge Format (removed 2026-09-14, kept as a record)
 
 > The code described below was deleted. Nothing in `src/` implements it
-> today; the results are in `docs/comprehensive-okf-results.md`.
+> today; the results are in `docs/reports/okf/comprehensive-okf-results.md`.
 
 The OKF experiment is a second knowledge representation over the same canonical
 raw pages, not another chunk retriever.
