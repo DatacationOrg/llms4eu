@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 from contextlib import suppress
 from functools import cache
 from pathlib import Path
@@ -79,7 +80,10 @@ def collection_ready(
     if not collection_exists(provider):
         return False
     collection = _client().get_collection(_collection_name(provider))
-    return collection.count() == _chunk_count()
+    digest = (collection.metadata or {}).get("chunks_digest")
+    if digest is None:  # indexed before digests; fall back to the count
+        return collection.count() == _chunk_count()
+    return digest == _chunks_digest()
 
 
 def rebuild_chunk_collection(provider: str) -> None:
@@ -94,7 +98,7 @@ def rebuild_chunk_collection(provider: str) -> None:
         client.delete_collection(collection_name)
     collection = client.create_collection(
         collection_name,
-        metadata={"hnsw:space": "cosine"},
+        metadata={"hnsw:space": "cosine", "chunks_digest": _chunks_digest()},
     )
 
     indexer = build_indexer(provider, CONFIG)
@@ -161,6 +165,15 @@ def _metadata(chunk: PageChunk) -> dict:
 def _chunk_count() -> int:
     with connect() as conn:
         return int(conn.execute("select count(*) from page_chunks").fetchone()[0])
+
+
+def _chunks_digest() -> str:
+    """Fingerprint of every chunk id and text, so a rechunk invalidates the index."""
+    digest = hashlib.sha256()
+    with connect() as conn:
+        for row in conn.execute("select id, text from page_chunks order by id"):
+            digest.update(f"{row['id']}\0{row['text']}\0".encode())
+    return digest.hexdigest()
 
 
 def _chunk_texts(ids: list[str]) -> dict[str, str]:

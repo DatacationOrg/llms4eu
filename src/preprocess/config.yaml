@@ -1,3 +1,5 @@
-chunk_target_chars: 1800
-chunk_max_chars: 2600
+# Characters, not tokens: one chunk set serves every embedder's tokenizer.
+chunk_size: 1800
+chunk_overlap: 0
+# Shorter chunks are merged into the previous one instead of standing alone.
 chunk_min_chars: 300

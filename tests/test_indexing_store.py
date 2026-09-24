@@ -49,6 +49,13 @@ def test_chunk_collection_rebuild_readiness_and_query(monkeypatch, page_db):
     assert [hit.id for hit in batch_hits[0]] == ["chunk-castle"]
     assert [hit.id for hit in batch_hits[1]] == ["chunk-forest"]
 
+    with sqlite3.connect(page_db) as conn:
+        conn.execute(
+            "update page_chunks set text = 'Rechunked.' where id = 'chunk-castle'"
+        )
+    assert not collection_ready("qwen")
+    rebuild_chunk_collection("qwen")
+
     monkeypatch.setitem(chunk_vectors.CONFIG, "query_batch_size", 1)
     small_batch_hits = query_chunk_vectors_batch(
         "qwen",

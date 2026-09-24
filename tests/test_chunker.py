@@ -15,7 +15,7 @@ Intro text with enough factual detail about the castle and its location.
 The castle was first mentioned in 895. It stands above the Sava river.
 """
 
-    chunks = chunk_markdown(markdown, target_chars=120, max_chars=180, min_chars=20)
+    chunks = chunk_markdown(markdown, size=120, overlap=0, min_chars=20)
 
     assert len(chunks) == 2
     assert chunks[0].heading_path == "Castle"
@@ -26,10 +26,31 @@ The castle was first mentioned in 895. It stands above the Sava river.
 def test_chunk_markdown_splits_long_paragraph():
     markdown = "# Title\n\n" + "Sentence about Rajhenburg. " * 80
 
-    chunks = chunk_markdown(markdown, target_chars=300, max_chars=450, min_chars=20)
+    chunks = chunk_markdown(markdown, size=300, overlap=0, min_chars=20)
 
     assert len(chunks) > 1
-    assert all(len(chunk.text) <= 500 for chunk in chunks)
+    assert all(len(chunk.text) <= 300 for chunk in chunks)
+
+
+def test_chunk_markdown_overlaps_trailing_paragraphs():
+    paragraphs = [f"Paragraph {i} about the castle." for i in range(6)]
+    markdown = "# T\n\n" + "\n\n".join(paragraphs)
+
+    chunks = chunk_markdown(markdown, size=90, overlap=40, min_chars=0)
+
+    assert len(chunks) > 1
+    for before, after in zip(chunks, chunks[1:]):
+        assert after.text.split("\n\n")[0] == before.text.split("\n\n")[-1]
+        assert len(after.text) <= 90
+
+
+def test_chunk_markdown_merges_short_chunks_instead_of_dropping_them():
+    markdown = "# Castle\n\n" + "Long history sentence. " * 10 + "\n\n## Note\n\nShort."
+
+    chunks = chunk_markdown(markdown, size=1000, overlap=0, min_chars=50)
+
+    assert len(chunks) == 1
+    assert chunks[0].text.endswith("Castle > Note\n\nShort.")
 
 
 def test_embedding_text_is_title_breadcrumbs_then_chunk():

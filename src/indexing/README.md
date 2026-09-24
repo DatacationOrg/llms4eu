@@ -21,6 +21,11 @@ page_chunks_<provider>_chunk
 Each chunk is embedded as its page title, heading breadcrumbs, and chunk text,
 joined by newlines. The retrieved evidence is always the original chunk text.
 
+Every provider reads up to the shared `embedding_max_seq_length` tokens. A
+document longer than that fails indexing with its token count instead of being
+silently truncated; raise the limit or lower `chunk_size` in
+`src/preprocess/config.yaml`.
+
 Model and collection settings live in `config.yaml`.
 
 Rebuild one collection:

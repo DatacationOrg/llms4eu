@@ -52,7 +52,7 @@ class SentenceTransformerIndexer:
             texts=texts,
             embed_missing=lambda missing: embed_texts(
                 self._model(),
-                missing,
+                self._fitting(missing),
                 prompt_name=self._prompt_name("document"),
                 batch_size=self.batch_size,
                 show_progress_bar=self.show_progress_bar,
@@ -93,6 +93,18 @@ class SentenceTransformerIndexer:
             )
         model.max_seq_length = self.max_seq_length
         return model
+
+    def _fitting(self, texts: list[str]) -> list[str]:
+        """Refuse documents the model would silently truncate."""
+        lengths = [len(ids) for ids in self._model().tokenizer(texts)["input_ids"]]
+        too_long = [n for n in lengths if n > self.max_seq_length]
+        if too_long:
+            raise ValueError(
+                f"{len(too_long)} documents exceed {self.max_seq_length} tokens for "
+                f"{self.name} (longest {max(too_long)}). Raise "
+                "embedding_max_seq_length or lower chunk_size."
+            )
+        return texts
 
     def _prompt_name(self, kind: str) -> str | None:
         prompts = self._model().prompts or {}

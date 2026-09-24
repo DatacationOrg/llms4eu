@@ -22,32 +22,56 @@ class Chunk:
 
 def chunk_markdown(
     markdown: str,
-    target_chars: int | None = None,
-    max_chars: int | None = None,
+    size: int | None = None,
+    overlap: int | None = None,
     min_chars: int | None = None,
 ) -> list[Chunk]:
-    target_chars = target_chars or CONFIG["chunk_target_chars"]
-    max_chars = max_chars or CONFIG["chunk_max_chars"]
-    min_chars = min_chars or CONFIG["chunk_min_chars"]
-    sections = _sections(markdown)
-    chunks: list[Chunk] = []
-    for heading_path, paragraphs in sections:
-        current: list[str] = []
-        current_chars = 0
-        for paragraph in paragraphs:
-            for piece in _split_long_paragraph(paragraph, max_chars):
-                if current and current_chars + len(piece) + 2 > target_chars:
-                    chunks.append(Chunk(heading_path, "\n\n".join(current)))
-                    current = []
-                    current_chars = 0
-                current.append(piece)
-                current_chars += len(piece) + 2
-        if current:
-            chunks.append(Chunk(heading_path, "\n\n".join(current)))
+    """Pack each section's paragraphs into chunks of about `size` characters.
 
-    if len(chunks) == 1:
-        return chunks
-    return [chunk for chunk in chunks if len(chunk.text) >= min_chars]
+    Consecutive chunks of a section share up to `overlap` characters of trailing
+    paragraphs. A chunk shorter than `min_chars` is merged into the one before
+    it rather than dropped, so no page text is lost.
+    """
+    size = size or CONFIG["chunk_size"]
+    overlap = CONFIG["chunk_overlap"] if overlap is None else overlap
+    min_chars = CONFIG["chunk_min_chars"] if min_chars is None else min_chars
+    chunks: list[Chunk] = []
+    for heading_path, paragraphs in _sections(markdown):
+        pieces = [p for text in paragraphs for p in _split_long_paragraph(text, size)]
+        for text in _pack(pieces, size, overlap):
+            if chunks and len(text) < min_chars:
+                previous = chunks[-1]
+                if previous.heading_path != heading_path and heading_path:
+                    text = f"{heading_path}\n\n{text}"
+                chunks[-1] = Chunk(previous.heading_path, f"{previous.text}\n\n{text}")
+            else:
+                chunks.append(Chunk(heading_path, text))
+    return chunks
+
+
+def _pack(pieces: list[str], size: int, overlap: int) -> list[str]:
+    # ponytail: overlap is whole paragraphs/sentences, so a piece longer than
+    # `overlap` is never repeated; split pieces finer if overlap must be exact.
+    texts: list[str] = []
+    current: list[str] = []
+    for piece in pieces:
+        if current and _length(current + [piece]) > size:
+            texts.append("\n\n".join(current))
+            carry: list[str] = []
+            for previous in reversed(current):
+                candidate = [previous, *carry]
+                if _length(candidate) > overlap or _length(candidate + [piece]) > size:
+                    break
+                carry = candidate
+            current = carry
+        current.append(piece)
+    if current:
+        texts.append("\n\n".join(current))
+    return texts
+
+
+def _length(pieces: list[str]) -> int:
+    return sum(len(piece) for piece in pieces) + 2 * (len(pieces) - 1)
 
 
 def rebuild_page_chunks() -> None:
