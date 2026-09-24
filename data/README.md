@@ -6,8 +6,9 @@ list and the labelled gold-standard corpus.
 
 The expanded corpus (nine more localities in eight countries, 2026-09-13) stays
 on the shared store: `/data/llms4eu/data/seeds/<cluster>.json` and
-`/data/llms4eu/v2/seeds/corpus-v2.json`, same row shape, fetched with
-`just fetch-pages <file>`.
+`/data/llms4eu/v2/seeds/corpus-v2.json`, fetched with `just fetch-pages <file>`.
+Their rows also carry a `language`, which fetching ignores: each page's language
+is read from the page itself.
 
 Everything derived lives outside the repo under `$LLMS4EU_DATA` (default
 `/data/llms4eu`): `db/pages.db` holds scraped pages, chunks and eval labels;
