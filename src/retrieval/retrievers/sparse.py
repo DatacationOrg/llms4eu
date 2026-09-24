@@ -6,39 +6,27 @@ from collections import Counter
 from dataclasses import dataclass
 from functools import cache
 
-from src.db.pages import load_chunk_rows
-from src.indexing.chunk_text import (
-    LEGACY_CHUNK_VERSION,
-    PageChunk,
-    chunk_text_representation,
-)
-from src.preprocess.chunks import BASE_CHUNK_VARIANT
-from src.retrieval.base import RankedChunk, retrieve_batch_default
+from pathlib import Path
 
+from src.db.pages import connect_pages as connect
+from src.retrieval.base import RankedChunk, retrieve_batch_default
+from src.shared.env import load_yaml
+
+CONFIG = load_yaml(Path(__file__).parents[1] / "config.yaml")
 TOKEN_RE = re.compile(r"[^\W_]+", re.UNICODE)
 
 
 @dataclass(frozen=True)
 class SparseRetriever:
     name: str = "sparse"
-    k1: float = 1.5
-    b: float = 0.75
-    chunk_version: str = LEGACY_CHUNK_VERSION
-    variant: str = BASE_CHUNK_VARIANT
-    # A geo scope's page set. Applied inside the scan rather than to the cached
-    # corpus, so the corpus stays one shared object per (version, variant).
-    allowed_page_ids: frozenset[str] | None = None
+    k1: float = CONFIG["sparse_k1"]
+    b: float = CONFIG["sparse_b"]
 
     def retrieve(self, query: str, limit: int) -> list[RankedChunk]:
-        corpus = _corpus(self.chunk_version, self.variant)
+        corpus = _corpus()
         query_terms = _tokens(query)
         scores = []
         for chunk in corpus:
-            if (
-                self.allowed_page_ids is not None
-                and chunk.page_id not in self.allowed_page_ids
-            ):
-                continue
             score = 0.0
             for term in query_terms:
                 term_frequency = chunk.term_counts.get(term, 0)
@@ -65,7 +53,6 @@ class SparseRetriever:
 @dataclass(frozen=True)
 class ChunkTerms:
     id: str
-    page_id: str
     text: str
     term_counts: Counter[str]
     length: int
@@ -82,30 +69,17 @@ class Corpus:
 
 
 @cache
-def _corpus(
-    chunk_version: str = LEGACY_CHUNK_VERSION,
-    variant: str = BASE_CHUNK_VARIANT,
-) -> Corpus:
-    # The cache key must carry the variant as well as the version: keyed on the
-    # version alone, a second variant silently reuses the first one's corpus.
-    representation = chunk_text_representation(chunk_version)
-    rows = load_chunk_rows(variant)
+def _corpus() -> Corpus:
+    # BM25 indexes the raw chunk text; title and breadcrumbs are dense-side context.
+    with connect() as conn:
+        rows = conn.execute("select id, text from page_chunks order by id").fetchall()
 
     chunks = []
     document_frequency: Counter[str] = Counter()
     for row in rows:
-        chunk = PageChunk.from_row(row)
-        terms = _tokens(
-            chunk.text
-            if chunk_version == LEGACY_CHUNK_VERSION
-            else representation.text_for_embedding(chunk)
-        )
+        terms = _tokens(row["text"])
         term_counts = Counter(terms)
-        chunks.append(
-            ChunkTerms(
-                chunk.id, chunk.page_id, chunk.text, term_counts, len(terms) or 1
-            )
-        )
+        chunks.append(ChunkTerms(row["id"], row["text"], term_counts, len(terms) or 1))
         document_frequency.update(term_counts.keys())
 
     document_count = len(chunks)

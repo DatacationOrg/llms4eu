@@ -4,6 +4,8 @@ import trafilatura
 
 
 EXTRACTOR_NAME = "trafilatura"
+# Shared by markdown_needs_browser_render and _looks_like_web_chrome.
+WEB_CHROME_MARKERS = ("accessibility provided by", "](#)")
 
 
 def extract_markdown(html: str, url: str | None = None) -> str:
@@ -40,14 +42,9 @@ def markdown_needs_browser_render(markdown: str) -> bool:
         "just a moment",
         "access denied",
         "captcha",
-        "accessibility provided by",
-        "](#)",
+        *WEB_CHROME_MARKERS,
     )
     return any(marker in lowered for marker in junk_markers)
-
-
-def markdown_looks_like_contact_footer(markdown: str) -> bool:
-    return _looks_like_contact_footer(markdown)
 
 
 def clean_markdown(markdown: str) -> str:
@@ -76,10 +73,10 @@ def clean_markdown(markdown: str) -> str:
 
 def _looks_like_web_chrome(markdown: str) -> bool:
     lowered = _normalized_lower(markdown)
-    return "accessibility provided by" in lowered or "](#)" in markdown
+    return any(marker in lowered for marker in WEB_CHROME_MARKERS)
 
 
-def _looks_like_contact_footer(markdown: str) -> bool:
+def markdown_looks_like_contact_footer(markdown: str) -> bool:
     if len(markdown) > 400:
         return False
     lowered = _normalized_lower(markdown)

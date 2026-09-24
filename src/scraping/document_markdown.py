@@ -13,7 +13,7 @@ from docling.datamodel.pipeline_options import PdfPipelineOptions
 from docling.document_converter import DocumentConverter, PdfFormatOption
 
 from src.scraping.extract_markdown import clean_markdown
-from src.scraping.scraper import HEADERS
+from src.scraping.page_fetch import HEADERS
 from src.scraping.settings import fetch_pages_config
 
 
@@ -39,18 +39,9 @@ def extract_first_document_markdown(
     html: str,
     page_url: str,
     timeout: float,
-    max_bytes: int | None = None,
-    max_pages: int | None = None,
 ) -> DocumentMarkdownResult | None:
-    max_bytes = max_bytes or config.max_document_bytes
-    max_pages = max_pages or config.max_document_pages
     for link in find_document_links(html, page_url):
-        result = document_url_to_markdown(
-            link.url,
-            timeout=timeout,
-            max_bytes=max_bytes,
-            max_pages=max_pages,
-        )
+        result = document_url_to_markdown(link.url, timeout=timeout)
         if result.markdown.strip():
             title = link.label.strip()
             prefix = f"# {title}\n\n" if title else ""
@@ -80,23 +71,12 @@ def find_document_links(html: str, page_url: str) -> list[DocumentLink]:
     return _deduplicate_links(links)
 
 
-def document_url_to_markdown(
-    url: str,
-    timeout: float,
-    max_bytes: int | None = None,
-    max_pages: int | None = None,
-) -> DocumentMarkdownResult:
-    max_bytes = max_bytes or config.max_document_bytes
-    max_pages = max_pages or config.max_document_pages
+def document_url_to_markdown(url: str, timeout: float) -> DocumentMarkdownResult:
+    max_bytes = config.max_document_bytes
     try:
         content = _download_document(url, timeout=timeout, max_bytes=max_bytes)
     except Exception as exc:
-        return DocumentMarkdownResult(
-            markdown="",
-            url=url,
-            bytes_read=0,
-            error=f"document download failed: {type(exc).__name__}: {exc}",
-        )
+        return _failed(url, 0, f"document download failed: {type(exc).__name__}: {exc}")
 
     suffix = Path(urlparse(url).path).suffix.lower() or ".pdf"
     try:
@@ -107,25 +87,21 @@ def document_url_to_markdown(
             result = converter.convert(
                 tmp.name,
                 max_file_size=max_bytes,
-                max_num_pages=max_pages,
+                max_num_pages=config.max_document_pages,
             )
     except Exception as exc:
-        return DocumentMarkdownResult(
-            markdown="",
-            url=url,
-            bytes_read=len(content),
-            error=f"document conversion failed: {type(exc).__name__}: {exc}",
+        return _failed(
+            url,
+            len(content),
+            f"document conversion failed: {type(exc).__name__}: {exc}",
         )
 
     if result.status not in {
         ConversionStatus.SUCCESS,
         ConversionStatus.PARTIAL_SUCCESS,
     }:
-        return DocumentMarkdownResult(
-            markdown="",
-            url=url,
-            bytes_read=len(content),
-            error=f"document conversion status: {result.status}",
+        return _failed(
+            url, len(content), f"document conversion status: {result.status}"
         )
 
     markdown = clean_markdown(result.document.export_to_markdown())
@@ -173,17 +149,19 @@ def _document_converter() -> DocumentConverter:
     )
 
 
+def _failed(url: str, bytes_read: int, error: str) -> DocumentMarkdownResult:
+    return DocumentMarkdownResult(
+        markdown="", url=url, bytes_read=bytes_read, error=error
+    )
+
+
 def _looks_like_document_url(url: str) -> bool:
     path = urlparse(url).path.lower()
     return any(path.endswith(extension) for extension in config.document_extensions)
 
 
 def _deduplicate_links(links: list[DocumentLink]) -> list[DocumentLink]:
-    seen: set[str] = set()
-    unique_links: list[DocumentLink] = []
+    seen: dict[str, DocumentLink] = {}
     for link in links:
-        if link.url in seen:
-            continue
-        seen.add(link.url)
-        unique_links.append(link)
-    return unique_links
+        seen.setdefault(link.url, link)
+    return list(seen.values())

@@ -10,13 +10,9 @@ from src.scraping.page_fetch import (
     fetch_page,
     read_source_urls,
 )
-from src.scraping.page_store import (
-    initialize_raw_pages_db,
-    record_source_languages,
-    upsert_fetch_result,
-)
+from src.scraping.page_store import initialize_raw_pages_db, upsert_fetch_result
 from src.scraping.settings import fetch_pages_config
-from src.shared.env import ROOT, load_local_env
+from src.shared.env import load_local_env, pages_db
 
 
 config = fetch_pages_config()
@@ -24,16 +20,12 @@ config = fetch_pages_config()
 
 def scrape_source_file(
     source_path: Path,
-    db_path: Path,
     workers: int = config.workers,
     domain_delay_seconds: float = config.domain_delay_seconds,
     timeout: float = config.timeout_seconds,
 ) -> dict[str, int]:
     source_urls = read_source_urls(source_path)
-    initialize_raw_pages_db(db_path)
-    record_source_languages(
-        db_path, {s.source: s.language for s in source_urls if s.language}
-    )
+    initialize_raw_pages_db()
 
     throttle = DomainThrottle(domain_delay_seconds)
     counts = {"total": len(source_urls), "ok": 0, "failed": 0, "non_html": 0}
@@ -55,7 +47,7 @@ def scrape_source_file(
                     timeout,
                 )
 
-            upsert_fetch_result(db_path, result)
+            upsert_fetch_result(result)
             status = _record_count(counts, result)
             print(f"{status}: {source_url.url}", flush=True)
 
@@ -82,7 +74,6 @@ def _record_count(counts: dict[str, int], result: FetchResult) -> str:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("source_file", type=Path)
-    parser.add_argument("--db", type=Path, default=Path(config.db_path))
     parser.add_argument("--workers", type=int, default=config.workers)
     parser.add_argument(
         "--domain-delay",
@@ -94,10 +85,8 @@ def main() -> None:
     args = parser.parse_args()
 
     load_local_env()
-    db_path = args.db if args.db.is_absolute() else ROOT / args.db
     counts = scrape_source_file(
         source_path=args.source_file,
-        db_path=db_path,
         workers=args.workers,
         domain_delay_seconds=args.domain_delay,
         timeout=args.timeout,
@@ -105,7 +94,7 @@ def main() -> None:
     print(
         "finished: "
         f"total={counts['total']} ok={counts['ok']} "
-        f"failed={counts['failed']} non_html={counts['non_html']} db={db_path}"
+        f"failed={counts['failed']} non_html={counts['non_html']} db={pages_db()}"
     )
 
 
