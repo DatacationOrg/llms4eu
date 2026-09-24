@@ -2,8 +2,8 @@
 
 Builds local vector indexes for document chunks.
 
-The indexer boundary is provider-shaped: Qwen multilingual,
-Qwen 4B, and Nemotron 3 Embed 1B all expose the same `embed_documents` /
+The indexer boundary is provider-shaped: every entry under `providers` in
+`config.yaml` (Qwen3-Embedding 0.6B/4B/8B, Nemotron 3 Embed 1B/8B) exposes the same `embed_documents` /
 `embed_query` methods from `src.indexing.embedders`. Every provider runs locally
 through sentence-transformers.
 
@@ -15,7 +15,7 @@ rebuilds.
 Current chunk collections are storage names, not public retrieval method names:
 
 ```text
-page_chunks_{qwen,qwen4b,nemotron}_chunk
+page_chunks_<provider>_chunk
 ```
 
 Each chunk is embedded as its page title, heading breadcrumbs, and chunk text,
@@ -29,14 +29,10 @@ Rebuild one collection:
 uv run python -m src.indexing --method qwen
 ```
 
-The Nemotron collection uses `nvidia/Nemotron-3-Embed-1B-BF16`, its saved
-query/document prompts, BF16 weights, SDPA attention, and a 4096-token indexing
-limit. It requires a CUDA-capable NVIDIA GPU for practical inference. Once the
-model is cached, rebuild the independent 2048-dimensional collection with:
-
-```bash
-uv run python -m src.indexing --method nemotron
-```
+Adding a model is a config entry: the keys are `SentenceTransformerIndexer`
+fields (`model_name`, `batch_size`, `dtype`, `attn_implementation`, `revision`,
+`local_files_only`). The Nemotron models are pinned to a revision and load in
+BF16 with SDPA attention; the 8B models need a CUDA GPU.
 
 Rebuild the default regenerable vector cache:
 

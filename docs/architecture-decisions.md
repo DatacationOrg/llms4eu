@@ -18,10 +18,12 @@ Reason: eval should compare application retrieval methods, not own them.
 User-facing names describe method intent, not storage details.
 
 - `sparse`: lexical retrieval, currently BM25 internally.
-- `qwen`, `qwen4b`, `nemotron`: dense/vector providers.
+- `qwen`, `qwen4b`, `qwen8b`, `nemotron`, `nemotron8b`: dense/vector providers,
+  one entry each under `providers` in `src/indexing/config.yaml`.
 - `*_hybrid`: dense provider plus sparse retrieval.
-- `*_rerank`: rerank candidates from one base retriever.
-- `*_hybrid_rerank`: rerank hybrid candidates.
+- `*_rerank`, `*_rerank_4b`: rerank candidates from one base retriever with the
+  Qwen3 0.6B or 4B cross-encoder (`rerankers` in `src/retrieval/config.yaml`).
+- `*_hybrid_rerank`, `*_hybrid_rerank_4b`: rerank hybrid candidates.
 
 No `_chunk` suffix in public method names because chunk retrieval is current
 target. No `sparse_hybrid`; hybrid means dense plus sparse.
@@ -35,7 +37,6 @@ Historical read:
 
 - Azure `embed-v-4-0` weighted hybrid was the strongest method ever measured,
   but that provider has been removed (see "Local-Only Inference" below).
-- Qwen 4B weighted hybrid is the strongest remaining method.
 - Default hybrid weights are 70% vector, 30% sparse.
 
 Keep RRF as historical context in research docs unless new eval justifies
@@ -46,9 +47,15 @@ active support.
 Reranking retrieves `N` candidates, then returns final top `M`. Current defaults:
 30 candidates, 10 final results.
 
-Measured Qwen3 reranking was harmful and slow in our setup. Keep rerank methods
-available for experiments, but do not treat rerank as default until model usage,
-prompt, and input formatting are diagnosed.
+The July "reranking is harmful" result was an input-formatting bug: the Qwen3
+reranker needs its chat template from the model cache, and without it scores
+collapse (hit@5 0.774 against 0.881 when the file went missing again on
+2026-09-07). With it, the reranker is the dominant factor. On the August sweep
+(3,471 questions, base chunks, hit@5): `qwen8b_hybrid_rerank_4b` 0.950 is the
+best pipeline; `nemotron8b` alone reaches 0.940 at 11 ms/query, above every
+0.6B-reranked pipeline (0.88-0.92), and the 0.6B reranker lowers it to 0.917.
+`nemotron8b_hybrid_rerank_4b` was never measured. Source:
+`docs/reports/retrieval/retrieval-results-comprehensive-2026-09-07.md`.
 
 ## Chunk Storage
 

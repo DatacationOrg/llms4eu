@@ -12,6 +12,8 @@ def test_retriever_catalog_generates_public_names():
     assert "sparse" in names
     assert "qwen_hybrid_rerank" in names
     assert "nemotron_hybrid_rerank" in names
+    assert "nemotron8b_hybrid_rerank_4b" in names
+    assert "sparse_rerank_4b" in names
     assert "sparse_hybrid" not in names
 
 

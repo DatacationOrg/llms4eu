@@ -42,6 +42,7 @@ class SentenceTransformerIndexer:
     show_progress_bar: bool = True
     dtype: str | None = None
     attn_implementation: str | None = None
+    revision: str | None = None
 
     def embed_documents(self, texts: list[str]) -> list[list[float]]:
         return cached_embeddings(
@@ -79,6 +80,7 @@ class SentenceTransformerIndexer:
             local_files_only=self.local_files_only,
             dtype=self.dtype,
             attn_implementation=self.attn_implementation,
+            revision=self.revision,
         )
         # One shared limit for every provider. A model that cannot reach it would be
         # compared truncated against untruncated rivals, so refuse rather than skew.
@@ -97,40 +99,18 @@ class SentenceTransformerIndexer:
         return kind if kind in prompts else None
 
 
-# indexer field -> config key. config.yaml is the only place these values exist.
-PROVIDER_FIELDS: dict[str, dict[str, str]] = {
-    "qwen": {
-        "model_name": "qwen_embedding_model",
-        "batch_size": "qwen_batch_size",
-        "local_files_only": "qwen_local_files_only",
-    },
-    "qwen4b": {
-        "model_name": "qwen4b_embedding_model",
-        "batch_size": "qwen4b_batch_size",
-        "local_files_only": "qwen4b_local_files_only",
-    },
-    "nemotron": {
-        "model_name": "nemotron_embedding_model",
-        "batch_size": "nemotron_batch_size",
-        "local_files_only": "nemotron_local_files_only",
-        "dtype": "nemotron_dtype",
-        "attn_implementation": "nemotron_attn_implementation",
-    },
-}
-
-
 def provider_names() -> list[str]:
-    return sorted(PROVIDER_FIELDS)
+    return sorted(CONFIG["providers"])
 
 
 def build_indexer(name: str, config: dict | None = None) -> EmbeddingIndexer:
-    if name not in PROVIDER_FIELDS:
-        raise ValueError(f"Unknown indexer: {name}")
     config = CONFIG if config is None else config
+    if name not in config["providers"]:
+        raise ValueError(f"Unknown indexer: {name}")
     return SentenceTransformerIndexer(
         name=name,
         max_seq_length=config["embedding_max_seq_length"],
-        **{field: config[key] for field, key in PROVIDER_FIELDS[name].items()},
+        **config["providers"][name],
     )
 
 
@@ -140,6 +120,7 @@ def load_embedder(
     local_files_only: bool = True,
     dtype: str | None = None,
     attn_implementation: str | None = None,
+    revision: str | None = None,
 ) -> SentenceTransformer:
     """Load a SentenceTransformers model from the local cache by default.
 
@@ -154,6 +135,7 @@ def load_embedder(
         model_name,
         local_files_only=local_files_only,
         model_kwargs=model_kwargs,
+        revision=revision,
     )
 
 

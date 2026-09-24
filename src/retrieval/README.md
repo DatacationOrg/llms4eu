@@ -11,11 +11,13 @@ Reusable chunk retrieval methods.
 retrieval path calls a hosted API.
 
 - `sparse`: local lexical retrieval over page chunks.
-- `{qwen,qwen4b,nemotron}`: Chroma vector search over page chunks.
+- `<provider>`: Chroma vector search over page chunks, one per entry in
+  `providers` of `src/indexing/config.yaml`.
 - `*_hybrid`: normalized weighted score fusion over one vector provider plus
   sparse retrieval.
-- `*_rerank`: Qwen3 cross-encoder reranker over first-stage candidates.
-- `*_hybrid_rerank`: Qwen3 reranker over hybrid candidates.
+- `*_rerank`, `*_rerank_4b`: Qwen3 0.6B or 4B cross-encoder over first-stage
+  candidates; `*_hybrid_rerank*` over hybrid candidates. Each entry in
+  `rerankers` of `config.yaml` adds one suffix.
 
 Hybrid + rerank is the strongest measured configuration. The agentic
 sufficiency and query-reformulation loop was removed after it measured below

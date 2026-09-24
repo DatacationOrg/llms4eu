@@ -24,6 +24,7 @@ class CrossEncoderRerankRetriever:
     max_length: int
     local_files_only: bool
     batch_size: int
+    dtype: str | None = None
 
     def retrieve(self, query: str, limit: int) -> list[RankedChunk]:
         candidates = self.base_retriever.retrieve(query, self.candidate_limit)
@@ -35,6 +36,7 @@ class CrossEncoderRerankRetriever:
             self.max_length,
             self.local_files_only,
             self.batch_size,
+            self.dtype,
         )
         return [
             RankedChunk(id=chunk.id, score=float(score), text=chunk.text)
@@ -55,6 +57,7 @@ class CrossEncoderRerankRetriever:
             self.device,
             self.max_length,
             self.local_files_only,
+            self.dtype,
         )
         pairs = []
         refs = []
@@ -91,12 +94,14 @@ def _rerank(
     max_length: int,
     local_files_only: bool,
     batch_size: int,
+    dtype: str | None,
 ) -> list[tuple[RankedChunk, float]]:
     scores = _cross_encoder(
         model_name,
         device,
         max_length,
         local_files_only,
+        dtype,
     ).predict(
         [(query, chunk.text) for chunk in candidates],
         batch_size=batch_size,
@@ -114,8 +119,12 @@ def _cross_encoder(
     device: str,
     max_length: int,
     local_files_only: bool,
+    dtype: str | None = None,
 ) -> CrossEncoder:
+    import torch
     from sentence_transformers import CrossEncoder
+
+    model_kwargs = {} if dtype is None else {"dtype": getattr(torch, dtype)}
 
     with (
         contextlib.redirect_stdout(io.StringIO()),
@@ -126,4 +135,5 @@ def _cross_encoder(
             device=device,
             max_length=max_length,
             local_files_only=local_files_only,
+            model_kwargs=model_kwargs,
         )

@@ -13,7 +13,6 @@ from src.indexing.documents import PageChunk, text_for_embedding
 from src.retrieval.base import RankedChunk
 from src.shared.env import chroma_path, load_local_env, load_yaml
 from src.indexing.embedders import build_indexer
-from src.indexing.embedders import provider_names as buildable_provider_names
 
 CONFIG = load_yaml(Path(__file__).with_name("config.yaml"))
 INDEXING_PROVIDERS = tuple(CONFIG["providers"])
@@ -232,7 +231,5 @@ def _collection_name(provider: str) -> str:
 
 
 def _validate_provider(provider: str) -> None:
-    if provider not in buildable_provider_names():
-        raise ValueError(f"Unknown embedding provider: {provider}")
     if provider not in INDEXING_PROVIDERS:
         raise ValueError(f"Unknown chunk vector provider: {provider}")

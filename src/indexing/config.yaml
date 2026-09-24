@@ -1,21 +1,31 @@
 collection_name: page_chunks
-# Shared across every provider; a model that cannot reach it is refused.
+# Shared across every provider; a model that cannot reach it is refused, and a
+# document longer than it fails indexing instead of being truncated. Keep it
+# about twice the chunk target in tokens (1800 chars is ~500-600 tokens).
 embedding_max_seq_length: 2048
 default_provider: qwen
+# One entry per embedding model; the keys are SentenceTransformerIndexer fields.
 providers:
-  - qwen
-  - qwen4b
-  - nemotron
-qwen_embedding_model: Qwen/Qwen3-Embedding-0.6B
-qwen_batch_size: 8
-qwen4b_embedding_model: Qwen/Qwen3-Embedding-4B
-qwen4b_batch_size: 1
-qwen4b_local_files_only: true
-nemotron_embedding_model: nvidia/Nemotron-3-Embed-1B-BF16
-nemotron_batch_size: 8
-nemotron_dtype: bfloat16
-nemotron_attn_implementation: sdpa
-nemotron_local_files_only: true
-qwen_local_files_only: true
+  qwen:
+    model_name: Qwen/Qwen3-Embedding-0.6B
+    batch_size: 8
+  qwen4b:
+    model_name: Qwen/Qwen3-Embedding-4B
+    batch_size: 1
+  qwen8b:
+    model_name: Qwen/Qwen3-Embedding-8B
+    batch_size: 2
+  nemotron:
+    model_name: nvidia/Nemotron-3-Embed-1B-BF16
+    batch_size: 8
+    dtype: bfloat16
+    attn_implementation: sdpa
+    revision: a5e0f804b9e90a1ca6784ecbf6e41595774fc834
+  nemotron8b:
+    model_name: nvidia/Nemotron-3-Embed-8B-BF16
+    batch_size: 2
+    dtype: bfloat16
+    attn_implementation: sdpa
+    revision: c44c20ab3f6b430336706847a6372de4b2eb3dbd
 index_upsert_batch_size: 128
 query_batch_size: 128

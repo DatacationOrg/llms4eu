@@ -23,7 +23,7 @@ experiment.
 
 **Indexer**
 A provider-specific embedding backend behind a common interface. Current
-indexers are Qwen multilingual, Qwen 4B, and Nemotron 3 Embed 1B.
+indexers are Qwen3-Embedding 0.6B/4B/8B and Nemotron 3 Embed 1B/8B.
 
 **Ranking method**
 A named retrieval strategy used in experiments to return ranked chunk ids for a
