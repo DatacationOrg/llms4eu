@@ -448,3 +448,31 @@ Decisions:
 Consequence: every report in `docs/` dated before 2026-09-13 was measured on the
 176-page corpus. The approved questions and labels still cover only that part;
 new questions for the added pages are a separate step.
+
+## Geographic Scope
+
+Geography re-ranks; it never filters. `*_hybrid_rerank_geo` over-fetches 4x
+from the hybrid-rerank stage and re-scores each chunk as
+`(1 - w) * text + w * exp(-km / decay)` (`w = 0.3`, text min-max normalised),
+with **1.0 for a page with no location**. This is the soft shape of #18 that
+passed its gate on 2026-09-09: identical to the text baseline question for
+question on the 72 scoped questions, where a hard filter lost 15, every one a
+gold page without a footprint (`docs/reports/geo/geo-soft-vs-strict-2026-09-09.md`).
+It showed no gain on the 176-page corpus, where located pages barely differ in
+position; it is kept for the expanded corpus, which spans eight countries.
+
+Kept from #18: pages get one Wikidata point each (configured item per
+single-site source, else the Wikipedia article's item; people never); the
+model names the query's place and its width but never a coordinate; a Wikidata
+hit counts only when its label shares a word with that name; answers are cached
+per query and a failure is retried next run instead of cached.
+
+Cut, with the reason: the strict filter-widen-boost path (measured equal or
+worse), NUTS regions and the Eurostat boundary files (region scopes were no-ops
+on this corpus; a region is now a point with a 50 km decay, a country is
+unscoped), the Nominatim tier and its rejection classifier (it located 2 of 89
+pages), "mentioned" places and the agent geo tools (the agents are gone), and
+geo metadata in Chroma (re-scoring happens after retrieval, from
+`page_locations`). If a multi-country eval shows countries or regions matter,
+the next step is a country-code match from Wikidata, before boundary files.
+

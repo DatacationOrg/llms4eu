@@ -19,6 +19,14 @@ retrieval path calls a hosted API.
   candidates; `*_hybrid_rerank*` over hybrid candidates. Each entry in
   `rerankers` of `config.yaml` adds one suffix.
 
+- `*_hybrid_rerank_geo`: the hybrid-rerank stage re-scored by distance to the
+  place the question names (`retrievers/geo.py`). The local model names the
+  place and how wide it is; Wikidata gives the point; over 4x candidates each
+  score becomes `0.7 * text + 0.3 * exp(-km / decay)`, and a page with no
+  location scores 1.0 on geography. Places are cached per query in
+  `geo_query_places`; a lookup failure leaves the query unscoped. Needs
+  `just locate-pages`. Settings are the `geo_*` keys in `config.yaml`.
+
 Hybrid + rerank is the strongest measured configuration. The agentic
 sufficiency and query-reformulation loop was removed after it measured below
 that baseline while spending an LLM call per attempt; the findings are in

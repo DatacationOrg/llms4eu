@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Callable
 
 from src.retrieval.base import Retriever
+from src.retrieval.retrievers.geo import GeoRetriever, page_points, place_of
 from src.retrieval.retrievers.fusion import WeightedScoreFusionRetriever
 from src.retrieval.retrievers.rerank import CrossEncoderRerankRetriever
 from src.retrieval.retrievers.sparse import SparseRetriever
@@ -90,6 +91,17 @@ def _specs() -> dict[str, RetrieverSpec]:
                 stages[name] = lambda name=name, suffix=suffix, stage=stage: _reranker(
                     name, suffix, stage()
                 )
+        name = f"{provider}_hybrid_rerank_geo"
+        stages[name] = lambda name=name, stage=stages[f"{provider}_hybrid_rerank"]: (
+            GeoRetriever(
+                name=name,
+                stage=stage(),
+                place_of=place_of,
+                page_points=page_points,
+                weight=CONFIG["geo_weight"],
+                overfetch=CONFIG["geo_overfetch"],
+            )
+        )
         for name, build in stages.items():
             specs[name] = RetrieverSpec(name, build, provider=provider)
     return specs

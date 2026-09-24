@@ -10,4 +10,7 @@ Only what more than one pipeline stage needs.
   deliberately: the shared path for any future agentic call, not tied to the
   one caller it has today.
 
+- `wikidata.py` — Wikipedia title to item, item to coordinates, and name search;
+  used by page locating (`src/preprocess`) and geo retrieval.
+
 Anything used by a single stage lives in that stage's package instead.

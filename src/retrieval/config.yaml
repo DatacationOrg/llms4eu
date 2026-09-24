@@ -16,3 +16,13 @@ reranker_batch_size: 8
 reranker_device: cuda
 reranker_max_length: 2048
 reranker_local_files_only: true
+# Geo: `<provider>_hybrid_rerank_geo`. Score = (1 - w) * text + w * geography.
+geo_weight: 0.3
+geo_overfetch: 4
+# exp(-km / decay) by how wide the question's place is; a country gets no geo.
+geo_decay_km:
+  site: 10
+  town: 10
+  region: 50
+geo_model: gemma4:26b-a4b-it-q4_K_M
+geo_structured_method: function_calling

@@ -44,3 +44,19 @@ create table if not exists eval_evidence (
   page_id text not null references page_metadata(id) on delete cascade,
   quote text not null
 );
+
+-- Where a page is about, when Wikidata knows: one point per page.
+create table if not exists page_locations (
+  page_id text primary key references page_metadata(id) on delete cascade,
+  qid text not null,
+  latitude real not null,
+  longitude real not null
+);
+
+-- The place each retrieval query is anchored to; a null point means none.
+create table if not exists geo_query_places (
+  query text primary key,
+  latitude real,
+  longitude real,
+  decay_km real
+);

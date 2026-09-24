@@ -15,6 +15,12 @@ pages alone, so existing eval labels keep pointing at valid chunk ids.
 `just rechunk` rechunks every page after a config change and moves the eval
 labels onto the new chunks through their evidence quotes (see `src/eval`).
 
+`locations.py` (`just locate-pages`) stores one point per page in
+`page_locations`: a single-site source's configured Wikidata item
+(`source_locations` in `config.yaml`), or a Wikipedia page's own article item.
+Items without coordinates, and people, give no point; other pages stay
+unlocated, which geo retrieval treats as neutral.
+
 SQLite owns the canonical chunk text; Chroma collections are derived indexes
 over it. A collection records a digest of the chunks it indexed, so after a
 rechunk it reports itself stale until `just index` rebuilds it.

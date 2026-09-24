@@ -4,6 +4,9 @@ To make the LLMs4EU scalable there are several mechanisms we can use to reduce s
 
 ## Geographic Enrichment (search space reduction)
 
+*Adopted as a soft re-rank rather than a filter; see "Geographic Scope" in
+architecture-decisions.md.*
+
 We inject country_codes to page and page_chunk tables in DB.
 e.g. a french article gets labeled by ISO norm "FR" or "SI"
 we could further refine such geographical searchspace with NUTS-2 codes 

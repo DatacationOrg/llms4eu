@@ -3,3 +3,27 @@ chunk_size: 1800
 chunk_overlap: 0
 # Shorter chunks are merged into the previous one instead of standing alone.
 chunk_min_chars: 300
+
+# The one place a single-site source is about, as a Wikidata item. Wikipedia
+# pages are located by their own article instead.
+source_locations:
+  castle_rajhenburg: Q12790253  # Rajhenburg Castle
+  brestanica_webpage: Q2117325  # Brestanica (settlement)
+  ptuj_museum: Q7257119  # Ptuj Castle, seat of the regional museum
+  ptuj_tourism: Q15906  # Ptuj
+  veliki_tabor_castle: Q606233  # Veliki Tabor Castle
+  desinic_municipality: Q904320  # Desinić
+  riegersburg_castle: Q872115  # Riegersburg Castle
+  riegersburg_municipality: Q679422  # Riegersburg (Steiermark)
+  duino_castle: Q2276731  # Duino Castle
+  miramare_castle: Q165069  # Miramare Castle
+  jurisics_castle: Q944804  # Jurisics Castle
+  koszeg_town: Q613813  # Kőszeg
+  lednice_castle: Q370990  # Lednice Castle
+  lednice_municipality: Q1017320  # Lednice (okres Břeclav)
+  valtice_castle: Q877062  # Valtice Castle
+  valtice_town: Q782147  # Valtice
+  bojnice_castle: Q1520849  # Bojnice Castle
+  bojnice_town: Q788753  # Bojnice
+  burghausen_castle: Q258217  # Burghausen Castle
+  burghausen_town: Q262669  # Burghausen

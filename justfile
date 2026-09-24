@@ -19,6 +19,10 @@ rechunk:
     uv run python -m src.preprocess.chunker --rebuild
     uv run python -m src.eval.evidence relabel
 
+# Look up where each page is about on Wikidata, for the *_geo methods.
+locate-pages:
+    uv run python -m src.preprocess.locations
+
 # 3. Embed the chunks into one provider's Chroma collection.
 index METHOD="qwen":
     uv run python -m src.indexing --method {{METHOD}}
