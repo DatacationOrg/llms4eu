@@ -15,11 +15,11 @@ Everything derived lives outside the repo under `$LLMS4EU_DATA` (default
 `chroma/` holds regenerable vector indexes; `embeddings/` and `checkpoints/`
 hold run caches.
 
-`/data/llms4eu/db/pages.db` is the expanded corpus (1,338 pages, 11,181 chunks,
-688 located pages) and has no eval questions yet. `/data/llms4eu/archive/` is
-the store before the expansion: `db/pages.db` there holds the 176 Brestanica
-pages with the **3,476 approved eval questions and their labels**, the only
-copy. The rest of `archive/` is Gerson's working material (per-locality seed
-lists, NUTS boundaries, OKF data, caches).
+`/data/llms4eu/archive/` holds Gerson's stores from before the fresh start:
+`db/pages.db` (the 176 Brestanica pages with 3,476 approved eval questions and
+labels), `db-expanded/pages.db` (his 1,338-page fetch of 2026-09-16), and his
+working material (per-locality seed lists, NUTS boundaries, OKF data, caches).
+Both databases use main's older schema; the pipeline here builds its own
+`db/pages.db` from the URL lists.
 
 Reviewed aggregate reports belong under `docs/`.
