@@ -391,8 +391,9 @@ Label them as historical rather than re-baselining old reports.
 ## Corpus Expansion (2026-09-13)
 
 The seed-URL tooling (`seeds.yaml`, `seed_urls.py`, `seed_quality.py`) stayed on
-main at the #18 merge; its output lives under `/data/llms4eu` (`data/seeds/`,
-`v2/seeds/corpus-v2.json`) and is fetched with `just fetch-pages <file>`.
+main at the #18 merge; its merged output is `/data/llms4eu/corpus-urls.json`
+(per-locality lists in `/data/llms4eu/archive/seeds/`), fetched with
+`just fetch-pages <file>`.
 
 The corpus grew from one locality to ten. Brestanica (176 pages, four Slovenian
 sources, 1.08M chars) stays as it was fetched and labelled and is the gold
