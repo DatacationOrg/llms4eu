@@ -34,7 +34,9 @@ ollama pull gpt-oss:20b
 ```bash
 just fetch-pages   # fetch the Slovenian source URLs into the page database
 just chunk         # split fetched Markdown into heading-aware page chunks
+just locate-pages  # Wikidata point per page, for the *_geo methods
 just index qwen    # embed those chunks into a Chroma collection
+just rechunk       # after changing chunk_size/overlap: rechunk, move labels
 just test          # run the non-LLM test suite
 ```
 
@@ -42,6 +44,7 @@ Retrieval evaluation over the scraped pages:
 
 ```bash
 just eval-generate 10                 # generate labelled questions
+just eval-evidence                    # anchor answers to quotes (before rechunk)
 just eval --methods qwen,sparse       # compare named retrieval methods
 just eval-all                         # whole catalog, resumable
 just eval-inspect                     # look at the labelled dataset
@@ -54,7 +57,7 @@ data/           brestanica.json, the tracked Slovenian source URLs
 sql/            page and eval schema, portable to SQLite and Postgres
 src/scraping/   fetch pages, extract Markdown, store in SQLite
 src/db/         page-database connection and schema helpers
-src/preprocess/ heading-aware page chunking
+src/preprocess/ heading-aware page chunking, page locations
 src/indexing/   embedding providers, embedding cache, Chroma collections
 src/retrieval/  chunk retrieval methods and catalog
 src/eval/       retrieval evaluation over labelled questions
