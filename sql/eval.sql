@@ -36,3 +36,11 @@ create index if not exists idx_eval_questions_approved_type
 
 create index if not exists idx_eval_relevant_chunks_chunk_id
   on eval_relevant_chunks(chunk_id);
+
+-- A verbatim quote from the page that supports each answer. Labels are
+-- projected from it onto whatever chunks exist, so they survive a rechunk.
+create table if not exists eval_evidence (
+  question_id text primary key references eval_questions(id) on delete cascade,
+  page_id text not null references page_metadata(id) on delete cascade,
+  quote text not null
+);

@@ -13,6 +13,12 @@ fetch-pages SOURCE="data/brestanica.json":
 chunk:
     uv run python -m src.preprocess.chunker
 
+# Rechunk every page with the current chunk config and move the eval labels onto
+# the new chunks. Needs an evidence quote per question (just eval-evidence).
+rechunk:
+    uv run python -m src.preprocess.chunker --rebuild
+    uv run python -m src.eval.evidence relabel
+
 # 3. Embed the chunks into one provider's Chroma collection.
 index METHOD="qwen":
     uv run python -m src.indexing --method {{METHOD}}
@@ -20,6 +26,10 @@ index METHOD="qwen":
 # 4. Generate eval questions from unlabelled chunks.
 eval-generate LIMIT="10":
     uv run python -m src.eval.generate_dataset --limit {{LIMIT}}
+
+# Anchor each question's answer to a verbatim quote, so its label survives a rechunk.
+eval-evidence *ARGS:
+    uv run python -m src.eval.evidence backfill {{ARGS}}
 
 # 5. Score retrieval methods. Takes any evaluate flag: just eval --methods all --limit 50
 eval *ARGS="--methods qwen":

@@ -74,9 +74,11 @@ def _length(pieces: list[str]) -> int:
     return sum(len(piece) for piece in pieces) + 2 * (len(pieces) - 1)
 
 
-def rebuild_page_chunks() -> None:
+def rebuild_page_chunks(rechunk_all: bool = False) -> None:
     initialize_page_artifacts_db()
     with connect() as conn:
+        if rechunk_all:
+            _drop_all_chunks(conn)
         pages = conn.execute(
             """
             select m.id, c.markdown
@@ -115,6 +117,22 @@ def rebuild_page_chunks() -> None:
         )
 
     print(f"chunked {len(pages)} new pages into {len(rows)} chunks")
+
+
+def _drop_all_chunks(conn) -> None:
+    """Delete every chunk; refused while a label could not be rebuilt afterwards."""
+    unanchored = conn.execute(
+        """
+        select count(*) from eval_questions q
+        where not exists (select 1 from eval_evidence e where e.question_id = q.id)
+        """
+    ).fetchone()[0]
+    if unanchored:
+        raise SystemExit(
+            f"{unanchored} eval questions have no evidence quote, so rechunking would "
+            "delete their labels for good. Run `just eval-evidence` first."
+        )
+    conn.execute("delete from page_chunks")
 
 
 def _sections(markdown: str) -> list[tuple[str, list[str]]]:
@@ -183,8 +201,12 @@ def _clean_heading(text: str) -> str:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.parse_args()
-    rebuild_page_chunks()
+    parser.add_argument(
+        "--rebuild",
+        action="store_true",
+        help="rechunk every page with the current config (then run `just relabel`)",
+    )
+    rebuild_page_chunks(parser.parse_args().rebuild)
 
 
 if __name__ == "__main__":

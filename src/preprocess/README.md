@@ -12,6 +12,8 @@ with its heading path as a line, so no page text is dropped.
 
 `just chunk` appends chunks for newly scraped pages and leaves already chunked
 pages alone, so existing eval labels keep pointing at valid chunk ids.
+`just rechunk` rechunks every page after a config change and moves the eval
+labels onto the new chunks through their evidence quotes (see `src/eval`).
 
 SQLite owns the canonical chunk text; Chroma collections are derived indexes
 over it. A collection records a digest of the chunks it indexed, so after a
