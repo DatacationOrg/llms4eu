@@ -37,6 +37,8 @@ Historical read:
 
 - Azure `embed-v-4-0` weighted hybrid was the strongest method ever measured,
   but that provider has been removed (see "Local-Only Inference" below).
+- Qwen 4B weighted hybrid was the strongest remaining method as of July 2026,
+  before the reranker fix below.
 - Default hybrid weights are 70% vector, 30% sparse.
 
 Keep RRF as historical context in research docs unless new eval justifies
@@ -47,7 +49,11 @@ active support.
 Reranking retrieves `N` candidates, then returns final top `M`. Current defaults:
 30 candidates, 10 final results.
 
-The July "reranking is harmful" result was an input-formatting bug: the Qwen3
+July finding, kept as a record: measured Qwen3 reranking was harmful and slow
+in our setup, so rerank methods stayed experimental until model usage, prompt,
+and input formatting were diagnosed.
+
+Diagnosis: the July "reranking is harmful" result was an input-formatting bug: the Qwen3
 reranker needs its chat template from the model cache, and without it scores
 collapse (hit@5 0.774 against 0.881 when the file went missing again on
 2026-09-07). With it, the reranker is the dominant factor. On the August sweep
@@ -202,6 +208,132 @@ Three properties earn their keep and should survive edits:
 Repeated identical tool calls are answered from the prompt instead of rerunning
 the query: the first version burned its whole budget re-searching one term.
 
+## Direct Corpus Interaction (removed 2026-09-24, kept as a record)
+
+Measured out: -18.4pp hit@5 overall and -50.5pp cross-lingual against the
+baseline (`docs/reports/agentic/agentic-retrieval-report-2026-09-01.md`). The
+code stayed on main at the #18 merge; what it was:
+
+`dci` gives the agent the corpus as files instead of a vector index: BM25 picks
+a bounded working set of at most K pages, `src/retrieval/workspace.py`
+materializes them as line-numbered Markdown, and the agent explores with
+`search`, `read` and `toc` until it can name chunk ids. Sweep K with
+`dci_k10` / `dci_k50` / `dci_k200`, since larger K is not monotonically better.
+
+Every chunk is written behind a `<!-- chunk: <id> | <heading> -->` marker, so a
+grep hit at a line maps back to exactly one `page_chunks.id`. That marker is the
+whole reason the method is scoreable against the existing chunk qrels rather
+than needing its own ground truth.
+
+**No `bash()`.** The papers hand the agent a general shell. This gives it three
+bounded tools; `search` invokes ripgrep through a fixed argument vector, never a
+shell string, so model output is always a search pattern and never a command. A
+benchmark does not need arbitrary command execution to measure retrieval.
+
+Two invariants protect the scores:
+
+- A cited chunk id that does not exist is dropped, never ranked. A hallucinated
+  id would otherwise be scored as a confident wrong answer.
+- The BM25 shortlist is appended below the agent's citations, so a ranking that
+  stops after two cited chunks cannot score worse than BM25 merely for being
+  short.
+
+Sized for a corpus far larger than today's 176 pages: pages stream out of SQLite
+one at a time, each page carries a content hash so a rebuild rewrites only what
+changed, and path/page/chunk lookups are materialized once per load instead of
+per query.
+
+`CorpusAction` needs `method="function_calling"` (3/3, against 0/3 for
+`json_schema` at every `num_predict`, K and reasoning level tried) — the
+opposite of `ToolAction` in the tool agent. The right structured-output mode is
+a per-schema measurement, not a per-model setting.
+
+## Geographic Scope, full version (superseded 2026-09-24, kept as a record)
+
+The implementation of #18 below; today's code keeps only its measured core
+(see "Geographic Scope" at the end). Its design documents are in
+`docs/reports/geo/`.
+
+
+Pages carry where they are about; questions resolve to a scope; retrieval
+re-scores on it (soft, the default) or filters, widens and boosts (strict, for
+measurement). Standards first, model second.
+
+**Data model** (`sql/eval.sql` `page_locations`, 0..n rows per page). Coordinates
+(WGS84) are the canonical fact. ISO 3166-1 country codes and Eurostat NUTS-2 /
+NUTS-3 codes are *derived* from them by point-in-polygon against the GISCO 2024
+boundaries (`src/shared/nuts.py`), so a NUTS revision is `just locate-pages
+--recompute-codes`, not a re-extraction. Names are display labels and are never
+filtered on: they are ambiguous and multilingual (Štajerska / Styria /
+Steiermark), and Slovenia's statistical regions are not administrative units, so
+Wikidata's `P131` chain skips them. NUTS is the one region hierarchy that is
+consistent across EU countries, which is what an EU-wide corpus needs. One
+`primary` row per page is denormalised into chunk metadata; `mentioned` rows stay
+in SQLite for the agent's geo tools.
+
+**Enrichment** (`src/preprocess/locations.py`, read-only until `--apply`) in
+three tiers, each recorded in `method`: Wikidata for Wikipedia pages (`P625`,
+`P605`, `P300`, with `P31` telling a person or a concept from a place, and a
+country or administrative parent required, because a language item can carry
+coordinates); a configured Wikidata QID per single-site source
+(`src/preprocess/config.yaml` `source_locations`); and, last, an LLM naming the
+place a page is about, resolved through Nominatim and kept only when the hit's
+name matches what the model said. The model never produces coordinates
+(Hu et al. 2024). Adding rows never touches `page_chunks`, so the approved
+labels are safe.
+
+**Retrieval** (`src/retrieval/retrievers/geo.py`, methods `*_hybrid_geo`,
+`*_hybrid_rerank_geo`, `*_hybrid_rerank_geo_strict`). A `GeoScope` is resolved
+once per question (`src/shared/geo_resolver.py`: the judge LLM names the
+anchoring place and its width, a gazetteer places it; corpus names, then NUTS
+names, then Wikidata, then Nominatim; cached in `geo_scope_cache`, but only a
+settled answer is cached: a failed extraction or a place the gazetteer could not
+find is retried next time rather than frozen into "no scope").
+
+*Decision 2026-09-09: geography re-ranks; it does not pre-filter.* The first
+measured run (2026-09-08, 500 questions) filtered the stage to the scope and lost
+15 of the 72 scoped questions against the text baseline, winning one. Every loss
+was a gold page with no footprint (biographies, Celeja, national-scope pages)
+that the hard filter removed, and widening never fired because five located
+pages always supplied chunks. With 89 of 176 pages located, any hard filter is a
+coverage lottery. So the default path over-fetches `limit * geo_overfetch`
+chunks unfiltered, reranks as the baseline does, and recombines each score as
+`(1 - w) * text + w * s_geo` with both in [0, 1] (`w = 0.3`): `s_geo` is
+`exp(-km / decay)` to a point scope, in/out of a region scope, and **1.0 for a
+page with no location**. Unknown footprint is neutral, never "outside". A region
+level is applied only when it keeps at most `geo_max_scope_share` (90%) of the
+located pages; with 85 of 89 in one NUTS-3, "Slovenija" and "Posavska" are
+no-ops on this corpus. The convex combination of normalised scores is the
+fusion Bruch et al. (TOIS 2023) found beats rank fusion; the neutral-for-unknown
+rule and the selectivity gate are the corpus facts from
+[geo-improvement-plan.md](reports/geo/geo-improvement-plan.md) §1 and §3.
+
+The strict shape survives as `*_hybrid_rerank_geo_strict` for measurement, with
+two changes from the 2026-09-08 run: unlocated pages pass the filter
+(`geo_include_null: true`) and widening counts located in-scope chunks rather
+than all returned chunks, so the filter widens when *it* contributed too little.
+The scope reaches the stage through constructor fields, `VectorChunkRetriever.where`
+(Chroma `where`) and `SparseRetriever.allowed_page_ids`, so the `Retriever`
+protocol and the eval harness are unchanged. This is the Spatial-RAG shape (Yu
+et al. 2025), and the agent's `pages_in_region` tool keeps it because there the
+user asked for containment.
+
+Geo is payload metadata rather than a bespoke scoring pass so the planned Chroma
+-> Qdrant move keeps it: Qdrant has native `geo_radius` filters, Chroma only a
+`$gte/$lte` bounding box on the stored latitude and longitude.
+
+**Agent tools** (`src/retrieval/retrievers/agentic_tools.py`): `find_pages_near
+(place, radius_km)` and `pages_in_region(nuts_or_iso_code)` return each located
+page's first chunk id *of the chunk variant being scored*, so what the agent
+finds stays scoreable, like `list_sections` and `search_in_page`. They exist
+only on the `*_geo` tool agent; the plain `*_hybrid_agentic_tools` keeps the
+tool set its published numbers were measured with.
+
+Not done: the legacy `places` collection behind `src.rag.agent_search` carries no
+location payload; `WiderGeoFilter` now widens a real `GeoScope`, but the
+places search it schedules does not filter. The page-chunk stack is where the
+filter applies.
+
 ## Local-Only Inference
 
 > Still true for what remains: embeddings, reranking and question
@@ -255,3 +387,64 @@ Two consequences for the LLM layer:
 Consequence: agentic and `embed_v4_*` numbers in existing `docs/` reports were
 produced with the hosted models and are not directly comparable to new runs.
 Label them as historical rather than re-baselining old reports.
+
+## Corpus Expansion (2026-09-13)
+
+The seed-URL tooling (`seeds.yaml`, `seed_urls.py`, `seed_quality.py`) stayed on
+main at the #18 merge; its output lives under `/data/llms4eu` (`data/seeds/`,
+`v2/seeds/corpus-v2.json`) and is fetched with `just fetch-pages <file>`.
+
+The corpus grew from one locality to ten. Brestanica (176 pages, four Slovenian
+sources, 1.08M chars) stays as it was fetched and labelled and is the gold
+standard; nine clusters of the same shape were added around it:
+`src/scraping/seeds.yaml` declares, per locality, the attraction's own site, the
+town's site, the national biographical lexicon and the national-language
+Wikipedia, and `src/scraping/seed_urls.py` discovers, verifies and writes the
+seed files. Result after quality pruning: 1,338 pages, 14.5M chars, 11,261
+base chunks, 38 sources, 8 languages, 690 pages located in 8 countries.
+
+Why: the September geo runs found the spatial signal a constant (85 of 89 located
+pages in one NUTS-3, so region scopes were no-ops), and the chunk-size sweep
+found a 1,024-token cut returning a few percent of the whole store at k=10, so
+size alone could buy recall. Both need a corpus spread over regions and about
+an order of magnitude larger. Now eight NUTS-3 regions hold 58 or more located
+pages each (SI036, SI032, HR064, AT224, HU222, CZ064, SK022, DE214), the
+Croatian cluster is 35 km from Brestanica across a border, the two Czech
+clusters are 8 km apart, and a 1,024-token cut at k=10 reads about 0.3% of the
+store instead of 3.8%.
+
+Decisions:
+
+- **Lexicon entries come from Wikidata, not lexicon search pages.** People born
+  in the town or its district with the lexicon's identifier property, most
+  linked first, URL from the property's formatter. The lexicon search pages are
+  JavaScript-rendered and yield nothing. Slovakia has no such property, so its
+  people come from the Wikipedia category instead.
+- **The reference is never touched.** Language detection was applied with the
+  four Brestanica sources excluded (`--exclude-source`), locations with only
+  the new sources selected (`--source`, now repeatable), and the seed builder
+  drops any URL in `data/brestanica.json`. The last rule exists because two
+  Ptuj wikilinks (Slovenija, Statistični urad) were already reference pages;
+  the fetch upsert moved them to the new source and refreshed their text
+  before this was caught, and they were restored from a pre-fetch copy.
+- **Quality is measured against the reference of the same kind**
+  (`src/scraping/seed_quality.py`, report in `docs/reports/scraping/`). The
+  Brestanica castle and town sites themselves have a third stub pages, which
+  sets the bar. Two cuts were applied to new sources only: 151 pages with under
+  300 characters of prose (mostly Czech lexicon index records, which exist for
+  people whose entry is not yet written) and 91 pages whose content repeated
+  within the source (cookie notices and navigation blocks the extractor fell
+  back to on Desinić, Bojnice, visitptuj and Miramare). The seed builder now
+  rejects pages with under 300 extracted characters at seed time. One source
+  stays flagged: Deutsche Biographie entries are real but short (median 753
+  prose chars against 2,502 for Slovenska biografija).
+- **Geo tiers 1 and 2 only, so far.** 602 of 1,159 new pages got a primary
+  location from Wikidata or the source default; the LLM + Nominatim tier has
+  not run on them, and `geo_country_hint` is still `si`, which mis-geocodes
+  foreign place names (see the 2026-09 country-hint note). Miramare's point
+  falls outside every NUTS polygon (it sits on the coast), so those 35 pages
+  have coordinates but no region code.
+
+Consequence: every report in `docs/` dated before 2026-09-13 was measured on the
+176-page corpus. The approved questions and labels still cover only that part;
+new questions for the added pages are a separate step.
