@@ -47,6 +47,27 @@ eval-all:
 eval-inspect LIMIT="20":
     uv run python -m src.eval.inspect_dataset --limit {{LIMIT}}
 
+# Wikipedia places corpus, kept apart under /data/llms4eu/wiki.
+wiki := "LLMS4EU_DATA=/data/llms4eu/wiki"
+
+# List EU castles, parks, caves, …, each with its article in the local language.
+wiki-collect:
+    {{wiki}} uv run python -m src.data_prep.wiki_places collect
+
+# Background fetch (safe to disconnect); re-run to resume, a lock stops doubles.
+wiki-fetch:
+    {{wiki}} setsid nohup flock -n /data/llms4eu/wiki/fetch.lock nice -n 19 \
+      uv run python -m src.scraping.fetch_pages /data/llms4eu/wiki/urls.jsonl \
+      --skip-done >> /data/llms4eu/wiki/fetch.log 2>&1 &
+
+# How far the background fetch got, per language.
+wiki-status:
+    @{{wiki}} uv run python -m src.data_prep.wiki_places status
+
+# Fetched pages with their metadata, as /data/llms4eu/wiki/pages.jsonl.
+wiki-export:
+    {{wiki}} uv run python -m src.data_prep.wiki_places export
+
 test:
     uv run --extra dev pytest
 

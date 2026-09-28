@@ -40,6 +40,18 @@ just rechunk       # after changing chunk_size/overlap: rechunk, move labels
 just test          # run the non-LLM test suite
 ```
 
+A larger Wikipedia corpus of EU castles, parks, caves, lakes, …, one article per
+place in its own country's language, kept apart under `/data/llms4eu/wiki`
+(types, countries and languages in `src/data_prep/config.yaml`; what the
+finished dataset holds is in [data/README.md](data/README.md)):
+
+```bash
+just wiki-collect  # Wikidata -> urls.jsonl, one row per place
+just wiki-fetch    # background fetch, safe to disconnect; re-run to resume
+just wiki-status   # progress per language, any time
+just wiki-export   # pages.jsonl: text plus url, title, language, country, point
+```
+
 Retrieval evaluation over the scraped pages:
 
 ```bash
@@ -56,6 +68,7 @@ just eval-inspect                     # look at the labelled dataset
 data/           brestanica.json, the tracked Slovenian source URLs
 sql/            page and eval schema, portable to SQLite and Postgres
 src/scraping/   fetch pages, extract Markdown, store in SQLite
+src/data_prep/  seed lists built from Wikidata (the wiki places corpus)
 src/db/         page-database connection and schema helpers
 src/preprocess/ heading-aware page chunking, page locations
 src/indexing/   embedding providers, embedding cache, Chroma collections
