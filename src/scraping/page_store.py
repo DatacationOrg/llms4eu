@@ -10,6 +10,15 @@ def initialize_raw_pages_db() -> None:
         conn.executescript(schema)
 
 
+def fetched_urls() -> set[str]:
+    """Source URLs that already have extracted Markdown."""
+    with connect_pages() as conn:
+        rows = conn.execute(
+            "select url from page_metadata where error is null and markdown_chars > 0"
+        )
+        return {row["url"] for row in rows}
+
+
 def upsert_fetch_result(result: FetchResult) -> None:
     metadata = result.metadata
     columns = PageMetadata.db_columns()

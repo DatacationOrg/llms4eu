@@ -10,7 +10,11 @@ from src.scraping.page_fetch import (
     fetch_page,
     read_source_urls,
 )
-from src.scraping.page_store import initialize_raw_pages_db, upsert_fetch_result
+from src.scraping.page_store import (
+    fetched_urls,
+    initialize_raw_pages_db,
+    upsert_fetch_result,
+)
 from src.scraping.settings import fetch_pages_config
 from src.shared.env import load_local_env, pages_db
 
@@ -23,9 +27,13 @@ def scrape_source_file(
     workers: int = config.workers,
     domain_delay_seconds: float = config.domain_delay_seconds,
     timeout: float = config.timeout_seconds,
+    skip_done: bool = False,
 ) -> dict[str, int]:
     source_urls = read_source_urls(source_path)
     initialize_raw_pages_db()
+    if skip_done:
+        done = fetched_urls()
+        source_urls = [s for s in source_urls if s.url not in done]
 
     throttle = DomainThrottle(domain_delay_seconds)
     counts = {"total": len(source_urls), "ok": 0, "failed": 0, "non_html": 0}
@@ -82,6 +90,11 @@ def main() -> None:
         help="Minimum seconds between requests to the same domain.",
     )
     parser.add_argument("--timeout", type=float, default=config.timeout_seconds)
+    parser.add_argument(
+        "--skip-done",
+        action="store_true",
+        help="Skip URLs already fetched successfully, so a stopped run resumes.",
+    )
     args = parser.parse_args()
 
     load_local_env()
@@ -90,6 +103,7 @@ def main() -> None:
         workers=args.workers,
         domain_delay_seconds=args.domain_delay,
         timeout=args.timeout,
+        skip_done=args.skip_done,
     )
     print(
         "finished: "

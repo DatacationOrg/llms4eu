@@ -477,3 +477,39 @@ geo metadata in Chroma (re-scoring happens after retrieval, from
 `page_locations`). If a multi-country eval shows countries or regions matter,
 the next step is a country-code match from Wikidata, before boundary files.
 
+## Wikipedia Places Corpus (2026-09-25)
+
+A partner dataset fell through, so a second, larger corpus comes from Wikidata:
+EU27 places of nature and heritage types (castles, reserves, caves, lakes, …),
+one Wikipedia article per place in its country's language, fetched with the
+default trafilatura pipeline. The export follows the field names of
+`ilsp/llms4eu_synthetic_qa` and adds country, point and categories.
+
+Decisions:
+
+- **Separate store.** Every `just wiki-*` recipe sets
+  `LLMS4EU_DATA=/data/llms4eu/wiki`, so the fetch writes its own `pages.db` and
+  the main corpus cannot be overwritten (see the Ptuj upsert above).
+- **One article per place, in the local language.** The language versions of
+  one Wikidata item repeat the same facts, which would give a RAG question
+  several right answers. So each item keeps only its article in the country's
+  official language (the first listed, for bilingual countries); places
+  without one are left out. The other versions share the `wikidata_id` and can
+  be fetched later for cross-lingual tests. No per-language cap yet.
+- **The language is verified, not assumed.** URLs are explicit
+  `<lang>.wikipedia.org` sitelinks; `language_ok` requires the page's own
+  `<html lang>` and the final host to both match the target language.
+- **Nothing is filtered at collection.** About half the places are Swedish
+  and Finnish lakes whose articles bots wrote from lake registers in 2013
+  (Lsjbot, Nasko.bot): accurate but a few template sentences each. Filtering
+  them by sitelink counts leaked (bots also copied them to other wikis), and
+  Wikipedia's API throttled the article-size lookup, so every page is fetched
+  and any cut is made on the export (`char_count`, `word_count`, `sitelinks`).
+- **Direct instance-of only.** Following subclasses (`P31/P279*`) times out
+  for the large countries, so each type is one query per country on `P31`.
+  This misses places typed only by a subclass, e.g. Lake Constance as
+  "eutrophic lake".
+- **Countries and languages are configured, not queried.** Wikidata has no ISO
+  code on the Netherlands and no ISO 639-1 code on Modern Greek.
+- **Resumable background fetch.** `fetch_pages --skip-done` drops URLs that
+  already have Markdown, so `just wiki-fetch` can simply be re-run.
