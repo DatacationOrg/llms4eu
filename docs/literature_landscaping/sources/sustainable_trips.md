@@ -12,13 +12,18 @@ https://arxiv.org/pdf/2409.18003
 - Goal: technique
 - Relates to: baseline "Retrieval → Rerank"; the soft geo score
 - Verdict: adds
-- The idea in one sentence: Add a sustainability score (popularity × seasonal
-  demand) to the retrieved context and let the LLM rerank cities with it.
-- So what for us: A second soft score next to location, scoring how
-  over-visited a place is. The authors suggest moving it into the retrieval
-  phase, which is exactly the slot the geo score's weighted sum already has.
-- Feasibility: Runs locally (Llama-3.1-8B, Mistral-7B). Popularity and
-  seasonality come from the Tripadvisor API, so we need our own signal
-  (e.g. Wikipedia pageviews ⚑) or the December data.
-- Open question: Paper assumes city-level recommendation (which European city to
-  visit), so does it work within one locality?
+- The idea in one sentence: A computed sustainability score (popularity ×
+  seasonal demand) is put into the prompt, and the LLM reranks the retrieved
+  cities with it.
+- So what for us: A second soft score next to location. The authors list moving
+  it into retrieval as future work, which is the slot the geo score's weighted
+  sum already has. Two candidate signals:
+  visitor popularity (external data, targets crowding) or documentation volume
+  (pages/chunks per place, free from the corpus, targets the retrieval bias).
+- Feasibility: Runs locally (Llama-3.1-8B, Mistral-7B). Popularity comes from
+  the Tripadvisor API; documentation volume needs no external data.
+- Evaluation gap: shift toward sustainable cities reported for SAR only, with
+  no baseline comparison and no split by popularity tier.
+- Open question: Paper assumes city-level recommendation, so does it work
+  within one locality? And for the team: fix retrieval bias or steer away from
+  crowds?
