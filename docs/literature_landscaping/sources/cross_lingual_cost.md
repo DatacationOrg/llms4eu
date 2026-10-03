@@ -1,4 +1,4 @@
-# A guiding question: which techniques counter language preference in retrieval, and could any be combined with location as a language-independent signal?
+# The Cross-Lingual Cost: Retrieval Biases in RAG over Arabic-English Corpora
 
 ### Amiraz et al. 2025, The Cross-Lingual Cost (ArabicNLP@EMNLP)  (https://aclanthology.org/2025.arabicnlp-main.6.pdf)
 - Problem stated: Retrieval ranking suffers in cross-lingual domain-specific
@@ -20,6 +20,5 @@
 - Feasibility: Balanced is simple to add locally. Translation used Google
   Translate, so it needs a local translation model. Equal quotas stayed stable
   at 25/50/75% English, but only two languages were tested.
-- Open question: Does domain-specific matter here, as knowledge about places is
-  mostly wiki-style? Can language selection be based on the languages spoken
+- Open question: Can language selection be based on the languages spoken
   around the POI's location? How does it work with 8 languages?

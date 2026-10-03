@@ -1,11 +1,9 @@
 # Digital overtourism in AI travel recommendations: evidence froma comparative analysis
 ### Najafi & Costa 2026, Digital overtourism in AI travel recommendations (Current Issues in Tourism)  (https://doi.org/10.1080/13683500.2026.2654066)
 - Problem stated: AI travel recommenders may concentrate attention on already
-  famous destinations before anyone travels ("digital overtourism"), driven by
+  famous destinations during trip planning ("digital overtourism"), driven by
   uneven online representation and popularity-weighted ranking.
-- New problem for us? Partly: the documentation-skew concern is known (Pepe),
-  but this names it, shows it across 10 AI systems, and links it to
-  overtourism theory.
+- New problem for us? Partly: the documentation-skew concern is known, but this names it, shows it across 10 AI systems, and links it to overtourism theory.
 - Goal: evaluation + problem framing
 - Relates to: documentation skew; evaluation toolkit; Banerjee et al. 2024/2025
 - Verdict: new ground (problem named) + adds (concentration metrics)
@@ -18,9 +16,9 @@
     effective diversity (Shannon entropy, effective number), not just the
     number of distinct places. Applicable to retrieval: which places keep
     appearing in the top-5?
-  - Failure mode to test for: "horizontal substitution". Alternatives to
+  - Failure mode to take in to account: "horizontal substitution". Alternatives to
     Santorini become nearby similar islands (Milos, Naxos), staying within the
-    familiar circuit instead of reaching the periphery.
+    familiar zone instead of recommending further away.
   - Positioning: LLMs and assistants without retrieval, English prompts only,
     city/region/country level. Whether RAG amplifies or dampens this, in
     several languages and at POI level, is open.
