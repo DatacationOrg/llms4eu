@@ -1,0 +1,10 @@
+### Wang et al. 2026, All languages matter: language bias in multilingual RAG (ACL 2026)  (https://aclanthology.org/2026.acl-long.338.pdf)
+- Problem stated: Rerankers in multilingual RAG (mRAG) prefer English and the query language, so answer-critical documents in other languages are retrieved but pushed out of the top 5.
+- New problem for us? Already known (Amiraz, Park & Lee), not acted on; new is that the reranker, not the retriever, is the bottleneck
+- Goal: evaluation (language share of top-k, oracle gap) + technique (LAURA)
+- Relates to: our reranker (Qwen3-Reranker-0.6B, one of the two tested); Amiraz card (retriever stage); Park & Lee card (generator stage)
+- Verdict: confirms the bias for our reranker; adds a fix for the reranker stage
+- The idea in one sentence: LAURA fine-tunes the reranker on documents labelled by answer utility (does this document alone help generators produce the correct answer?), chosen from per-language top-5 lists, instead of on semantic relevance.
+- So what for us: Language bias enters at retriever, reranker and generator; this paper fixes the reranker stage, but needs answer-labelled training data. Training-free diagnostic for us: compare the language share of the hybrid top-30 before reranking with the top-10 after; if other languages drop, the team's reranker adds bias.
+- Feasibility: local yes (0.6B reranker, 7–14B generators), GPU fine-tuning. Needs (1) questions with known correct answers and (2) LLM runs per candidate document to check whether it helped (theirs: 4 generators per document, 18k training questions). Dependency: whether the December data provides answer labels is unknown.
+- Open question: Does utility-based training transfer to tourism without answer labels? None of the three stage techniques (Amiraz, LAURA, DKM-RAG) uses location.

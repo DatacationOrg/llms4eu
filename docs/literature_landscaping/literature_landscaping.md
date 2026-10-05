@@ -86,6 +86,7 @@ storage, and the hidden-gems recommender itself.
 - H3 Location-first candidates, then text ranking (language-blind pool).
 - H4 Place as retrieval unit (one score per Wikidata ID, all languages).
 - H5 Location decides which passages get translated.
+- H6 the soft geo score may already reduce popularity concentration (after Rahmani et al.). It's testable directly: concentration with and without the geo score.
 
 ### Evaluation toolkit (data-independent)
 
@@ -148,6 +149,7 @@ open checks in [decisions-assumptions.md](decisions-assumptions.md).
 | T7 | Is local-only inference still a principle, given a hosted model is the geo resolver? | Open |
 | T8 | What will the official dataset contain (sources, languages, question types, format)? | Open, likely unknown until December |
 | T9 | May the chatbot use the LLM's own knowledge, or must every answer be grounded in the corpus? | Open; decides whether adaptive retrieval is an option |
+| T10 | which harm should the system target, the retrieval bias (documentation) or crowding (visits)? The recommender system survey's critique makes this the prerequisite for choosing any signal. |
 
 ### For the literature
 

@@ -1,0 +1,10 @@
+### Klimashevskaia et al. 2024, A survey on popularity bias in recommender systems (UMUAI ⚑)  (https://arxiv.org/abs/2308.01118)
+- Problem stated: Recommenders tend to push already popular items, which limits discovery for users and providers and can reinforce itself over time ("rich get richer"). The survey reviews 123 papers on how to detect, measure and mitigate this.
+- New problem for us? Already known (second soft score thread)
+- Goal: survey (definitions, metrics, mitigation, evaluation practice)
+- Relates to: soft geo score (a post-processing re-scaling); second soft score thread; Collab-Rec card (xQuAD/MMR baselines)
+- Verdict: adds (taxonomy of mitigation techniques); confirms the evaluation gap seen in earlier cards
+- The idea in one sentence: Mitigation techniques sort by stage: pre-processing (change the data, e.g. remove the most popular items), in-processing (change the training, e.g. penalize popularity in the loss), and post-processing (adjust a finished ranked list by re-scaling scores, re-ranking or fusing with an inverse-popularity ranking).
+- So what for us: Our options are post-processing, the cheapest family and the one that needs no training. The soft score is already re-scaling, so a popularity or documentation-volume term fits there. xQuAD-style re-ranking and rank aggregation are the other two options. In-processing needs interaction data (clicks, ratings), which a RAG system doesn't have. The survey's main critique: most work assumes popularity is bad per se and tests offline only, so the team should first decide which harm it targets (retrieval bias or crowding).
+- Feasibility: post-processing is local and training-free, but needs a popularity signal per item; in- and pre-processing need interaction data.
+- Open question: in RAG the fix must act per place, not per chunk (e.g. a per-place cap in the top-k), because skew works through chunk count.
