@@ -34,11 +34,15 @@ the place's own country language, extracted with trafilatura. Fields: `id`,
 `wikiname`, `wikidata_id`, `title`, `url`, `final_url`, `in_language`
 (requested), `language` (declared by the page), `language_ok`, `country`,
 `country_languages`, `latitude`, `longitude`, `sitelinks`, `categories`,
-`char_count`, `word_count`, `fetched_at`, `text`. Languages by rows: sv 68,955,
+`machine_generated`, `char_count`, `word_count`, `fetched_at`, `text`. Languages by rows: sv 68,955,
 de 15,145, fi 13,003, fr 6,081, it 5,408, pl 5,351, es 3,010, lt 2,859, sk 2,579,
 cs 2,309, et 1,446, nl 1,122, then 14 more under 1,000. Before use: keep
-`language_ok` rows (one Swedish stub was replaced by a linked PDF); most
-Swedish and many Finnish rows are bot-written lake stubs, unfiltered; there
+`language_ok` rows (one Swedish stub was replaced by a linked PDF); `machine_generated`
+flags 55,750 Swedish lake register pages ("maskinellt skapad" footer), kept
+in the file; other Swedish and Finnish bot stubs are unflagged; there
 are no groups of related places yet (`wikidata_id` is the only identity).
+
+The QA test set built on these pages lives in `/data/llms4eu/wiki/qa/` (Parquet; load with
+`src/data_prep/wiki_qa.py`, see `src/data_prep/README.md`).
 
 Reviewed aggregate reports belong under `docs/`.
