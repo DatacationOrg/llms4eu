@@ -1,4 +1,4 @@
-from src.data_prep.wiki_places import add_rows, language_ok
+from src.data_prep.wiki_places import add_rows, language_ok, page_row
 
 
 def binding(url, lang, item="Q1", coord="Point(15.5 46.0)"):
@@ -38,3 +38,28 @@ def test_language_ok_needs_declared_language_and_host():
     assert not language_ok("sl", "en", "https://sl.wikipedia.org/wiki/Grad")
     assert not language_ok("sl", "sl", "https://en.wikipedia.org/wiki/Castle")
     assert not language_ok("sl", None, None)
+
+
+def test_page_row_flags_machine_generated_articles():
+    seed = {
+        "language": "sv",
+        "qid": "Q1",
+        "title": "T",
+        "url": "u",
+        "country": "SE",
+        "country_languages": ["sv"],
+        "latitude": 1.0,
+        "longitude": 2.0,
+        "sitelinks": 3,
+        "categories": ["lake"],
+    }
+    page = {
+        "markdown": "Denna sjöartikel är maskinellt skapad",
+        "final_url": "u",
+        "language": "sv",
+        "fetched_at": "now",
+    }
+    assert page_row(seed, page)["machine_generated"]
+    assert not page_row(seed, {**page, "markdown": "Handwritten text"})[
+        "machine_generated"
+    ]

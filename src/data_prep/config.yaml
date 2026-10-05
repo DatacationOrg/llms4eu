@@ -48,3 +48,7 @@ wiki_places:
     mountain: Q8502
     garden: Q1107656
 
+  # Footer text that marks a bot-written article; export flags these rows
+  # `machine_generated` instead of dropping them. Swedish lake register pages.
+  machine_markers:
+    - maskinellt skapad
