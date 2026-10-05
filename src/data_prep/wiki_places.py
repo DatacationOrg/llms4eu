@@ -169,6 +169,7 @@ def page_row(seed: dict, page) -> dict:
         "longitude": seed["longitude"],
         "sitelinks": seed["sitelinks"],
         "categories": seed["categories"],
+        "machine_generated": any(m in text for m in CONFIG["machine_markers"]),
         "char_count": len(text),
         "word_count": len(text.split()),
         "fetched_at": page["fetched_at"],
