@@ -1,5 +1,16 @@
 # Candidate question types for the official dataset
 
+## Question dimensions (for designing and classifying questions)
+
+- **Role of the place:** constraint (what is allowed), score (what ranks
+  higher), disambiguator (which entity is meant), or none.
+- **Anchor type:** named place ("in Amsterdam"), the user's location ("near my
+  work"), or a natural or informal region ("in the Alps") `[me]`.
+- **Answer form:** one right answer, a set, or a ranked list.
+- **Room for hidden gems:** can a lesser-known place be a good answer?
+- **Language and borders:** can a good answer lie in another language or
+  across a border?
+
 First draft `[me]`, refined with Claude. Classified by the question dimensions
 in section 3.
 
