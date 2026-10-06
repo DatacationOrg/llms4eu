@@ -4,6 +4,14 @@ chunk_overlap: 0
 # Shorter chunks are merged into the previous one instead of standing alone.
 chunk_min_chars: 300
 
+# Alternative cuts of the same pages, for chunk-size experiments. Each variant
+# overrides the values above and gets its own chunks, labels and indexes beside
+# the cut above, which is `base`. Select one with CHUNK_VARIANT=<name>.
+chunk_variants:
+  c900: {chunk_size: 900}
+  c900ov: {chunk_size: 900, chunk_overlap: 200}
+  c3600: {chunk_size: 3600}
+
 # The one place a single-site source is about, as a Wikidata item. Wikipedia
 # pages are located by their own article instead.
 source_locations:

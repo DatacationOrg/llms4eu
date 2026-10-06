@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
+from src.db.pages import chunk_variant, variant_tag
 from src.db.pages import (
     connect_pages as connect,
 )
@@ -96,6 +97,7 @@ def _build_eval_report(
 ) -> str:
     lines = [
         f"Methods: {', '.join(run.methods)}",
+        f"Chunk variant: {chunk_variant()}",
         f"Questions: {len(run.questions)}",
         f"Limit: {limit if limit is not None else 'all'}",
         f"Category: {category or 'all'}",
@@ -173,7 +175,7 @@ def run_eval(
 # ponytail: resume is per method, not per question. A crash loses at most the
 # method in flight. Go per question only if one method's run outgrows a sitting.
 def _checkpoint_path() -> Path:
-    return data_path("checkpoints", "eval.json")
+    return data_path("checkpoints", f"eval{variant_tag(chunk_variant(), '-')}.json")
 
 
 def _load_checkpoint(signature: list[str]) -> dict:
@@ -198,17 +200,25 @@ def load_eval_rows(
     limit: int | None = None,
     category: str | None = None,
 ) -> tuple[list[dict], list[dict]]:
+    # A question counts for a variant only when its evidence quote was found in
+    # that variant's chunks, so every variant is scored on labelled questions.
     with connect() as conn:
         question_sql = """
-                select id, question, answer, question_type, question_language
-                from eval_questions
-                where approved = 1
+                select q.id, q.question, q.answer, q.question_type, q.question_language
+                from eval_questions q
+                where q.approved = 1
+                  and exists (
+                    select 1
+                    from eval_relevant_chunks r
+                    join page_chunks c on c.id = r.chunk_id
+                    where r.question_id = q.id and c.variant = :variant
+                  )
                 """
-        params = {}
+        params = {"variant": chunk_variant()}
         if category is not None:
-            question_sql += "\n                and question_type = :category"
+            question_sql += "\n                and q.question_type = :category"
             params["category"] = category
-        question_sql += "\n                order by id"
+        question_sql += "\n                order by q.id"
         if limit is not None:
             question_sql += "\n                limit :limit"
             params["limit"] = limit
@@ -227,12 +237,13 @@ def load_eval_rows(
             dict(row)
             for row in conn.execute(
                 f"""
-                select question_id, chunk_id
-                from eval_relevant_chunks
-                where question_id in ({placeholders})
-                order by question_id, chunk_id
+                select r.question_id, r.chunk_id
+                from eval_relevant_chunks r
+                join page_chunks c on c.id = r.chunk_id
+                where c.variant = ? and r.question_id in ({placeholders})
+                order by r.question_id, r.chunk_id
                 """,
-                question_ids,
+                [chunk_variant(), *question_ids],
             )
         ]
     return questions, relevance

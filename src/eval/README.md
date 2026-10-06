@@ -37,6 +37,16 @@ its quote (or, for a quote cut by a boundary, any of its sentences).
 re-run, keyed on the question set so a different `--limit` or `--category`
 starts fresh.
 
+Eval scores one chunk variant at a time (`CHUNK_VARIANT`, default `base`; see
+`src/preprocess`): only labels on that variant's chunks count, and a question
+whose quote was not found in them is left out of that variant's run. Each
+variant has its own checkpoint. `just chunk-compare base,c900 --methods qwen`
+chunks, relabels, indexes and scores each variant and writes one table to
+`.local/reports/`. Beside the usual metrics it shows each variant's chunk count,
+mean chunk length and `chars@5`, the characters a reader gets back at k, because
+`hit@k` on whole chunks favours a longer cut by construction; the earlier
+chunk-size sweeps in `docs/reports/chunking/` explain that trade-off.
+
 Eval checks that requested vector indexes already exist and reports the build
 commands when they are missing; it does not build indexes while measuring.
 All inference is local, through sentence-transformers and Ollama.

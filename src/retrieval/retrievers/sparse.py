@@ -8,6 +8,7 @@ from functools import cache
 
 from pathlib import Path
 
+from src.db.pages import chunk_variant
 from src.db.pages import connect_pages as connect
 from src.retrieval.base import RankedChunk, retrieve_batch_default
 from src.shared.env import load_yaml
@@ -23,7 +24,7 @@ class SparseRetriever:
     b: float = CONFIG["sparse_b"]
 
     def retrieve(self, query: str, limit: int) -> list[RankedChunk]:
-        corpus = _corpus()
+        corpus = _corpus(chunk_variant())
         query_terms = _tokens(query)
         scores = []
         for chunk in corpus:
@@ -69,10 +70,12 @@ class Corpus:
 
 
 @cache
-def _corpus() -> Corpus:
+def _corpus(variant: str) -> Corpus:
     # BM25 indexes the raw chunk text; title and breadcrumbs are dense-side context.
     with connect() as conn:
-        rows = conn.execute("select id, text from page_chunks order by id").fetchall()
+        rows = conn.execute(
+            "select id, text from page_chunks where variant = ? order by id", (variant,)
+        ).fetchall()
 
     chunks = []
     document_frequency: Counter[str] = Counter()

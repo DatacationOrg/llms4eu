@@ -3,14 +3,19 @@ create table if not exists page_sources (
   language text not null
 );
 
+-- One row per chunk per variant. `base` is the cut the pipeline runs on; the
+-- other variants are alternative cuts of the same pages, kept side by side for
+-- chunk-size experiments (src/preprocess/README.md). A database from before
+-- this column is rebuilt once with sql/migrate_chunk_variants.sql.
 create table if not exists page_chunks (
   id text primary key,
   page_id text not null references page_metadata(id) on delete cascade,
+  variant text not null default 'base',
   chunk_index integer not null,
   heading_path text,
   text text not null,
   char_count integer not null,
-  unique(page_id, chunk_index)
+  unique(page_id, variant, chunk_index)
 );
 
 create table if not exists eval_questions (
@@ -30,6 +35,9 @@ create table if not exists eval_relevant_chunks (
 
 create index if not exists idx_page_chunks_page_id
   on page_chunks(page_id);
+
+create index if not exists idx_page_chunks_variant
+  on page_chunks(variant);
 
 create index if not exists idx_eval_questions_approved_type
   on eval_questions(approved, question_type);

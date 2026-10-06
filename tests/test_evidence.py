@@ -53,7 +53,8 @@ def _seed(path, with_evidence):
             "insert into page_markdown_content values ('page', ?)", (markdown,)
         )
         conn.execute(
-            "insert into page_chunks values ('page:0', 'page', 0, 'Castle', 'old', 3)"
+            "insert into page_chunks (id, page_id, chunk_index, heading_path, text, "
+            "char_count) values ('page:0', 'page', 0, 'Castle', 'old', 3)"
         )
         conn.execute(
             "insert into eval_questions (id, question, answer, question_type, "
