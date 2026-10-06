@@ -58,7 +58,7 @@ Questions about 133k Wikipedia pages of EU places (24 languages), on thebeast:
 | `/data/llms4eu/wiki/pages.jsonl` | the pages to index: `id`, `title`, `text`, metadata |
 | `/data/llms4eu/wiki/qa/wiki_qa_*.parquet` | the questions, one file per kind |
 
-| model in `wiki_qa.py` | rows | a question that |
+| model (`schemas/<name>.py`) | rows | a question that |
 |---|---|---|
 | `Rag` | 531k | is about one page: easy (names the place) or hard (describes it) |
 | `Unanswerable` | 31k | no page answers |
@@ -66,7 +66,7 @@ Questions about 133k Wikipedia pages of EU places (24 languages), on thebeast:
 | `Meta` | 4k | has a set of pages as its answer (list, geo) |
 | `Tables` | 339 | aggregates a table in a page |
 
-Each model lists its file's columns. Test on `ok` rows (`answer_ok` in `Rag`), tune on `split == "dev"`.
+Each model lists its file's columns; `wiki_qa.py` loads them. Test on `ok` rows (`answer_ok` in `Rag`), tune on `split == "dev"`.
 
 ```python
 from src.eval.wiki_qa import Rag, Unanswerable, load, read, pages
