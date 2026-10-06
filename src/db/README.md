@@ -36,7 +36,7 @@ How it was made: `docs/reports/wiki-qgen/wiki-qa-dataset.md`.
 ## Legacy: Slovenian page database
 
 Scraped pages, page chunks, and eval labels of the first Slovenian corpus live in
-`$LLMS4EU_DATA/db/pages.db`. `pages.py` owns the connection and applies `sql/raw_pages.sql` and
+`$LLMS4EU_DATA/db/pages.db`. `legacy/pages.py` owns the connection and applies `sql/raw_pages.sql` and
 `sql/eval.sql`; chunking, indexing and eval still read through it.
 
 Vector indexing lives in `src/indexing`.

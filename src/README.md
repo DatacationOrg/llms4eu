@@ -6,7 +6,7 @@ Service-shaped folders with one root `pyproject.toml`.
 SQLite.
 
 `db` owns the data: the wiki places dataset (`wiki_qa.py`, `schemas/`) and the
-legacy page-database connection.
+legacy page-database connection (`legacy/`).
 
 `preprocess` rebuilds derived artifacts from SQL rows, currently page chunks.
 

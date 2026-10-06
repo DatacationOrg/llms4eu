@@ -8,8 +8,8 @@ from pathlib import Path
 import chromadb
 from tqdm import tqdm
 
-from src.db.pages import connect_pages as connect
-from src.db.pages import initialize_page_artifacts_db
+from src.db.legacy.pages import connect_pages as connect
+from src.db.legacy.pages import initialize_page_artifacts_db
 from src.indexing.documents import PageChunk, text_for_embedding
 from src.retrieval.base import RankedChunk
 from src.shared.env import chroma_path, load_local_env, load_yaml

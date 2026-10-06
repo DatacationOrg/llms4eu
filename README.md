@@ -56,7 +56,7 @@ just eval-inspect                     # look at the labelled dataset
 data/           brestanica.json, the tracked Slovenian source URLs
 sql/            page and eval schema, portable to SQLite and Postgres
 src/scraping/   fetch pages, extract Markdown, store in SQLite
-src/db/         page-database connection and schema helpers
+src/db/         the wiki places dataset (wiki_qa.py, schemas/); legacy/ the old page DB
 src/preprocess/ heading-aware page chunking, page locations
 src/indexing/   embedding providers, embedding cache, Chroma collections
 src/retrieval/  chunk retrieval methods and catalog
