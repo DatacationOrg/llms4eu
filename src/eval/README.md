@@ -48,34 +48,3 @@ Eval reports `hit@1`, `hit@5`, `hit@10`, `recall@10` and `mrr@10`. Defaults
 live in `config.yaml`; `just eval` overrides them with `--methods qwen`.
 Retriever names and tuning live in `src/retrieval`. Result reports from past
 runs are indexed in [`docs/README.md`](../../docs/README.md).
-
-## Wiki places QA test set
-
-Questions about 133k Wikipedia pages of EU places (24 languages), on thebeast:
-
-| path | what |
-|---|---|
-| `/data/llms4eu/wiki/pages.jsonl` | the pages to index: `id`, `title`, `text`, metadata |
-| `/data/llms4eu/wiki/qa/wiki_qa_*.parquet` | the questions, one file per kind |
-
-| model (`schemas/<name>.py`) | rows | a question that |
-|---|---|---|
-| `Rag` | 531k | is about one page: easy (names the place) or hard (describes it) |
-| `Unanswerable` | 31k | no page answers |
-| `Compare` | 10k | needs two pages |
-| `Meta` | 4k | has a set of pages as its answer (list, geo) |
-| `Tables` | 339 | aggregates a table in a page |
-
-Each model lists its file's columns; `wiki_qa.py` loads them. Test on `ok` rows (`answer_ok` in `Rag`), tune on `split == "dev"`.
-
-```python
-from src.eval.wiki_qa import Rag, Unanswerable, load, read, pages
-
-hard = load(Rag, ["id", "question"], answer_ok=True, kind="challenge").to_pandas()  # fast, columns
-for q in read(Unanswerable, ok=True):  # validated models
-    print(q.question, q.why)
-texts = pages(hard.id)  # page id -> page
-```
-
-Not confidential, copy it where you need it (`WIKI_QA_DIR=<copy of qa/>`); do not publish it.
-How it was made: `docs/reports/wiki-qgen/wiki-qa-dataset.md`.

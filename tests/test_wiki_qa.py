@@ -1,7 +1,7 @@
 import pyarrow.parquet as pq
 import pytest
 
-from src.eval import wiki_qa
+from src.db import wiki_qa
 
 MODELS = [
     wiki_qa.Rag,

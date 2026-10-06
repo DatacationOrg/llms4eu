@@ -17,12 +17,12 @@ from pathlib import Path
 
 import pyarrow.parquet as pq
 
-from src.eval.schemas.base import Row
-from src.eval.schemas.compare import Compare
-from src.eval.schemas.meta import Meta
-from src.eval.schemas.rag import Rag
-from src.eval.schemas.tables import Tables
-from src.eval.schemas.unanswerable import Unanswerable
+from src.db.schemas.base import Row
+from src.db.schemas.compare import Compare
+from src.db.schemas.meta import Meta
+from src.db.schemas.rag import Rag
+from src.db.schemas.tables import Tables
+from src.db.schemas.unanswerable import Unanswerable
 
 __all__ = ["Compare", "Meta", "Rag", "Tables", "Unanswerable", "load", "pages", "read"]
 

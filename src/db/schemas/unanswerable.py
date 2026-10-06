@@ -4,7 +4,7 @@ from typing import Any, Literal
 
 from pydantic import Json
 
-from src.eval.schemas.base import Qrels, Row, Split
+from src.db.schemas.base import Qrels, Row, Split
 
 
 class Unanswerable(Row, Qrels):
