@@ -148,12 +148,7 @@ def _is_child_page(page_url: str, link_url: str) -> bool:
 
 
 def _deduplicate_links(links: list[MainLink]) -> list[MainLink]:
-    seen: set[str] = set()
-    unique_links: list[MainLink] = []
+    seen: dict[tuple[str, str], MainLink] = {}
     for link in links:
-        key = f"{link.label}\n{link.url}"
-        if key in seen:
-            continue
-        seen.add(key)
-        unique_links.append(link)
-    return unique_links
+        seen.setdefault((link.label, link.url), link)
+    return list(seen.values())

@@ -1,5 +1,6 @@
 import json
 import random
+import re
 import threading
 import time
 import uuid
@@ -13,21 +14,26 @@ from urllib.request import Request, urlopen
 import httpx
 from bs4 import BeautifulSoup
 
-from src.scraping.scraper import HEADERS
 from src.scraping.settings import fetch_pages_config
-from src.shared.schema import PageMetadata
+from src.scraping.schema import PageMetadata
 
 
 config = fetch_pages_config()
+
+HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/131.0.0.0 Safari/537.36"
+    ),
+    "Accept-Language": "en-US,en;q=0.9,nl;q=0.8",
+}
 
 
 @dataclass(frozen=True)
 class SourceUrl:
     source: str
     url: str
-    # Optional in the seed file: the source's language for `page_sources`,
-    # so a non-Slovenian source does not fall back to the configured default.
-    language: str | None = None
 
 
 @dataclass(frozen=True)
@@ -71,9 +77,8 @@ def read_source_urls(path: Path) -> list[SourceUrl]:
     for row in rows:
         source = str(row["source"]).strip()
         url = str(row["url"]).strip()
-        language = str(row.get("language") or "").strip() or None
         if source and url:
-            source_urls.append(SourceUrl(source=source, url=url, language=language))
+            source_urls.append(SourceUrl(source=source, url=url))
     return source_urls
 
 
@@ -215,6 +220,21 @@ def _extract_title(html: str) -> str | None:
     if soup.title and soup.title.string:
         return soup.title.string.strip()
     return None
+
+
+def extract_language(html: str) -> str | None:
+    """The page's own declared language: <html lang>, else a content-language meta."""
+    soup = BeautifulSoup(html, "lxml")
+    declared = soup.html.get("lang") if soup.html else None
+    if not declared:
+        meta = soup.find(
+            "meta", attrs={"http-equiv": re.compile("^content-language$", re.I)}
+        )
+        declared = meta.get("content") if meta else None
+    if not declared:
+        return None
+    # "sl-SI", "sl_SI" and "SL" all mean the same language.
+    return re.split(r"[-_]", declared.strip())[0].lower() or None
 
 
 def _is_html(content_type: str | None) -> bool:

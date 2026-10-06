@@ -1,257 +1,63 @@
 set dotenv-load
 set windows-shell := ["pwsh", "-NoLogo", "-Command"]
 
-init:
-    uv run python -m src.db.initialize
+# Show the pipeline, in the order you run it.
+default:
+    @just --list --unsorted
 
-index:
-    uv run python -m src.preprocess.index
+# 1. Fetch the Slovenian source URLs into the page database.
+fetch-pages SOURCE="data/brestanica.json":
+    uv run python -m src.scraping.fetch_pages {{SOURCE}}
 
-ask *question:
-    uv run python -m src.rag.answer "{{question}}"
+# Every chunk step, index and eval works on one chunk variant: `base`, or
+# CHUNK_VARIANT=<name> from src/preprocess/config.yaml (CHUNK_VARIANT=c900 just chunk).
 
-scrape *URLS:
-    uv run python -m src.scraping.scrape --urls {{URLS}}
+# 2. Split the fetched Markdown into chunks.
+chunk:
+    uv run python -m src.preprocess.chunker
 
-scrape-web:
-    uv run python -m src.scraping.web.main
+# Rechunk every page with the current chunk config and move the eval labels onto
+# the new chunks. Needs an evidence quote per question (just eval-evidence).
+rechunk:
+    uv run python -m src.preprocess.chunker --rebuild
+    uv run python -m src.eval.evidence relabel
 
-fetch-pages SOURCE="data/brestanica.json" DB="data/db/pages.db":
-    uv run python -m src.scraping.fetch_pages {{SOURCE}} --db {{DB}} --workers 4
+# Chunk, label, index and score every listed variant, in one table. Resumable.
+chunk-compare VARIANTS="base,c900,c900ov,c3600" *ARGS="--methods qwen":
+    uv run python -m src.eval.compare_chunkings --variants {{VARIANTS}} {{ARGS}}
 
-# Discover and verify seed URLs for the neighbouring-country localities in
-# src/scraping/seeds.yaml; writes data/seeds/<cluster>.json and the merged
-# data/eu_neighbours.json. Network-bound, a few minutes per cluster.
-seed-urls *ARGS:
-    uv run python -m src.scraping.seed_urls {{ARGS}}
+# Look up where each page is about on Wikidata, for the *_geo methods.
+locate-pages:
+    uv run python -m src.preprocess.locations
 
-# Score every neighbouring-country source against the Brestanica source of its
-# kind (size, prose share, stubs, duplicates, language). Read-only; pass
-# --prune-below 300 to drop new-source stub pages before chunking.
-seed-quality *ARGS:
-    uv run python -m src.scraping.seed_quality {{ARGS}}
+# 3. Embed the chunks into one provider's Chroma collection.
+index METHOD="qwen":
+    uv run python -m src.indexing --method {{METHOD}}
+
+# 4. Generate eval questions from unlabelled chunks.
+eval-generate LIMIT="10":
+    uv run python -m src.eval.generate_dataset --limit {{LIMIT}}
+
+# Anchor each question's answer to a verbatim quote, so its label survives a rechunk.
+eval-evidence *ARGS:
+    uv run python -m src.eval.evidence backfill {{ARGS}}
+
+# 5. Score retrieval methods. Takes any evaluate flag: just eval --methods all --limit 50
+eval *ARGS="--methods qwen":
+    uv run python -m src.eval.evaluate {{ARGS}}
+
+# The whole catalog, resumable: finished methods are skipped on a re-run.
+eval-all:
+    uv run python -m src.eval.evaluate --methods all --checkpoint
+
+# Read generated questions back out of the database.
+eval-inspect LIMIT="20":
+    uv run python -m src.eval.inspect_dataset --limit {{LIMIT}}
 
 test:
     uv run --extra dev pytest
 
-eval-chunks:
-    uv run python -m src.preprocess.chunks
-
-# Copy the durable page database to a private scratch DB for chunk-variant work.
-# Variant chunking rewrites page_chunks, whose delete cascade would take the
-# approved eval labels with it, so experiments never run against data/db.
-chunk-sweep-db SOURCE="data/db/pages.db" TARGET=".local/db/pages-variants.db":
-    uv run python -m src.db.snapshot {{SOURCE}} {{TARGET}}
-
-eval-index METHOD="qwen" VERSION="v1" VARIANT="base":
-    uv run python -m src.indexing.chunks --method {{METHOD}} --chunk-version {{VERSION}} --variant {{VARIANT}}
-
-# Detect each page's language. Read-only; pass --apply to write.
-detect-languages *ARGS:
-    uv run python -m src.preprocess.languages {{ARGS}}
-
-# Download the Eurostat NUTS 2024 boundaries into data/geo/ (once, ~16 MB).
-fetch-nuts *ARGS:
-    uv run python -m src.shared.nuts {{ARGS}}
-
-# Locate each page (Wikidata, source defaults, then LLM + Nominatim) and derive
-# its NUTS codes. Read-only; pass --apply to write page_locations. Adds rows
-# only, never touches page_chunks, so the eval labels are safe.
-locate-pages *ARGS:
-    uv run python -m src.preprocess.locations {{ARGS}}
-
-# Cut one chunk variant. Needs PAGES_DB_PATH pointed at a `just chunk-sweep-db` copy.
-chunk-variant VARIANT SIZE="512" OVERLAP="0" UNIT="tokens" PROVIDER="qwen" STRATEGY="markdown" EXTRA="":
-    uv run python -m src.preprocess.chunks --variant {{VARIANT}} --strategy {{STRATEGY}} \
-        --size {{SIZE}} --overlap {{OVERLAP}} --unit {{UNIT}} --provider {{PROVIDER}} {{EXTRA}}
-
-# Point the approved questions at one variant's chunks.
-relabel VARIANT *ARGS:
-    uv run python -m src.eval.relabel --variant {{VARIANT}} {{ARGS}}
-
-chunk-sweep *ARGS:
-    uv run python experiments/indexing/compare_chunkings.py {{ARGS}}
-
-# Snapshot for the shared-question design, where one question set is projected
-# onto every variant. Kept apart from the per-variant DB because both designs
-# write into eval_relevant_chunks and a mixed database scores rows that are not
-# comparable; `compare_chunkings.py --design` refuses to run against a mismatch.
-chunk-sweep-shared-db SOURCE="data/db/pages.db" TARGET=".local/db/pages-shared.db":
-    uv run python -m src.db.snapshot {{SOURCE}} {{TARGET}}
-
-# Anchor each answer to a verbatim quote's character span. One model pass for the
-# whole benchmark however many variants follow, and the prerequisite for both the
-# shared design's labels and the `anchor` span target. Resumable: already-anchored
-# questions are skipped.
-anchor-answers *ARGS:
-    uv run python -m src.eval.anchors {{ARGS}}
-
-# The comprehensive variant grid: span and chunk metrics, latency, category split,
-# and optionally judge_hit@K and agentic diagnostics. Always pass --dry-run first;
-# a reranked cell costs roughly 0.00132s per median chunk token per question, and
-# an agentic cell 5.1s per question.
-#
-# This runs against whatever PAGES_DB_PATH and CHROMA_PATH are set to, which for
-# the durable store means base only. Use `sweep-overview` for the variant grid.
-chunk-overview *ARGS:
-    uv run python experiments/indexing/compare_chunkings.py {{ARGS}}
-
-# `chunk-overview` against the variant store, so the five cuttings are visible.
-# Same reason as prepare_variants.sh and sweep-status: `set dotenv-load` has
-# already exported the durable CHROMA_PATH, and pointing a variant grid at it
-# would silently find only base and prune every other cell.
-sweep-overview *ARGS:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    export CHROMA_PATH="${SWEEP_CHROMA_PATH:-.local/chroma-sweep}"
-    export PAGES_DB_PATH="${SWEEP_PAGES_DB_PATH:-.local/db/pages-variants.db}"
-    echo "store: $CHROMA_PATH | db: $PAGES_DB_PATH"
-    uv run python experiments/indexing/compare_chunkings.py {{ARGS}}
-
-# The same grid against the shared-question database, where one question set is
-# projected onto every variant. Needs `anchor-answers` and `relabel` to have run.
-shared-overview *ARGS:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    export CHROMA_PATH="${SWEEP_CHROMA_PATH:-.local/chroma-sweep}"
-    export PAGES_DB_PATH="${SHARED_PAGES_DB_PATH:-.local/db/pages-shared.db}"
-    echo "store: $CHROMA_PATH | db: $PAGES_DB_PATH"
-    uv run python experiments/indexing/compare_chunkings.py --design shared {{ARGS}}
-
-audit-chunk-tokens PROVIDERS="qwen,qwen4b,nemotron" VERSIONS="v1" OUTPUT="docs/reports/chunking/chunk-token-audit-$(date +%F).md":
-    uv run python experiments/indexing/audit_chunk_tokens.py --providers {{PROVIDERS}} --versions {{VERSIONS}} --output {{OUTPUT}}
-
-eval-generate LIMIT="10":
-    uv run python -m src.eval.generate_dataset --limit {{LIMIT}}
-
-# Give one chunk variant its own question set, generated from its own chunks, so
-# it is not measured on questions written from base's cutting. Point
-# PAGES_DB_PATH at the sweep copy first — this writes questions and gold labels.
-#
-# Density-normalised: one question per 256 of a chunk's own tokens, so 256 gets
-# one, 512 two and 1,024 four and every variant covers the corpus with the same
-# number of questions. Sweep the result as `--design per-variant-density`. Pass
-# DENSITY="" for the legacy one-question-per-type sets, which probed the smallest
-# cut four times more densely than the largest (`--design per-variant`).
-variant-questions VARIANT WORKERS="8" MINCHARS="300" DENSITY="--density":
-    uv run python -m src.eval.generate_dataset \
-        --variant {{VARIANT}} --workers {{WORKERS}} --min-chars {{MINCHARS}} \
-        {{DENSITY}}
-
-eval METHODS="qwen":
-    uv run python -m src.eval.evaluate --methods {{METHODS}}
-
-eval-agentic:
-    uv run python -m src.eval.evaluate --agentic-only
-
-eval-agentic-limit LIMIT="100":
-    uv run python -m src.eval.evaluate --agentic-only --limit {{LIMIT}}
-
-eval-agentic-report OUTPUT="docs/reports/retrieval/retrieval-results.md":
-    uv run python experiments/indexing/compare_qwen_modes.py --methods agents --output {{OUTPUT}}
-
-# The comprehensive comparison: every embedder, pipeline rung, chunk-text
-# representation, geo method, agent generation, judge LLM and reasoning rung, over
-# the chunk variants, in one resumable run. Always dry-run first: it checks the
-# database against the design, lists the missing indexes with their build
-# commands, and prices the grid. Runs against the sweep store; the shared-design
-# database needs `just relabel <variant>` for every variant and the page
-# locations copied in (`full-comparison-prepare`) before geo cells can run.
-full-comparison-dry-run METHODS="full" VARIANTS="base,tok256,tok512,tok512ov,tok1024" OUTPUT="docs/reports/retrieval/retrieval-results-full.md":
-    #!/usr/bin/env bash
-    set -euo pipefail
-    export CHROMA_PATH="${SWEEP_CHROMA_PATH:-.local/chroma-sweep}"
-    export PAGES_DB_PATH="${SHARED_PAGES_DB_PATH:-.local/db/pages-shared.db}"
-    echo "store: $CHROMA_PATH | db: $PAGES_DB_PATH"
-    uv run python experiments/indexing/compare_qwen_modes.py --dry-run \
-        --methods {{METHODS}} --variants {{VARIANTS}} --output {{OUTPUT}}
-
-# Copy page locations from the durable database into the sweep database, so geo
-# methods can filter there too. Adds rows only.
-full-comparison-prepare:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    export PAGES_DB_PATH="${SHARED_PAGES_DB_PATH:-.local/db/pages-shared.db}"
-    uv run python -m src.preprocess.locations --copy-from data/db/pages.db
-
-# Launch the full comparison from cron so it survives logout (see launch_cron.sh).
-# Resumable: rerun the same command to continue from the checkpoint.
-full-comparison METHODS="full" VARIANTS="base,tok256,tok512,tok512ov,tok1024" OUTPUT="docs/reports/retrieval/retrieval-results-full.md" NAME="full-comparison":
-    experiments/indexing/launch_cron.sh {{NAME}} .venv/bin/python experiments/indexing/compare_qwen_modes.py \
-        --methods {{METHODS}} --variants {{VARIANTS}} --output {{OUTPUT}} --judge-equivalence
-
-eval-equivalence CHECKPOINT="docs/reports/retrieval/retrieval-results-full.md.checkpoint.json" OUTPUT="docs/reports/retrieval/retrieval-equivalence-judge.md" K="5":
-    uv run python experiments/indexing/judge_retrieval_equivalence.py --checkpoint {{CHECKPOINT}} --output {{OUTPUT}} -k {{K}}
-
-eval-inspect LIMIT="20":
-    uv run python -m src.eval.inspect_dataset --limit {{LIMIT}}
-
-okf-pilot SOURCE="castle_rajhenburg" LIMIT="2":
-    uv run python -m src.okf.generate --source {{SOURCE}} --limit {{LIMIT}}
-
-okf-generate:
-    uv run python -m src.okf.generate
-
-okf-rebuild:
-    uv run python -m src.okf.generate --clean
-
-okf-index:
-    uv run python -c "from pathlib import Path; from src.okf.bundle import regenerate_indexes; regenerate_indexes(Path('data/okf/tourism'))"
-
-okf-validate:
-    uv run python -m src.okf.validate
-
-okf-ask *question:
-    uv run python -m src.okf.answer "{{question}}"
-
-okf-benchmark LIMIT="19":
-    uv run python experiments/indexing/compare_okf_rag.py --limit {{LIMIT}}
-
-# Relabel and index every chunk variant for the size sweep. Hours, resumable.
-prepare-variants:
-    bash experiments/indexing/prepare_variants.sh
-
-# Index providers across variants in an existing sweep, without re-cutting chunks.
-# `prepare-variants` re-cuts, and page_chunks cascades into eval_relevant_chunks,
-# so using it to add a provider would delete the gold labels. One provider per
-# process, so two 15 GB checkpoints are never resident together.
-index-variants PROVIDERS="qwen4b qwen8b nemotron8b" VARIANTS="base tok256 tok512 tok512ov tok1024":
-    PROVIDERS="{{PROVIDERS}}" VARIANTS="{{VARIANTS}}" \
-        bash experiments/indexing/index_variants.sh
-
-# Progress of the chunk-variant preparation: what is running, how far labelling
-# has got, and which collections exist.
-sweep-status LOG=".local/logs/prepare-variants.log":
-    #!/usr/bin/env bash
-    # Same reason as prepare_variants.sh: dotenv-load has already exported the
-    # runtime CHROMA_PATH, so a `:-` default would report the wrong store.
-    export CHROMA_PATH="${SWEEP_CHROMA_PATH:-.local/chroma-sweep}"
-    export PAGES_DB_PATH="${SWEEP_PAGES_DB_PATH:-.local/db/pages-variants.db}"
-    echo "=== running ==="
-    # Match only the worker processes; a bare pattern also matches the shell
-    # that is running this recipe, and any pgrep pattern matches itself.
-    pgrep -af "(python|uv) .*(eval\.relabel|indexing\.chunks|preprocess\.chunks)" \
-      | grep -vE "shell-snapshots|sweep.status" || echo "  nothing running"
-    echo
-    uv run python -m src.eval.sweep_status
-    if [ -f "{{LOG}}" ]; then echo; echo "=== last log lines ==="; tail -5 "{{LOG}}"; fi
-
-# The 2026-08-18 completion: both scale rungs of each embedder family plus one
-# larger reranker rung, over the five cuttings. Four sequential legs, ~17.5h,
-# resumable per cell. RERANK is the variants the 4B-reranker leg covers — the
-# default two answer the question for 8h where all five cost 20h.
-#
-#   just large-embedder-sweep                          # as launched
-#   just large-embedder-sweep "base,tok1024" "base,tok256,tok512,tok512ov,tok1024"
-#
-# Re-running is safe and cheap: each leg keeps its own checkpoint, so widening
-# RERANK re-measures only the reranker leg and the other three resume instantly.
-large-embedder-sweep RERANK="base,tok1024" VARIANTS="base,tok256,tok512,tok512ov,tok1024":
-    RERANK_VARIANTS="{{RERANK}}" VARIANTS="{{VARIANTS}}" \
-        bash experiments/indexing/run_large_embedder_sweep.sh
-
-# Join every chunk sweep run into one table per metric. Parses the reports rather
-# than retyping them, and refuses to publish if the runs scored different samples.
-# Add a run by adding it to SOURCES and ORDER in the script, not by editing docs.
-merge-chunk-sweeps:
-    uv run python experiments/indexing/merge_chunk_sweeps.py
+# Lint and format, the same checks CI would run.
+lint:
+    uv run ruff check --fix .
+    uv run ruff format .

@@ -24,13 +24,6 @@ class CrossEncoderRerankRetriever:
     max_length: int
     local_files_only: bool
     batch_size: int
-    prompt_name: str | None = None
-    prompt: str | None = None
-    trust_remote_code: bool = False
-    # CrossEncoder otherwise loads in float32 whatever the checkpoint declares,
-    # which quadruples a bf16 reranker's residency: 16 GB for a 4B model, beside
-    # a 16 GB embedder, on one 48 GB card. Left None for the 0.6B default so its
-    # published numbers keep their exact arithmetic.
     dtype: str | None = None
 
     def retrieve(self, query: str, limit: int) -> list[RankedChunk]:
@@ -43,9 +36,6 @@ class CrossEncoderRerankRetriever:
             self.max_length,
             self.local_files_only,
             self.batch_size,
-            self.prompt_name,
-            self.prompt,
-            self.trust_remote_code,
             self.dtype,
         )
         return [
@@ -67,9 +57,6 @@ class CrossEncoderRerankRetriever:
             self.device,
             self.max_length,
             self.local_files_only,
-            self.prompt_name,
-            self.prompt,
-            self.trust_remote_code,
             self.dtype,
         )
         pairs = []
@@ -107,19 +94,13 @@ def _rerank(
     max_length: int,
     local_files_only: bool,
     batch_size: int,
-    prompt_name: str | None,
-    prompt: str | None,
-    trust_remote_code: bool = False,
-    dtype: str | None = None,
+    dtype: str | None,
 ) -> list[tuple[RankedChunk, float]]:
     scores = _cross_encoder(
         model_name,
         device,
         max_length,
         local_files_only,
-        prompt_name,
-        prompt,
-        trust_remote_code,
         dtype,
     ).predict(
         [(query, chunk.text) for chunk in candidates],
@@ -138,16 +119,13 @@ def _cross_encoder(
     device: str,
     max_length: int,
     local_files_only: bool,
-    prompt_name: str | None,
-    prompt: str | None,
-    trust_remote_code: bool = False,
     dtype: str | None = None,
 ) -> CrossEncoder:
     import torch
     from sentence_transformers import CrossEncoder
 
-    prompt_kwargs = _prompt_kwargs(prompt_name, prompt)
     model_kwargs = {} if dtype is None else {"dtype": getattr(torch, dtype)}
+
     with (
         contextlib.redirect_stdout(io.StringIO()),
         contextlib.redirect_stderr(io.StringIO()),
@@ -157,16 +135,5 @@ def _cross_encoder(
             device=device,
             max_length=max_length,
             local_files_only=local_files_only,
-            trust_remote_code=trust_remote_code,
             model_kwargs=model_kwargs,
-            **prompt_kwargs,
         )
-
-
-def _prompt_kwargs(prompt_name: str | None, prompt: str | None) -> dict:
-    if not prompt_name or not prompt:
-        return {}
-    return {
-        "prompts": {prompt_name: prompt},
-        "default_prompt_name": prompt_name,
-    }

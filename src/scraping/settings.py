@@ -7,7 +7,6 @@ from src.shared.env import load_yaml
 
 @dataclass(frozen=True)
 class FetchPagesConfig:
-    db_path: str
     workers: int
     domain_delay_seconds: float
     timeout_seconds: float
@@ -23,18 +22,10 @@ class FetchPagesConfig:
 @lru_cache(maxsize=1)
 def fetch_pages_config() -> FetchPagesConfig:
     raw = load_yaml(Path(__file__).with_name("config.yaml"))["fetch_pages"]
+    # Sequences become tuples so the frozen config stays immutable and hashable.
     return FetchPagesConfig(
-        db_path=str(raw["db_path"]),
-        workers=int(raw["workers"]),
-        domain_delay_seconds=float(raw["domain_delay_seconds"]),
-        timeout_seconds=float(raw["timeout_seconds"]),
-        retry_statuses=tuple(int(status) for status in raw["retry_statuses"]),
-        browser_timeout_ms=int(raw["browser_timeout_ms"]),
-        listing_min_items=int(raw["listing_min_items"]),
-        listing_min_context_words=int(raw["listing_min_context_words"]),
-        max_document_bytes=int(raw["max_document_bytes"]),
-        max_document_pages=int(raw["max_document_pages"]),
-        document_extensions=tuple(
-            str(extension) for extension in raw["document_extensions"]
-        ),
+        **{
+            key: tuple(value) if isinstance(value, list) else value
+            for key, value in raw.items()
+        }
     )

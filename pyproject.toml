@@ -5,31 +5,25 @@ requires-python = ">=3.11"
 dependencies = [
   "beautifulsoup4>=4.14.3",
   "chromadb>=1.1.1",
-  "fastapi>=0.115.0",
   "httpx>=0.28.1",
-  "langchain-core>=1.2.0",
   "langchain-ollama>=1.1.0",
-  "loguru>=0.7.3",
   "lxml>=6.1.0",
   "pydantic>=2.13.4",
   "playwright>=1.60.0",
   "python-dotenv>=1.2.2",
   "pyyaml>=6.0.3",
   "sentence-transformers>=5.4.1",
-  "uvicorn[standard]>=0.34.0",
+  "torch>=2.6.0",
+  "tqdm>=4.67.0",
   "trafilatura>=2.0.0",
   "docling>=2.95.0",
-  "authlib>=1.6.5",
-  "itsdangerous>=2.2.0",
-  "langchain-text-splitters>=1.1.2",
-  "lingua-language-detector>=2.1.1",
 ]
 
 [project.optional-dependencies]
 dev = ["pytest>=9.0.3"]
 
 [build-system]
-requires = ["setuptools>=83.0.0"]
+requires = ["setuptools>=69"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
