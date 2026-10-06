@@ -223,22 +223,6 @@ better answered by experiments.
 Landscape, revisit: substitutability ("valid alternatives"), crowding-aware
 recommendation, EU regulation, quality signals.
 
----
-
-## 6. Method notes
-
-- **Read with a question.** Before reading, write what I want to get out of
-  the text; afterwards, produce an artifact that answers it, plus what the text did not answer.
-- **Assumption test.** "This decision would be wrong if …". Use when inheriting decisions, before conditions change, when judging whether a result transfers, and when moving from experiment to the real world.
-- **Direct vs adjacent literature.** No direct work on our use case doesn't
-  mean nothing applies: look at adjacent fields (popularity bias in
-  recommenders, long-tail QA, entity disambiguation, multilingual retrieval) and state the transfer assumption.
-- **Saturation is a stopping signal.** When new papers mostly confirm, switch
-  strand or switch from reading to applying.
-- **Understanding vs remembering.** Keep the structure in my head and the
-  details in this document. Maintain the document, or it decays.
-
----
 
 ## 7. Glossary
 
