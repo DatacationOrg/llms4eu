@@ -12,18 +12,18 @@ dependencies = [
   "playwright>=1.60.0",
   "python-dotenv>=1.2.2",
   "pyyaml>=6.0.3",
-  "sentence-transformers>=5.4.1",
-  "torch>=2.13.0",
+  "sentence-transformers>=5.6.0",
+  "torch>=2.14.1",
   "tqdm>=4.67.0",
   "trafilatura>=2.0.0",
-  "docling>=2.95.0",
+  "docling>=2.120.3",
 ]
 
 [project.optional-dependencies]
 dev = ["pytest>=9.0.3"]
 
 [build-system]
-requires = ["setuptools>=69"]
+requires = ["setuptools>=83.0.0"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
