@@ -5,7 +5,8 @@ links; reasoning and evidence live in the spokes.
 
 ## Links
 
-- [consolidation-2026-10-03.md](consolidation-2026-10-03.md): coverage table, concept map, what the proxy data can support, low-hanging improvements, next steps
+- [consolidation-2026-10-06.md](consolidation-2026-10-06.md): coverage table, concept map, hypotheses with novelty verdicts, what the proxy data can support, low-hanging improvements, next steps (replaces the 2026-10-03 version)
+- [sources/novelty-check-2026-10-06.md](sources/novelty-check-2026-10-06.md): targeted search on location × language bias and diversity re-ranking
 - [decisions-assumptions.md](decisions-assumptions.md): full decision table with assumptions and open checks
 - [question-types.md](question-types.md): question dimensions and candidate question types for the official dataset
 - [multi-stakeholder.md](multi-stakeholder.md): tourism as a multi-stakeholder problem; the tiktokrijen loop
@@ -29,13 +30,17 @@ relative to the baseline; only papers that add something or contradict the
 team's choices get a full card. Out of scope for now: agentic retrieval,
 storage, and the hidden-gems recommender itself.
 
+**Status (2026-10-06):** reading phase closed; all high-priority coverage cells
+addressed. Next: experiment proposals for the team (applied focus: system,
+evaluation, proxy dataset).
+
 ---
 
 ## 2. Project context
 
 - **End goal:** recommend "hidden gems" across Europe: places interesting for tourists that get fewer visitors `[team: Pepe]`.
 - **Current step:** compare retrieval strategies, measured on retrieval accuracy and speed, not yet targeting hidden gems `[team: Pepe, Gergely]`.
-- **Data:** today's corpus is a proxy (1,338 pages, 8 languages, 8 countries); the official ~300K-document multilingual dataset arrives around December with unknown questions and gold `[team]`. Details: consolidation §3.
+- **Data:** today's corpus is a proxy (1,338 pages, 8 languages, 8 countries); the official ~300K-document multilingual dataset arrives around December with unknown questions and gold `[team]`. Details: consolidation §4.
 - **Team concerns** `[team: Pepe]`: documentation skew favours well-known places; language and format may favour same-country places over closer cross-border ones; coordinates are being added to chunk metadata.
 
 ---
@@ -47,21 +52,32 @@ storage, and the hidden-gems recommender itself.
 - **Documented ≠ visited ≠ crowded.** Documentation volume (corpus), visitor
   popularity (reviews, page views, arrivals) and crowding (time-varying) are
   different signals; how you measure decides whether they correlate, and often
-  they don't [src: Banerjee 2025]. For small places, documentation volume from
-  the corpus may be the only available signal.
+  they don't [src: Banerjee 2025]. No paper found uses documentation volume
+  (chunk count) as its popularity measure [src: novelty check]. For small
+  places, the corpus may be the only available signal.
 - **Availability vs selection.** Availability: can the system answer correctly
   when a place is named (factual questions)? Selection: does the place get
   chosen when it isn't named (recommendation questions)? Knowing a place is
   necessary but not sufficient for recommending it [src: Najafi & Costa].
   Evaluation should be split the same way.
 - **Where the bias enters.** Measure at three points for the same questions:
-  LLM alone, retriever top-k, LLM with retrieval [precedent: PopQA].
+  LLM alone, retriever top-k, LLM with retrieval [precedent: PopQA compares
+  LLM alone with LLM + retrieval; the retriever-only point is ours].
 - **Corpus skew ≠ model skew.** A place thin in the corpus may be known to the
-  LLM; retrieval can then override correct knowledge. Candidate fix: adaptive
-  retrieval [src: PopQA, to read]. See T9.
-- **Language bias enters at retrieval and at generation** [src: Park & Lee].
+  LLM; retrieval can then override correct knowledge. Adaptive retrieval
+  (retrieve only below a popularity threshold) is the known fix [src: PopQA];
+  it is moot if the local model knows nothing about our places (closed-book
+  test). See T9.
+- **Language bias enters at retriever, reranker and generator**
+  [src: Park & Lee; All Languages Matter].
 - **Tourism RAG papers evaluate answers, rarely recommendations** (quality,
-  diversity, popularity mix) [me, from 4 papers].
+  diversity, popularity mix) [me, across ~6 papers].
+- **LLM judges need human calibration.** Judges matched the expert majority
+  only 17–54% of the time on recommendation lists [src: Banerjee 2026,
+  LLM-judge]. This also applies to the team's own uncalibrated LLM judgments.
+- **Keep objectives as separate, explicit scores.** One LLM asked to balance
+  several goals quietly favours one, usually famous places ("objective
+  collapse") [src: Collab-Rec]. The weighted-sum design guards against this.
 - **Tourism is multi-stakeholder** (tourists, residents, businesses,
   environment); the tiktokrijen loop shows how visibility becomes crowding [me].
   Details: [multi-stakeholder.md](multi-stakeholder.md).
@@ -71,31 +87,74 @@ storage, and the hidden-gems recommender itself.
 - **Constraint vs score.** A constraint must say yes or no to a page with
   unknown location; a score can stay neutral. With half the pages unlocated,
   this is why the hard filter failed `[src: Spatial-RAG]` `[docs]` `[me]`.
+  Hard location filters in the literature assume complete metadata
+  [src: Tandon; LAMB].
+- **The geo score can create its own concentration.** Across many queries, a
+  distance score can favour places near common anchors, and places whose
+  location is *known*. Location metadata comes mostly from Wikidata, so it
+  correlates with fame; "unknown = neutral" may then favour well-documented
+  places. It depends on *why* a page is unlocated: not a place (fine) or too
+  obscure to locate (biased) [src: novelty check; Forster et al.] `[me]`.
 - **Place as disambiguator (hypothesis).** The team's questions mostly use the
   place to say *which* entity is meant, not for spatial reasoning; the geo-RAG
-  literature mostly targets spatial reasoning. Possible positioning angle; check
-  against real questions `[me]` `[claude]`.
+  literature mostly targets spatial reasoning. Possible positioning angle;
+  check against real questions `[me]` `[claude]`.
 - **Location is language-independent.** A distance score can counter language
   bias across borders, which gives the geo layer a purpose beyond
   disambiguation `[claude]`. See H1–H5.
 
-### Open hypotheses (geo × language) `[claude]`
+### Techniques (current view)
 
-- H1 Geo score counteracts language bias for nearby other-language pages.
-- H2 Language quota only for languages spoken near the anchor place.
-- H3 Location-first candidates, then text ranking (language-blind pool).
-- H4 Place as retrieval unit (one score per Wikidata ID, all languages).
-- H5 Location decides which passages get translated.
-- H6 the soft geo score may already reduce popularity concentration (after Rahmani et al.). It's testable directly: concentration with and without the geo score.
+- **Only post-processing fits a RAG system** (re-scale, re-rank, aggregate);
+  pre- and in-processing need interaction data [src: popularity-bias survey].
+- **In RAG, act per place, not per chunk.** Skew works through chunk count, so
+  down-weighting chunks is not enough. Options: a per-place cap in the top-k,
+  place-level scoring (average of a place's top-n passages, as in EQR's
+  Algorithm 1), or xQuAD with places as aspects `[claude]` [src: Wen et al.].
+- **Quotas are a general training-free tool:** per language (Amiraz), per
+  place, per popularity tier. A per-place cap has no published evidence yet
+  [src: novelty check].
+- **Diversity re-ranking (MMR, set selection) helps in some RAG studies and
+  hurt answer relevance in one** [src: novelty check]. Test, don't assume.
+- **Re-ranking cannot surface what never entered the candidate pool**
+  [src: Forster et al.]; the over-fetch size matters for hidden gems.
+- **Language debiasing per stage:** retriever, balanced quota (Amiraz,
+  training-free); reranker, utility-based LAURA (needs answer-labelled
+  training data); generator, translate into the query language (DKM-RAG).
+  Translation adds little for dense retrieval [src: novelty check].
+- **Broad and indirect queries:** LLM query reformulation into subtopics
+  with elaborations (EQR), prompt-only [src: Wen et al.].
+- **Keep any anti-popularity weight small;** users accept only a light shift
+  toward less popular items [src: survey, Steck 2011].
+
+### Hypotheses, with novelty verdicts
+
+Verdicts from the novelty check (targeted, not systematic).
+
+- **H1** Geo score counteracts language bias for nearby other-language pages. *None found.*
+- **H2** Language quota only for languages spoken near the anchor place. *None found;* BORDIRLINES picks languages by country, the closest counter-evidence.
+- **H3** Location-first candidates, then text ranking (language-blind pool). *Partial:* mechanism exists, never measured for language bias.
+- **H4** Place as retrieval unit (one score per Wikidata ID, all languages). *Partial:* entity-as-unit exists monolingually; no cross-language merging.
+- **H5** Location decides which passages get translated. *None found;* low priority (translation adds little for dense retrieval).
+- **H6** A location/context score reduces concentration on well-documented or popular places. *Prior work in recommenders, mixed results* (one geo model raised popularity bias by 40%); *none in RAG.* Must be measured in both directions.
+
+**Positioning (parked):** location × language bias is a defensible novelty
+claim if framed as bias mitigation in multilingual dense RAG, not as
+cross-lingual geographic IR (GeoCLEF 2005–2009). Neighbouring languages are
+already retrieved better, so Slovenian–Croatian may show little gap; test
+Slovenian–German and Slovenian–Hungarian too [src: novelty check].
 
 ### Evaluation toolkit (data-independent)
 
 - Popularity / documentation stratification [SynthTRIPs, PopQA]
-- Concentration and effective diversity: HHI, Top-k share, entropy [Najafi & Costa]
+- Concentration and effective diversity: HHI, Top-k share, entropy [Najafi & Costa]; measured across many queries, in both directions
 - Novelty, coverage, geographic spread, local share [Çelik]
-- Language preference: MLRS [Park & Lee]; citation language [BORDIRLINES]
+- Language preference: MLRS [Park & Lee]; language share of top-k before vs after reranking [All Languages Matter]; citation language [BORDIRLINES]
 - Intent / question-type stratification [Tandon]
-- Three-point measurement: LLM alone / retriever / LLM + retrieval
+- Three-point measurement: LLM alone / retriever / LLM + retrieval; closed-book test for the LLM alone [PopQA]
+- Place exposure in answers: which places an answer names, against chunk count and a visitor signal (no standard metric exists; ours to define) [novelty check]
+- Pairwise, per-dimension LLM judging with a human-calibrated sample [Banerjee 2026, LLM-judge]
+- Small exhaustive human-labelled set for recommendation questions [TravelDest]
 - Candidate pool size, local vs global [LAMB]
 
 ### Other concerns
@@ -104,11 +163,12 @@ storage, and the hidden-gems recommender itself.
 - **Scale:** at ~300K documents, speed and filtered search become real concerns; at 726 chunks they did not `[docs: geo-literature]`.
 - **Experiment vs real world:** generated questions reuse the gold chunk's wording, which flatters text similarity; real users ask vaguely, with preferences, in other languages `[claude]`.
 - **Deployment constraints:** data licensing, GDPR, EU rules on recommenders `[claude]`.
-- **Signals not yet available:** popularity (proxies: Wikipedia page views, Wikidata sitelinks) and quality ("worth a visit", source unknown).
+- **Signals not yet available:** visitor popularity (proxies: Wikipedia page views, which exist only for places with an article and differ per language edition) and quality ("worth a visit", source unknown).
 
 ### Dependencies
 
 - Location data before any geo task.
+- Place ID (Wikidata) in chunk metadata before per-place metrics, caps or aggregation.
 - Set-based gold questions before evaluating set or ranked answers.
 - Documentation, popularity and quality signals before evaluating recommendations.
 - Crowding data and personal profiles need external data; out of reach now.
@@ -127,10 +187,10 @@ open checks in [decisions-assumptions.md](decisions-assumptions.md).
 | 3 | Regions use EU NUTS codes | Data-dependent (fails outside EU, natural regions) |
 | 4 | Three location tiers: Wikidata, source default, LLM + gazetteer | Data-dependent (new source types may break tier 2) |
 | 5 | Model names places, never outputs coordinates | Data-dependent (tested on Slovenian only) |
-| 6 | Location is a soft score; unknown = neutral | Likely holds |
+| 6 | Location is a soft score; unknown = neutral | Likely holds; risk: may favour places whose location is known (well-documented) |
 | 7 | Region used only if it excludes >10% of located pages | Data-dependent (gate now fires, unmeasured) |
 | 8 | Strict filter version kept alongside | Stable |
-| 9 | Location in simple metadata, not store-specific features | Stable for now (4× over-fetch costs speed at scale) |
+| 9 | Location in simple metadata, not store-specific features | Stable for now (4× over-fetch costs speed at scale; over-fetch size also limits which hidden gems can surface) |
 
 ---
 
@@ -149,16 +209,19 @@ open checks in [decisions-assumptions.md](decisions-assumptions.md).
 | T7 | Is local-only inference still a principle, given a hosted model is the geo resolver? | Open |
 | T8 | What will the official dataset contain (sources, languages, question types, format)? | Open, likely unknown until December |
 | T9 | May the chatbot use the LLM's own knowledge, or must every answer be grounded in the corpus? | Open; decides whether adaptive retrieval is an option |
-| T10 | which harm should the system target, the retrieval bias (documentation) or crowding (visits)? The recommender system survey's critique makes this the prerequisite for choosing any signal. |
+| T10 | Which harm should the system target: the retrieval bias (documentation) or crowding (visits)? | Open; prerequisite for choosing any signal [src: popularity-bias survey] |
 
 ### For the literature
 
-Search task v3, the coverage table and the main gaps:
-[consolidation-2026-10-03.md](consolidation-2026-10-03.md) §1.
+Reading phase closed. Coverage table, hypotheses and remaining gaps:
+[consolidation-2026-10-06.md](consolidation-2026-10-06.md). Further threads
+(geo-score exposure effects, exposure metrics for RAG answers, open visitor
+signals for Europe, per-language-pair bias numbers, generation-stage
+mitigation, unsearched venues) are listed in the novelty check; most are
+better answered by experiments.
 
-Landscape, revisit: popularity bias in recommenders, exposure measurement,
-substitutability ("valid alternatives"), crowding-aware recommendation, EU
-regulation, quality signals.
+Landscape, revisit: substitutability ("valid alternatives"), crowding-aware
+recommendation, EU regulation, quality signals.
 
 ---
 
@@ -170,6 +233,8 @@ regulation, quality signals.
 - **Direct vs adjacent literature.** No direct work on our use case doesn't
   mean nothing applies: look at adjacent fields (popularity bias in
   recommenders, long-tail QA, entity disambiguation, multilingual retrieval) and state the transfer assumption.
+- **Saturation is a stopping signal.** When new papers mostly confirm, switch
+  strand or switch from reading to applying.
 - **Understanding vs remembering.** Keep the structure in my head and the
   details in this document. Maintain the document, or it decays.
 
@@ -194,7 +259,12 @@ regulation, quality signals.
 - **Popularity bias:** systems over-suggesting what is already popular.
 - **Exposure:** how often an item appears in results across many queries.
 - **Concentration (HHI):** sum of squared result shares per place; high means a few places dominate.
-- **Effective diversity:** the number of equally-shown places that would give the same concentration.
+- **Effective diversity:** the number of equally-shown places that would give the same concentration; nominal diversity is just the count of distinct places.
+- **Horizontal substitution:** "alternatives" that stay within the familiar circuit (Santorini → Milos) instead of reaching the periphery.
+- **Objective collapse:** one model asked to balance several goals quietly optimizing only one.
+- **Quota / cap:** a limit on how many top-k results may come from one language, place or popularity tier.
+- **MMR / xQuAD:** re-ranking methods that trade relevance against redundancy or aspect coverage.
+- **MLRS:** label-free measure of how far documents rise when translated into one shared language, i.e. the rank effect of language alone.
 - **Digital overtourism / tiktokrijen:** crowding amplified by what platforms show; the viral-visit-post-visibility loop.
 
 ---
@@ -204,40 +274,4 @@ regulation, quality signals.
 Coverage by domain problem and goal: consolidation §1.
 Cards: [sources/](sources/) (format in [sources/README.md](sources/README.md)).
 Team sources: [sources/team-list.md](sources/team-list.md).
-
----
-
-## 9. Changelog
-
-- **2026-09-30, v0.** Document created.
-- **2026-09-30, superseded:** a single five-rung ladder. *Reason:* it mixed
-  task, objective and data; offline exposure measurement is possible earlier.
-  Replaced by the three-axis map.
-- **2026-09-30, superseded:** "the spatial signal is a constant, so geography
-  cannot help" `[docs: geo-rationale.md]`. *Reason:* measured on 176 pages; the
-  expansion to 10 localities and 8 countries removes the premise.
-- **2026-10-01, v1.** Team answers added; decision table, method notes,
-  question dimensions and candidate question types added; Spatial-RAG card
-  started.
-- **2026-10-01, superseded:** "the goal is unclear: scalability, precision or
-  exposure". *Reason:* Pepe confirmed the hidden-gems end goal and retrieval
-  accuracy as the current step `[team]`.
-- **2026-10-01, superseded:** literature questions on popularity bias,
-  exposure, substitutability, crowding and regulation as the main strands.
-  *Reason:* the team's priorities. Demoted to "landscape, revisit"; replaced by
-  L1–L6.
-- **2026-10-01, superseded:** "reason from the current data". *Reason:* the
-  current corpus is a proxy; the official ~300K-document dataset arrives in
-  December with unknown questions and gold passages `[team]`.
-- **2026-10-01:** Restructured into hub and spokes; no content changes.
-- **2026-10-05, v2.** Hub trimmed to current beliefs and links. Added Framing,
-  open hypotheses H1–H5, evaluation toolkit, T9. Moved out: decision table →
-  `decisions-assumptions.md`; question dimensions → `question-types.md`;
-  multi-stakeholder and tiktokrijen notes → `multi-stakeholder.md`; corpus
-  details → consolidation §3. T1–T3 collapsed; glossary extended.
-- **2026-10-05, superseded:** the three-axis map (task, objective, signals).
-  *Reason:* the problem-centred concept map and the Framing block say the same
-  more usefully. Dependencies rewritten without its labels (A2, A3, B2).
-- **2026-10-05, superseded:** literature questions L1–L6 and "coverage at a
-  glance". *Reason:* replaced by search task v3 and the coverage table in the
-  consolidation document.
+Deferred with reasons: consolidation §6.
