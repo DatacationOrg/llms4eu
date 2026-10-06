@@ -8,6 +8,7 @@ from pathlib import Path
 import chromadb
 from tqdm import tqdm
 
+from src.db.legacy.pages import chunk_variant, variant_tag
 from src.db.legacy.pages import connect_pages as connect
 from src.db.legacy.pages import initialize_page_artifacts_db
 from src.indexing.documents import PageChunk, text_for_embedding
@@ -144,8 +145,10 @@ def _load_chunks() -> list[PageChunk]:
                 from page_chunks c
                 join page_metadata m on m.id = c.page_id
                 left join page_sources s on s.source = m.source
+                where c.variant = ?
                 order by c.id
-                """
+                """,
+                (chunk_variant(),),
             )
         ]
 
@@ -164,14 +167,21 @@ def _metadata(chunk: PageChunk) -> dict:
 
 def _chunk_count() -> int:
     with connect() as conn:
-        return int(conn.execute("select count(*) from page_chunks").fetchone()[0])
+        return int(
+            conn.execute(
+                "select count(*) from page_chunks where variant = ?", (chunk_variant(),)
+            ).fetchone()[0]
+        )
 
 
 def _chunks_digest() -> str:
     """Fingerprint of every chunk id and text, so a rechunk invalidates the index."""
     digest = hashlib.sha256()
     with connect() as conn:
-        for row in conn.execute("select id, text from page_chunks order by id"):
+        for row in conn.execute(
+            "select id, text from page_chunks where variant = ? order by id",
+            (chunk_variant(),),
+        ):
             digest.update(f"{row['id']}\0{row['text']}\0".encode())
     return digest.hexdigest()
 
@@ -240,7 +250,8 @@ def _existing_collection(provider: str):
 
 
 def _collection_name(provider: str) -> str:
-    return f"{CONFIG['collection_name']}_{provider}_chunk"
+    cut = variant_tag(chunk_variant(), "_")
+    return f"{CONFIG['collection_name']}_{provider}{cut}_chunk"
 
 
 def _validate_provider(provider: str) -> None:

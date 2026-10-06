@@ -15,6 +15,29 @@ pages alone, so existing eval labels keep pointing at valid chunk ids.
 `just rechunk` rechunks every page after a config change and moves the eval
 labels onto the new chunks through their evidence quotes (see `src/eval`).
 
+## Chunk variants
+
+The cut above is the `base` variant. `chunk_variants` in `config.yaml` names
+alternative cuts (`c900: {chunk_size: 900}`, ...) that override its values.
+Every variant's chunks live side by side in `page_chunks`, tagged by the
+`variant` column, with ids `<page>:<variant>:<index>`; base ids stay
+`<page>:<index>`. Chunking, indexing, labelling and eval all work on one
+variant at a time, chosen with `CHUNK_VARIANT`:
+
+```bash
+CHUNK_VARIANT=c900 just chunk        # cut the pages a second way
+CHUNK_VARIANT=c900 just rechunk      # relabel from the evidence quotes
+CHUNK_VARIANT=c900 just index qwen   # its own collection, page_chunks_qwen_c900_chunk
+CHUNK_VARIANT=c900 just eval         # scored on the questions found in its chunks
+```
+
+`just chunk-compare` runs those four steps for every listed variant and
+prints one table (see `src/eval`). The base chunks, labels and collections
+are never touched by another variant, so an experiment cannot disturb the
+pipeline's own cut. A database from before the `variant` column is refused
+until `sql/migrate_chunk_variants.sql` has been applied by hand; it keeps
+every chunk id, so no label is lost.
+
 `locations.py` (`just locate-pages`) stores one point per page in
 `page_locations`: a single-site source's configured Wikidata item
 (`source_locations` in `config.yaml`), or a Wikipedia page's own article item.

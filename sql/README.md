@@ -8,5 +8,8 @@ Markdown.
 
 `eval.sql` stores generated eval questions and gold relevant chunk ids. Eval
 labels belong beside page chunks because relevance points to `page_chunks.id`.
+`page_chunks.variant` keeps alternative cuts of the pages side by side for
+chunk-size experiments; `migrate_chunk_variants.sql` is the one-off, manual
+rebuild that adds the column to an older database.
 
 The SQL stays portable so moving to Postgres later should stay small.
