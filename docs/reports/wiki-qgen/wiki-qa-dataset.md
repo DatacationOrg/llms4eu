@@ -1,12 +1,11 @@
 # How the wiki places QA test set was made (2026-09-25 to 2026-10-05)
 
-The test set in `/data/llms4eu/wiki/qa/` (load: `src/data_prep/wiki_qa.py`; columns and examples: the `README.md`
-there) is built in twelve stages on top of the Wikipedia places corpus. This report gives, per stage, what was
+The test set in `/data/llms4eu/wiki/qa/` (load it and read its columns: `src/data_prep/README.md`) is built in twelve stages on top of the Wikipedia places corpus. This report gives, per stage, what was
 done, with which model and settings, which filter decides what is kept, and what the checks measured, so the set can
 be judged and, roughly, rebuilt. Exact reruns are not possible: the free models are stochastic and change behind
-their endpoints. The scripts, prompts and the full decision log live on thebeast in the git-excluded workspace
-`llms4eu/tmp_labeling/` (`CLEANING_LOG.md` is the day-by-day log; `xcheck/` holds every blind check's input and
-result); the stage table names the script for each step.
+their endpoints. The scripts, prompts and the full decision log are not in the repo: they live on thebeast in
+`llms4eu/tmp_labeling/` (`CLEANING_LOG.md` is the day-by-day log, `xcheck/` every blind check's input and result).
+The stage table names the script for each step and the columns it fills.
 
 ## Models and endpoints
 
@@ -21,30 +20,30 @@ result); the stage table names the script for each step.
 | Claude Sonnet | subagents, blind (never shown a model's labels) | quality checks only, plus the 200 table answers |
 
 Bunny is a reasoning model: `max_tokens` 32,768 (8,192 made nearly every hard-question request fail); default
-reasoning effort (effort=low dropped verdict F1 0.69 -> 0.55). Every database row stores the model that made it, and
-no model judges its own output in the same call.
+reasoning effort (effort=low dropped verdict F1 0.69 -> 0.55). Every intermediate row records the model that made
+it, and no model judges its own output in the same call.
 
 ## Stages
 
-| # | stage | script (tmp_labeling) | output |
+| # | stage | script (tmp_labeling) | ends up in |
 |---|---|---|---|
 | 0 | corpus | `src/data_prep/wiki_places.py` (repo) | `/data/llms4eu/wiki/pages.jsonl` |
-| 1 | page tags | `tag_spec.py`, `train_lora.py --task cls`, `run_vllm.py` | table `labels` |
-| 2 | corpus questions | `gen_questions.py`, `train_lora.py --task qg`, `run_vllm.py` | table `questions` |
-| 3 | rule checks | `rule_checks.py` | table `checks` |
-| 4 | quality labels, repairs, relabels | `qspec.py`, `bunny_label.py`, `bunny_fix.py`, `bunny_verify.py`, `make_queue.py` | `bunny_labels`, `repairs`, `repair_labels` |
-| 5 | cross-page duplicates | `near_dups.py` | `ambiguous_across_pages` |
-| 6 | hard questions | `bm25.py`, `gen_challenge.py`, `dense_rank.py rank` | table `challenge_items` |
-| 7 | answers, evidence, cross-lingual | `gen_rag.py gen` | table `answers` |
-| 8 | answer judges | `gen_rag.py judge`, `qspec.RAG` | `answer_labels` (Bunny), `answer_labels_ling` |
-| 9 | extra layers | `gen_extra.py` (variants, unans, compare, meta, tables), `tables.py` | `variants`, `unanswerable`, `compare`, `meta_q`, `table_q` |
-| 10 | multi-page relevance | `gen_extra.py qrels` | table `qrels` |
-| 11 | ranks, tags, splits | `dense_rank.py rag` / `bm25`, `build_clean.py` | in the export |
+| 1 | page tags | `tag_spec.py`, `train_lora.py --task cls`, `run_vllm.py` | `rag.page_tags` |
+| 2 | corpus questions | `gen_questions.py`, `train_lora.py --task qg`, `run_vllm.py` | `clean` |
+| 3 | rule checks | `rule_checks.py` | (suspect flags only) |
+| 4 | quality labels, repairs, relabels | `qspec.py`, `bunny_label.py`, `bunny_fix.py`, `bunny_verify.py`, `make_queue.py` | `clean.labels`, `clean.repaired` |
+| 5 | cross-page duplicates | `near_dups.py` | `clean.ambiguous_across_pages` |
+| 6 | hard questions | `bm25.py`, `gen_challenge.py`, `dense_rank.py rank` | `challenge` |
+| 7 | answers, evidence, cross-lingual | `gen_rag.py gen` | `rag` answers, evidence, `*_x` |
+| 8 | answer judges | `gen_rag.py judge`, `qspec.RAG` | `rag.criteria`, `answer_ok`, `x_ok` |
+| 9 | extra layers | `gen_extra.py` (variants, unans, compare, meta, tables), `tables.py` | `rag.variants`, `unanswerable`, `compare`, `meta`, `tables` |
+| 10 | multi-page relevance | `gen_extra.py qrels` | `relevant`, `hits`, ... in `rag`, `unanswerable` |
+| 11 | ranks, tags, splits | `dense_rank.py rag` / `bm25`, `build_clean.py` | `rank_*`, tags, `split` in `rag` |
 | 12 | export | `build_clean.py` | `wiki_qa_*.parquet`, `manifest.json`, `SHA256SUMS` |
 
-Runners (`run_*.sh`) loop each step 24/7 under `watchdog.sh`; every step resumes from its table, so a restart
-redoes nothing. All steps only add tables or rows; originals are never changed, and a replaced layer was first saved
-to `tmp_labeling/backup/`.
+Intermediate results sit in one working SQLite file (`tmp_labeling/wiki_qa.db`), never read by users. Runners
+(`run_*.sh`) loop each step 24/7 under `watchdog.sh` and resume where they stopped. Steps only add rows; originals
+are never changed, and a replaced layer was first saved to `tmp_labeling/backup/`.
 
 ### 0. Corpus
 
@@ -171,7 +170,7 @@ Computed tags: `lex_overlap` (share of the question's idf weight found in the pa
 
 ### 12. Export
 
-`build_clean.py` reads the tables (never changing them), writes each layer, converts to zstd Parquet (one schema:
+`build_clean.py` reads the working file (never changing it), joins the layers, converts to zstd Parquet (one schema:
 union of keys, absent = null; dict-valued columns as JSON strings) through a temp file and rename, then
 `manifest.json` and `SHA256SUMS`. Frozen build: 2026-10-05 07:43.
 
