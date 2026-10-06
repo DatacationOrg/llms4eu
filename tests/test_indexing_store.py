@@ -80,6 +80,7 @@ def test_chunk_collection_stores_page_metadata(monkeypatch, page_db):
         chunk_vectors._collection_name("qwen")
     )
     stored = collection.get(ids=["chunk-castle"], include=["metadatas"])
+    assert stored["metadatas"] is not None
     assert stored["metadatas"][0] == {
         "chunk_index": 0,
         "id": "chunk-castle",

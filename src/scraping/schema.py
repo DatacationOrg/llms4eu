@@ -1,3 +1,4 @@
+from typing import Any
 from datetime import datetime
 
 from pydantic import BaseModel, Field
@@ -28,7 +29,7 @@ class PageMetadata(BaseModel):
     def db_columns(cls) -> list[str]:
         return list(cls.model_fields)
 
-    def db_values(self) -> tuple:
+    def db_values(self) -> tuple[Any, ...]:
         values = []
         for column in self.db_columns():
             value = getattr(self, column)

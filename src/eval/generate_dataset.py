@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from typing import Any, cast
 import argparse
 import re
 import uuid
@@ -105,7 +106,9 @@ def generate_dataset(
             target_language = _cross_language(chunk["id"], chunk["language"])
             result = structured_model.invoke(_messages(chunk, target_language))
             questions = [
-                item for item in _flatten_questions(result) if _valid_question(*item)
+                item
+                for item in _flatten_questions(cast(EvalQuestionBatch, result))
+                if _valid_question(*item)
             ]
             inserted += insert_questions(conn, chunk["id"], questions)
             print(f"[{index}/{len(chunks)}] got {len(questions)} questions", flush=True)
@@ -115,7 +118,7 @@ def generate_dataset(
     )
 
 
-def _eligible_unprocessed_chunks(limit: int | None) -> list[dict]:
+def _eligible_unprocessed_chunks(limit: int | None) -> list[dict[str, Any]]:
     with connect() as conn:
         rows = [
             dict(row)
@@ -220,14 +223,16 @@ def _valid_question(question_type: str, item: QuestionCandidate) -> bool:
     )
 
 
-def _messages(chunk: dict, target_language: str | None) -> list[tuple[str, str]]:
+def _messages(
+    chunk: dict[str, Any], target_language: str | None
+) -> list[tuple[str, str]]:
     return [
         ("system", _system_prompt(chunk, target_language)),
         ("human", _human_prompt(chunk)),
     ]
 
 
-def _system_prompt(chunk: dict, target_language: str | None) -> str:
+def _system_prompt(chunk: dict[str, Any], target_language: str | None) -> str:
     target_language = target_language or "en"
     return render(
         "question_generation.system",
@@ -240,7 +245,7 @@ def _system_prompt(chunk: dict, target_language: str | None) -> str:
     )
 
 
-def _human_prompt(chunk: dict) -> str:
+def _human_prompt(chunk: dict[str, Any]) -> str:
     return render(
         "question_generation.human",
         title=chunk["title"] or "",

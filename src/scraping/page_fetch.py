@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from urllib.error import URLError
 from urllib.parse import urlparse
-from urllib.request import Request, urlopen
+from urllib.request import Request, build_opener
 
 import httpx
 from bs4 import BeautifulSoup
@@ -19,6 +19,8 @@ from src.scraping.schema import PageMetadata
 
 
 config = fetch_pages_config()
+# Scrape-politeness jitter, not security; SystemRandom keeps the same distribution.
+_JITTER = random.SystemRandom()
 
 HEADERS = {
     "User-Agent": (
@@ -60,7 +62,7 @@ class DomainThrottle:
             self._last_request_at[domain] = now + wait_seconds
 
         if wait_seconds:
-            time.sleep(wait_seconds + random.uniform(0, 0.25))
+            time.sleep(wait_seconds + _JITTER.uniform(0, 0.25))
 
 
 def read_source_urls(path: Path) -> list[SourceUrl]:
@@ -136,7 +138,7 @@ def _fetch_once(
             response = client.get(fetch_url)
             if response.status_code not in config.retry_statuses or attempt == 1:
                 break
-            time.sleep(1.0 + random.uniform(0, 0.5))
+            time.sleep(1.0 + _JITTER.uniform(0, 0.5))
 
     assert response is not None
     if response.status_code == 403 and "robot policy" in response.text.lower():
@@ -168,10 +170,12 @@ def _fetch_once_urllib(
     throttle: DomainThrottle,
     timeout: float,
 ) -> FetchedPage:
+    if urlparse(fetch_url).scheme not in ("http", "https"):
+        return error_page(source_url, f"Unsupported URL scheme: {fetch_url}")
     try:
         throttle.wait(fetch_url)
         request = Request(fetch_url, headers=HEADERS)
-        with urlopen(request, timeout=timeout) as response:
+        with build_opener().open(request, timeout=timeout) as response:
             content = response.read()
             final_url = response.url
             status_code = response.status
@@ -234,7 +238,7 @@ def extract_language(html: str) -> str | None:
     if not declared:
         return None
     # "sl-SI", "sl_SI" and "SL" all mean the same language.
-    return re.split(r"[-_]", declared.strip())[0].lower() or None
+    return re.split(r"[-_]", str(declared).strip())[0].lower() or None
 
 
 def _is_html(content_type: str | None) -> bool:

@@ -8,6 +8,9 @@ POINTS = {"near": (45.98, 15.48), "far": (46.42, 15.87)}  # 1 km and 57 km away
 class Stage:
     name = "stage"
 
+    def retrieve(self, query, limit):
+        return self.retrieve_batch([query], limit)[0]
+
     def retrieve_batch(self, queries, limit):
         chunks = [
             RankedChunk("far:0", 0.9, ""),

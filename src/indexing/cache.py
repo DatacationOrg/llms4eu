@@ -62,10 +62,10 @@ def _load(conn: sqlite3.Connection, keys: list[str]) -> dict[str, list[float]]:
     rows = {}
     for start in range(0, len(keys), 500):
         batch = keys[start : start + 500]
-        placeholders = ", ".join("?" for _ in batch)
         for key, vector_json in conn.execute(
-            f"select key, vector_json from embedding_cache where key in ({placeholders})",
-            batch,
+            "select key, vector_json from embedding_cache "
+            "where key in (select value from json_each(?))",
+            (json.dumps(batch),),
         ):
             rows[key] = json.loads(vector_json)
     return rows
