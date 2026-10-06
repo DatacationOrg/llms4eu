@@ -15,8 +15,12 @@ rebuilds.
 Current chunk collections are storage names, not public retrieval method names:
 
 ```text
-page_chunks_<provider>_chunk
+page_chunks_<provider>_chunk             # the base chunk variant
+page_chunks_<provider>_<variant>_chunk   # CHUNK_VARIANT=<variant>
 ```
+
+A collection holds one chunk variant (see `src/preprocess`), so indexing a
+variant never replaces the base index.
 
 Each chunk is embedded as its page title, heading breadcrumbs, and chunk text,
 joined by newlines. The retrieved evidence is always the original chunk text.

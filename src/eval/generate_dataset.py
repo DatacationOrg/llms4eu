@@ -7,8 +7,9 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field
 
-from src.db.pages import connect_pages as connect
-from src.db.pages import initialize_page_artifacts_db as initialize_eval_db
+from src.db.legacy.pages import chunk_variant
+from src.db.legacy.pages import connect_pages as connect
+from src.db.legacy.pages import initialize_page_artifacts_db as initialize_eval_db
 from src.shared.env import load_yaml
 from src.shared.prompts import render
 from src.shared.llm import (
@@ -125,13 +126,15 @@ def _eligible_unprocessed_chunks(limit: int | None) -> list[dict]:
                 from page_chunks c
                 join page_metadata m on m.id = c.page_id
                 join page_sources s on s.source = m.source
-                where not exists (
-                  select 1
-                  from eval_relevant_chunks r
-                  where r.chunk_id = c.id
-                )
+                where c.variant = ?
+                  and not exists (
+                    select 1
+                    from eval_relevant_chunks r
+                    where r.chunk_id = c.id
+                  )
                 order by c.id
-                """
+                """,
+                (chunk_variant(),),
             )
         ]
     chunks = [row for row in rows if _is_fact_dense(row["text"])]

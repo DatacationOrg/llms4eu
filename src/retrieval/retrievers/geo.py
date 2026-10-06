@@ -19,7 +19,7 @@ from typing import Literal, NamedTuple
 
 from pydantic import BaseModel, Field
 
-from src.db.pages import connect_pages as connect
+from src.db.legacy.pages import connect_pages as connect
 from src.retrieval.base import RankedChunk, Retriever
 from src.shared import wikidata
 from src.shared.env import load_yaml

@@ -5,8 +5,9 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from src.db.pages import connect_pages as connect
-from src.db.pages import initialize_page_artifacts_db
+from src.db.legacy.pages import DEFAULT_CHUNK_VARIANT, chunk_variant, variant_tag
+from src.db.legacy.pages import connect_pages as connect
+from src.db.legacy.pages import initialize_page_artifacts_db
 from src.shared.env import load_yaml
 
 CONFIG = load_yaml(Path(__file__).with_name("config.yaml"))
@@ -32,9 +33,10 @@ def chunk_markdown(
     paragraphs. A chunk shorter than `min_chars` is merged into the one before
     it rather than dropped, so no page text is lost.
     """
-    size = size or CONFIG["chunk_size"]
-    overlap = CONFIG["chunk_overlap"] if overlap is None else overlap
-    min_chars = CONFIG["chunk_min_chars"] if min_chars is None else min_chars
+    defaults = variant_settings(DEFAULT_CHUNK_VARIANT)
+    size = size or defaults["size"]
+    overlap = defaults["overlap"] if overlap is None else overlap
+    min_chars = defaults["min_chars"] if min_chars is None else min_chars
     chunks: list[Chunk] = []
     for heading_path, paragraphs in _sections(markdown):
         pieces = [p for text in paragraphs for p in _split_long_paragraph(text, size)]
@@ -74,11 +76,27 @@ def _length(pieces: list[str]) -> int:
     return sum(len(piece) for piece in pieces) + 2 * (len(pieces) - 1)
 
 
-def rebuild_page_chunks(rechunk_all: bool = False) -> None:
+def variant_settings(variant: str) -> dict[str, int]:
+    """Size, overlap and min_chars of one named cut; `base` is the top-level config."""
+    variants = {DEFAULT_CHUNK_VARIANT: {}, **CONFIG["chunk_variants"]}
+    if variant not in variants:
+        raise SystemExit(
+            f"Unknown chunk variant {variant!r}; add it under chunk_variants in "
+            "src/preprocess/config.yaml"
+        )
+    return {
+        key.removeprefix("chunk_"): variants[variant].get(key, CONFIG[key])
+        for key in ("chunk_size", "chunk_overlap", "chunk_min_chars")
+    }
+
+
+def rebuild_page_chunks(rechunk_all: bool = False, variant: str | None = None) -> None:
+    variant = variant or chunk_variant()
+    settings = variant_settings(variant)
     initialize_page_artifacts_db()
     with connect() as conn:
         if rechunk_all:
-            _drop_all_chunks(conn)
+            _drop_chunks(conn, variant)
         pages = conn.execute(
             """
             select m.id, c.markdown
@@ -88,51 +106,55 @@ def rebuild_page_chunks(rechunk_all: bool = False) -> None:
               and not exists (
                 select 1
                 from page_chunks chunks
-                where chunks.page_id = m.id
+                where chunks.page_id = m.id and chunks.variant = ?
               )
             order by m.id
-            """
+            """,
+            (variant,),
         ).fetchall()
 
         rows = [
             (
-                f"{page['id']}:{index}",
+                f"{page['id']}{variant_tag(variant, ':')}:{index}",
                 page["id"],
+                variant,
                 index,
                 chunk.heading_path or None,
                 chunk.text,
                 len(chunk.text),
             )
             for page in pages
-            for index, chunk in enumerate(chunk_markdown(page["markdown"]))
+            for index, chunk in enumerate(chunk_markdown(page["markdown"], **settings))
         ]
 
         conn.executemany(
             """
             insert into page_chunks (
-              id, page_id, chunk_index, heading_path, text, char_count
-            ) values (?, ?, ?, ?, ?, ?)
+              id, page_id, variant, chunk_index, heading_path, text, char_count
+            ) values (?, ?, ?, ?, ?, ?, ?)
             """,
             rows,
         )
 
-    print(f"chunked {len(pages)} new pages into {len(rows)} chunks")
+    print(f"chunked {len(pages)} new pages into {len(rows)} {variant} chunks")
 
 
-def _drop_all_chunks(conn) -> None:
-    """Delete every chunk; refused while a label could not be rebuilt afterwards."""
+def _drop_chunks(conn, variant: str) -> None:
+    """Delete one variant's chunks; refused while a label could not be rebuilt afterwards."""
     unanchored = conn.execute(
         """
-        select count(*) from eval_questions q
-        where not exists (select 1 from eval_evidence e where e.question_id = q.id)
-        """
+        select count(distinct r.question_id) from eval_relevant_chunks r
+        join page_chunks c on c.id = r.chunk_id and c.variant = ?
+        where not exists (select 1 from eval_evidence e where e.question_id = r.question_id)
+        """,
+        (variant,),
     ).fetchone()[0]
     if unanchored:
         raise SystemExit(
             f"{unanchored} eval questions have no evidence quote, so rechunking would "
             "delete their labels for good. Run `just eval-evidence` first."
         )
-    conn.execute("delete from page_chunks")
+    conn.execute("delete from page_chunks where variant = ?", (variant,))
 
 
 def _sections(markdown: str) -> list[tuple[str, list[str]]]:
@@ -204,7 +226,7 @@ def main() -> None:
     parser.add_argument(
         "--rebuild",
         action="store_true",
-        help="rechunk every page with the current config (then run `just relabel`)",
+        help="rechunk every page of the active variant (then `just rechunk` relabels)",
     )
     rebuild_page_chunks(parser.parse_args().rebuild)
 

@@ -21,7 +21,7 @@ from urllib.parse import urlparse
 
 import httpx
 
-from src.db.pages import connect_pages
+from src.db.legacy.pages import connect_pages
 from src.scraping.page_store import initialize_raw_pages_db
 from src.shared import wikidata
 from src.shared.env import data_path, load_yaml

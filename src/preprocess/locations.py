@@ -11,8 +11,8 @@ import re
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 
-from src.db.pages import connect_pages as connect
-from src.db.pages import initialize_page_artifacts_db
+from src.db.legacy.pages import connect_pages as connect
+from src.db.legacy.pages import initialize_page_artifacts_db
 from src.shared import wikidata
 from src.shared.env import load_yaml
 

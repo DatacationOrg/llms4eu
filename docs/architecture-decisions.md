@@ -68,9 +68,15 @@ best pipeline; `nemotron8b` alone reaches 0.940 at 11 ms/query, above every
 SQLite is source of truth for page chunks. Chroma is derived vector cache.
 
 - `page_chunks.text` stores canonical chunk text.
-- Chroma stores embeddings plus minimal ids.
+- `page_chunks.variant` keeps alternative cuts beside the `base` one, so
+  chunk-size experiments (2026-10-06, re-added after the cleanup) run on the
+  same database without touching the pipeline's chunks, labels or indexes.
+  Every stage works on one variant, chosen with `CHUNK_VARIANT`.
+- Chroma stores embeddings plus minimal ids, one collection per provider and
+  variant.
 - Vector retrieval hydrates chunk text from SQLite.
-- Chroma readiness means collection exists and count matches `page_chunks`.
+- Chroma readiness means the collection exists and its chunk digest matches
+  the variant's rows in `page_chunks`.
 
 ## Chunk Summaries
 
