@@ -1,4 +1,4 @@
-from src.db.pages import connect_pages
+from src.db.legacy.pages import connect_pages
 from src.scraping.page_extract import FetchResult
 from src.scraping.schema import PageMetadata
 from src.shared.env import ROOT

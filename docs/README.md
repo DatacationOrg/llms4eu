@@ -26,6 +26,7 @@ before 2026-08-11 was measured at the old 512-token cap.
 | [geo/](reports/geo/) | the soft-versus-strict geo run, gazetteer misses, and the design, rationale, literature and plan of the full geo implementation that preceded today's minimal one |
 | [okf/](reports/okf/) | the Open Knowledge Format benchmark; measured out |
 | [scraping/](reports/scraping/) | seed-URL quality for the expanded corpus (the URL lists live under `/data/llms4eu`) |
+| [wiki-qgen/](reports/wiki-qgen/) | the Wikipedia places QA test set: question generator and labels (2026-09-30), how the set was built (`wiki-qa-dataset.md`) |
 
 Sidecars sit beside their report: `<report>.md.cells.csv` is the long-form table.
 

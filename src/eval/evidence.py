@@ -16,9 +16,9 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field
 
-from src.db.pages import chunk_variant
-from src.db.pages import connect_pages as connect
-from src.db.pages import initialize_page_artifacts_db
+from src.db.legacy.pages import chunk_variant
+from src.db.legacy.pages import connect_pages as connect
+from src.db.legacy.pages import initialize_page_artifacts_db
 from src.shared.env import load_yaml
 from src.shared.llm import LocalOllamaStructuredLlm
 from src.shared.prompts import render

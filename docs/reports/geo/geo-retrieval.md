@@ -144,7 +144,7 @@ test for the gazetteer work in [geo-improvement-plan.md](geo-improvement-plan.md
 | geo tools for the agent | `src/retrieval/retrievers/page_tools.py`, `agentic_tools.py` |
 | method names and the resolver factory | `src/retrieval/methods.py` |
 | enrichment | `src/preprocess/locations.py` |
-| storage helpers | `src/db/pages.py` (`page_locations`, `page_ids_in_scope`, `pages_near`) |
+| storage helpers | `src/db/legacy/pages.py` (`page_locations`, `page_ids_in_scope`, `pages_near`) |
 
 Settings are the `geo_*` keys in `src/retrieval/config.yaml`: resolver
 provider, default radius, the soft path's weight, decay, over-fetch factor and
