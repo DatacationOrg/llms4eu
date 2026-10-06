@@ -10,7 +10,7 @@ from src.db.schemas.base import Qrels, Row, Split
 class Unanswerable(Row, Qrels):
     """A question no page answers; `answering` is empty on ok rows."""
 
-    file = "unanswerable"
+    file = "qa/wiki_qa_unanswerable.parquet"
     id: str  # the page it was written from
     lang: str
     title: str

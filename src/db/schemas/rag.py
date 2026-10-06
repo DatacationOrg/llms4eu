@@ -10,7 +10,7 @@ from src.db.schemas.base import Qrels, Row, Split
 class Rag(Row, Qrels):
     """One question about one page: easy (names the place) or hard (describes it)."""
 
-    file = "rag"
+    file = "qa/wiki_qa_rag.parquet"
     id: str  # the gold page
     n: int  # item number on the page
     kind: Literal["corpus", "challenge"]  # easy / hard

@@ -10,7 +10,7 @@ from src.db.schemas.base import Row, Split
 class Tables(Row):
     """An aggregation (max, mean, argmin, ...) over a table in one page."""
 
-    file = "tables"
+    file = "qa/wiki_qa_tables.parquet"
     id: str
     n: int
     title: str

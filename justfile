@@ -61,3 +61,15 @@ test:
 lint:
     uv run ruff check --fix .
     uv run ruff format .
+
+# Wiki dataset (src/db): cut pages.jsonl into pages.parquet + chunks.parquet.
+wiki-chunks *ARGS:
+    uv run python -m src.db.wiki_chunks {{ARGS}}
+
+# Ling 3.1 Flash notes: `summaries`, then `roles --size 512`. Resumable.
+wiki-notes *ARGS:
+    uv run python -m src.db.wiki_notes {{ARGS}}
+
+# Embed the chunks: qwen3-embedding-0.6b (GPU) or nemotron-3-embed-1b (OpenRouter). Resumable.
+wiki-embed *ARGS:
+    uv run python -m src.db.wiki_embed {{ARGS}}

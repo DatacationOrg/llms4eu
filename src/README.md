@@ -5,7 +5,8 @@ Service-shaped folders with one root `pyproject.toml`.
 `scraping` fetches source URLs, converts pages to Markdown, and stores them in
 SQLite.
 
-`db` owns the data: the wiki places dataset (`wiki_qa.py`, `schemas/`) and the
+`db` owns the data: the wiki places dataset (`wiki_qa.py`, `schemas/`; built by
+`wiki_chunks.py`, `wiki_notes.py`, `wiki_embed.py`) and the
 legacy page-database connection (`legacy/`).
 
 `preprocess` rebuilds derived artifacts from SQL rows, currently page chunks.

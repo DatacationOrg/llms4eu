@@ -10,7 +10,7 @@ from src.db.schemas.base import Row, Split
 class Compare(Row):
     """A question that needs two pages."""
 
-    file = "compare"
+    file = "qa/wiki_qa_compare.parquet"
     id: str  # = pages[0]
     pages: list[str]
     lang: str

@@ -10,7 +10,7 @@ from src.db.schemas.base import Row, Split
 class Meta(Row):
     """A list or geo question whose answer is a set of pages."""
 
-    file = "meta"
+    file = "qa/wiki_qa_meta.parquet"
     key: str
     kind: Literal["list", "geo"]
     lang: str
