@@ -130,15 +130,13 @@ def _fetch_once(
     with httpx.Client(
         headers=HEADERS, follow_redirects=True, timeout=timeout
     ) as client:
-        response: httpx.Response | None = None
-        for attempt in range(2):
+        throttle.wait(fetch_url)
+        response = client.get(fetch_url)
+        if response.status_code in config.retry_statuses:
+            time.sleep(1.0 + random.uniform(0, 0.5))  # nosec B311 - retry jitter, not security
             throttle.wait(fetch_url)
             response = client.get(fetch_url)
-            if response.status_code not in config.retry_statuses or attempt == 1:
-                break
-            time.sleep(1.0 + random.uniform(0, 0.5))  # nosec B311 - retry jitter, not security
 
-    assert response is not None
     if response.status_code == 403 and "robot policy" in response.text.lower():
         return _fetch_once_urllib(source_url, fetch_url, throttle, timeout)
 

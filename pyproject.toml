@@ -39,3 +39,20 @@ dev = [
     "pytest>=9.0.3",
     "ruff>=0.15.14",
 ]
+
+[tool.bandit.assert_used]
+skips = ["*test_*.py"] # pytest needs assert; still flagged in src
+
+[tool.pyright]
+typeCheckingMode = "standard"
+
+# chromadb has no fixed release (last affected 1.5.9). These four are HTTP-server-only
+# (trust_remote_code RCE, tenant auth gaps); we only use the embedded PersistentClient
+# in src/indexing/store.py. Remove when chromadb ships a fix, or if we ever run a server.
+[tool.pip-audit]
+ignore-vuln = [
+  "PYSEC-2026-311",
+  "PYSEC-2026-3813",
+  "PYSEC-2026-3814",
+  "PYSEC-2026-3815",
+]
