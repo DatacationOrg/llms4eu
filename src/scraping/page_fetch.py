@@ -60,7 +60,7 @@ class DomainThrottle:
             self._last_request_at[domain] = now + wait_seconds
 
         if wait_seconds:
-            time.sleep(wait_seconds + random.uniform(0, 0.25))
+            time.sleep(wait_seconds + random.uniform(0, 0.25))  # nosec B311 - politeness jitter, not security
 
 
 def read_source_urls(path: Path) -> list[SourceUrl]:
@@ -130,15 +130,13 @@ def _fetch_once(
     with httpx.Client(
         headers=HEADERS, follow_redirects=True, timeout=timeout
     ) as client:
-        response: httpx.Response | None = None
-        for attempt in range(2):
+        throttle.wait(fetch_url)
+        response = client.get(fetch_url)
+        if response.status_code in config.retry_statuses:
+            time.sleep(1.0 + random.uniform(0, 0.5))  # nosec B311 - retry jitter, not security
             throttle.wait(fetch_url)
             response = client.get(fetch_url)
-            if response.status_code not in config.retry_statuses or attempt == 1:
-                break
-            time.sleep(1.0 + random.uniform(0, 0.5))
 
-    assert response is not None
     if response.status_code == 403 and "robot policy" in response.text.lower():
         return _fetch_once_urllib(source_url, fetch_url, throttle, timeout)
 
@@ -168,10 +166,12 @@ def _fetch_once_urllib(
     throttle: DomainThrottle,
     timeout: float,
 ) -> FetchedPage:
+    if urlparse(fetch_url).scheme not in ("http", "https"):
+        return error_page(source_url, f"Unsupported URL scheme: {fetch_url}")
     try:
         throttle.wait(fetch_url)
         request = Request(fetch_url, headers=HEADERS)
-        with urlopen(request, timeout=timeout) as response:
+        with urlopen(request, timeout=timeout) as response:  # nosec B310 - scheme checked above
             content = response.read()
             final_url = response.url
             status_code = response.status
@@ -234,7 +234,7 @@ def extract_language(html: str) -> str | None:
     if not declared:
         return None
     # "sl-SI", "sl_SI" and "SL" all mean the same language.
-    return re.split(r"[-_]", declared.strip())[0].lower() or None
+    return re.split(r"[-_]", str(declared).strip())[0].lower() or None
 
 
 def _is_html(content_type: str | None) -> bool:

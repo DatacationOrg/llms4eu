@@ -1,3 +1,5 @@
+from typing import Any
+
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
@@ -23,9 +25,8 @@ class FetchPagesConfig:
 def fetch_pages_config() -> FetchPagesConfig:
     raw = load_yaml(Path(__file__).with_name("config.yaml"))["fetch_pages"]
     # Sequences become tuples so the frozen config stays immutable and hashable.
-    return FetchPagesConfig(
-        **{
-            key: tuple(value) if isinstance(value, list) else value
-            for key, value in raw.items()
-        }
-    )
+    values: dict[str, Any] = {
+        key: tuple(value) if isinstance(value, list) else value
+        for key, value in raw.items()
+    }
+    return FetchPagesConfig(**values)

@@ -15,6 +15,12 @@ A heading-aware slice of a Markdown page. Current defaults target 1,800
 characters, allow up to 2,600 characters for long paragraphs, and drop tiny
 chunks below 300 characters when a page produces multiple chunks.
 
+**Chunk variant**
+One named way of cutting the pages. `base` is the cut the pipeline runs on;
+other variants (`c900`, ...) are alternative cuts stored beside it, each with
+its own chunk ids, labels and vector collections, so chunk size can be
+compared without disturbing the pipeline.
+
 **Chunk summary**
 A short search-oriented description of a page chunk. It is derived content used
 for past embedding and retrieval experiments, not a replacement for the chunk

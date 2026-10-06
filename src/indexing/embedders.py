@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from functools import cache
 from pathlib import Path
-from typing import Protocol
+from typing import Any, Protocol, cast
 
 
 import torch
@@ -84,7 +84,7 @@ class SentenceTransformerIndexer:
         )
         # One shared limit for every provider. A model that cannot reach it would be
         # compared truncated against untruncated rivals, so refuse rather than skew.
-        supported = int(model.max_seq_length)
+        supported = int(cast(int, model.max_seq_length))
         if supported < self.max_seq_length:
             raise ValueError(
                 f"{self.name} ({self.model_name}) caps out at {supported} tokens, under "
@@ -115,7 +115,9 @@ def provider_names() -> list[str]:
     return sorted(CONFIG["providers"])
 
 
-def build_indexer(name: str, config: dict | None = None) -> EmbeddingIndexer:
+def build_indexer(
+    name: str, config: dict[str, Any] | None = None
+) -> SentenceTransformerIndexer:
     config = CONFIG if config is None else config
     if name not in config["providers"]:
         raise ValueError(f"Unknown indexer: {name}")
@@ -160,7 +162,7 @@ def embed_texts(
 ) -> list[list[float]]:
     # Normalized vectors make Qdrant cosine scores comparable across queries.
     # prompt_name can be e.g. "query" for instruction-aware models like Qwen3-Embedding.
-    kwargs: dict = {
+    kwargs: dict[str, Any] = {
         "normalize_embeddings": True,
         "show_progress_bar": show_progress_bar,
     }

@@ -20,7 +20,7 @@ def upsert_fetch_result(result: FetchResult) -> None:
 
     with connect_pages() as conn:
         conn.execute(
-            f"insert into page_metadata ({', '.join(columns)}) values ({placeholders}) "
+            f"insert into page_metadata ({', '.join(columns)}) values ({placeholders}) "  # nosec B608 - columns are PageMetadata fields, values are bound
             f"on conflict(id) do update set {updates}",
             metadata.db_values(),
         )

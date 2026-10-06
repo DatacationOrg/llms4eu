@@ -37,6 +37,7 @@ just chunk         # split fetched Markdown into heading-aware page chunks
 just locate-pages  # Wikidata point per page, for the *_geo methods
 just index qwen    # embed those chunks into a Chroma collection
 just rechunk       # after changing chunk_size/overlap: rechunk, move labels
+just chunk-compare # score the named chunk variants side by side
 just test          # run the non-LLM test suite
 ```
 

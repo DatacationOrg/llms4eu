@@ -16,7 +16,8 @@ class RankedChunk:
 class Retriever(Protocol):
     """Common retrieval contract used by RAG and eval."""
 
-    name: str
+    @property
+    def name(self) -> str: ...
 
     def retrieve(self, query: str, limit: int) -> list[RankedChunk]: ...
 

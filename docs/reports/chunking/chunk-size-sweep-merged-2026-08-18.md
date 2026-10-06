@@ -230,4 +230,3 @@ Nemotron-3-Embed's model card declares 42 languages and Slovenian is not one
 of them, at either 1B or 8B. This corpus is Slovenian. A nemotron-to-qwen gap
 is therefore not evidence about model scale, and the 1B-to-8B step is the row
 that separates the two readings.
-

@@ -1,13 +1,19 @@
 from __future__ import annotations
 
 import hashlib
+import json
+from collections.abc import Mapping
 from contextlib import suppress
 from functools import cache
 from pathlib import Path
+from typing import Any, cast
 
 import chromadb
+from chromadb.api import ClientAPI
+from chromadb.api.types import PyEmbedding
 from tqdm import tqdm
 
+from src.db.legacy.pages import chunk_variant, variant_tag
 from src.db.legacy.pages import connect_pages as connect
 from src.db.legacy.pages import initialize_page_artifacts_db
 from src.indexing.documents import PageChunk, text_for_embedding
@@ -47,7 +53,9 @@ def query_chunk_vectors_batch(
 
     for start in range(0, len(vectors), batch_size):
         result = collection.query(
-            query_embeddings=vectors[start : start + batch_size],
+            query_embeddings=cast(
+                "list[PyEmbedding]", vectors[start : start + batch_size]
+            ),
             n_results=limit,
             include=["metadatas", "distances"],
         )
@@ -116,7 +124,7 @@ def rebuild_chunk_collection(provider: str) -> None:
         )
         collection.upsert(
             ids=[chunk.id for chunk in batch_chunks],
-            embeddings=vectors,
+            embeddings=cast("list[PyEmbedding]", vectors),
             metadatas=[_metadata(chunk) for chunk in batch_chunks],
         )
     print(f"indexed {collection.count()} chunks into {collection_name}")
@@ -144,13 +152,15 @@ def _load_chunks() -> list[PageChunk]:
                 from page_chunks c
                 join page_metadata m on m.id = c.page_id
                 left join page_sources s on s.source = m.source
+                where c.variant = ?
                 order by c.id
-                """
+                """,
+                (chunk_variant(),),
             )
         ]
 
 
-def _metadata(chunk: PageChunk) -> dict:
+def _metadata(chunk: PageChunk) -> dict[str, Any]:
     return {
         "id": chunk.id,
         "page_id": chunk.page_id,
@@ -164,14 +174,21 @@ def _metadata(chunk: PageChunk) -> dict:
 
 def _chunk_count() -> int:
     with connect() as conn:
-        return int(conn.execute("select count(*) from page_chunks").fetchone()[0])
+        return int(
+            conn.execute(
+                "select count(*) from page_chunks where variant = ?", (chunk_variant(),)
+            ).fetchone()[0]
+        )
 
 
 def _chunks_digest() -> str:
     """Fingerprint of every chunk id and text, so a rechunk invalidates the index."""
     digest = hashlib.sha256()
     with connect() as conn:
-        for row in conn.execute("select id, text from page_chunks order by id"):
+        for row in conn.execute(
+            "select id, text from page_chunks where variant = ? order by id",
+            (chunk_variant(),),
+        ):
             digest.update(f"{row['id']}\0{row['text']}\0".encode())
     return digest.hexdigest()
 
@@ -179,18 +196,18 @@ def _chunks_digest() -> str:
 def _chunk_texts(ids: list[str]) -> dict[str, str]:
     if not ids:
         return {}
-    placeholders = ", ".join("?" for _ in ids)
     with connect() as conn:
         return {
             row["id"]: row["text"]
             for row in conn.execute(
-                f"select id, text from page_chunks where id in ({placeholders})",
-                ids,
+                "select id, text from page_chunks "
+                "where id in (select value from json_each(?))",
+                (json.dumps(ids),),
             )
         }
 
 
-def _batch_chunk_ids_from_result(result: dict) -> list[str]:
+def _batch_chunk_ids_from_result(result: Mapping[str, Any]) -> list[str]:
     return [
         chunk_id
         for offset in range(len(result.get("ids", [])))
@@ -198,7 +215,7 @@ def _batch_chunk_ids_from_result(result: dict) -> list[str]:
     ]
 
 
-def _chunk_ids_from_result(result: dict, offset: int) -> list[str]:
+def _chunk_ids_from_result(result: Mapping[str, Any], offset: int) -> list[str]:
     ids = result.get("ids", [])[offset]
     metadatas = result.get("metadatas", [])[offset]
     return [
@@ -207,7 +224,7 @@ def _chunk_ids_from_result(result: dict, offset: int) -> list[str]:
 
 
 def _scored_chunks_from_result(
-    result: dict,
+    result: Mapping[str, Any],
     offset: int,
     texts: dict[str, str],
 ) -> list[RankedChunk]:
@@ -224,7 +241,7 @@ def _scored_chunks_from_result(
 
 
 @cache
-def _client() -> chromadb.PersistentClient:
+def _client() -> ClientAPI:
     # Cache the client: a fresh PersistentClient per query leaks connections to the
     # store and eventually fails readiness checks mid-run.
     return chromadb.PersistentClient(path=str(chroma_path()))
@@ -240,7 +257,8 @@ def _existing_collection(provider: str):
 
 
 def _collection_name(provider: str) -> str:
-    return f"{CONFIG['collection_name']}_{provider}_chunk"
+    cut = variant_tag(chunk_variant(), "_")
+    return f"{CONFIG['collection_name']}_{provider}{cut}_chunk"
 
 
 def _validate_provider(provider: str) -> None:

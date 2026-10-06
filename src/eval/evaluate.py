@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from typing import Any
 import argparse
 import json
 import time
@@ -8,6 +9,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
+from src.db.legacy.pages import chunk_variant, variant_tag
 from src.db.legacy.pages import (
     connect_pages as connect,
 )
@@ -34,8 +36,8 @@ REPORTS_DIR = ROOT / ".local" / "reports"
 
 @dataclass(frozen=True)
 class EvalRun:
-    questions: list[dict]
-    relevance: list[dict]
+    questions: list[dict[str, Any]]
+    relevance: list[dict[str, Any]]
     methods: list[str]
     rankings: dict[str, dict[str, list[str]]]
     timings: dict[str, dict[str, float]]
@@ -96,6 +98,7 @@ def _build_eval_report(
 ) -> str:
     lines = [
         f"Methods: {', '.join(run.methods)}",
+        f"Chunk variant: {chunk_variant()}",
         f"Questions: {len(run.questions)}",
         f"Limit: {limit if limit is not None else 'all'}",
         f"Category: {category or 'all'}",
@@ -173,10 +176,10 @@ def run_eval(
 # ponytail: resume is per method, not per question. A crash loses at most the
 # method in flight. Go per question only if one method's run outgrows a sitting.
 def _checkpoint_path() -> Path:
-    return data_path("checkpoints", "eval.json")
+    return data_path("checkpoints", f"eval{variant_tag(chunk_variant(), '-')}.json")
 
 
-def _load_checkpoint(signature: list[str]) -> dict:
+def _load_checkpoint(signature: list[str]) -> dict[str, Any]:
     path = _checkpoint_path()
     if not path.exists():
         return {}
@@ -187,7 +190,7 @@ def _load_checkpoint(signature: list[str]) -> dict:
     return saved["methods"]
 
 
-def _save_checkpoint(signature: list[str], methods: dict) -> None:
+def _save_checkpoint(signature: list[str], methods: dict[str, Any]) -> None:
     _checkpoint_path().write_text(
         json.dumps({"questions": signature, "methods": methods}),
         encoding="utf-8",
@@ -197,18 +200,26 @@ def _save_checkpoint(signature: list[str], methods: dict) -> None:
 def load_eval_rows(
     limit: int | None = None,
     category: str | None = None,
-) -> tuple[list[dict], list[dict]]:
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    # A question counts for a variant only when its evidence quote was found in
+    # that variant's chunks, so every variant is scored on labelled questions.
     with connect() as conn:
         question_sql = """
-                select id, question, answer, question_type, question_language
-                from eval_questions
-                where approved = 1
+                select q.id, q.question, q.answer, q.question_type, q.question_language
+                from eval_questions q
+                where q.approved = 1
+                  and exists (
+                    select 1
+                    from eval_relevant_chunks r
+                    join page_chunks c on c.id = r.chunk_id
+                    where r.question_id = q.id and c.variant = :variant
+                  )
                 """
-        params = {}
+        params: dict[str, Any] = {"variant": chunk_variant()}
         if category is not None:
-            question_sql += "\n                and question_type = :category"
+            question_sql += "\n                and q.question_type = :category"
             params["category"] = category
-        question_sql += "\n                order by id"
+        question_sql += "\n                order by q.id"
         if limit is not None:
             question_sql += "\n                limit :limit"
             params["limit"] = limit
@@ -222,17 +233,18 @@ def load_eval_rows(
         question_ids = [row["id"] for row in questions]
         if not question_ids:
             return questions, []
-        placeholders = ", ".join("?" for _ in question_ids)
         relevance = [
             dict(row)
             for row in conn.execute(
-                f"""
-                select question_id, chunk_id
-                from eval_relevant_chunks
-                where question_id in ({placeholders})
-                order by question_id, chunk_id
+                """
+                select r.question_id, r.chunk_id
+                from eval_relevant_chunks r
+                join page_chunks c on c.id = r.chunk_id
+                where c.variant = ?
+                  and r.question_id in (select value from json_each(?))
+                order by r.question_id, r.chunk_id
                 """,
-                question_ids,
+                [chunk_variant(), json.dumps(question_ids)],
             )
         ]
     return questions, relevance
@@ -240,7 +252,7 @@ def load_eval_rows(
 
 def _retrieve_rankings(
     retriever: Retriever,
-    questions: list[dict],
+    questions: list[dict[str, Any]],
 ) -> tuple[dict[str, list[str]], dict[str, float]]:
     batches = retriever.retrieve_batch(
         [row["question"] for row in questions],
@@ -270,7 +282,7 @@ def _overall_table(run: EvalRun) -> str:
 
 
 def score_eval_rankings(
-    relevance: list[dict],
+    relevance: list[dict[str, Any]],
     rankings: dict[str, dict[str, list[str]]],
     method_names: list[str],
 ) -> tuple[list[str], dict[str, dict[str, float]]]:
@@ -312,12 +324,12 @@ def _query_effort(retriever: Retriever, question_count: int) -> dict[str, float]
     if question_count == 0:
         return {"queries_per_query": 0.0, "total_queries": 0.0}
 
-    if hasattr(retriever, "average_queries_per_question") and hasattr(
-        retriever, "total_queries"
-    ):
+    average = getattr(retriever, "average_queries_per_question", None)
+    total = getattr(retriever, "total_queries", None)
+    if average is not None and total is not None:
         return {
-            "queries_per_query": float(retriever.average_queries_per_question()),
-            "total_queries": float(retriever.total_queries()),
+            "queries_per_query": float(average()),
+            "total_queries": float(total()),
         }
 
     return {
@@ -335,7 +347,7 @@ def _category_table(run: EvalRun) -> str:
 
     rows = []
     for method_name in run.methods:
-        row = [method_name]
+        cells: list[Any] = [method_name]
         for question_type in types:
             type_question_ids = {
                 item["question_id"] for item in relevance_by_type[question_type]
@@ -350,8 +362,8 @@ def _category_table(run: EvalRun) -> str:
                 ks=(CONFIG["category_hit_k"],),
                 mrr_k=CONFIG["mrr_k"],
             )[f"hit@{CONFIG['category_hit_k']}"]
-            row.append(score)
-        rows.append(row)
+            cells.append(score)
+        rows.append(cells)
     return bold_best_table(["method", *types], rows)
 
 

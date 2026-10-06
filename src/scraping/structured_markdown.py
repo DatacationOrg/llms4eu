@@ -119,7 +119,9 @@ def _container_link(container: Tag, page_url: str) -> MainLink | None:
     context = _clean_text(container.get_text(" ", strip=True))
     if context.startswith(label):
         context = context[len(label) :].lstrip(" -:,.")
-    return MainLink(label=label, url=urljoin(page_url, anchor["href"]), context=context)
+    return MainLink(
+        label=label, url=urljoin(page_url, str(anchor["href"])), context=context
+    )
 
 
 def _clean_text(text: str) -> str:
