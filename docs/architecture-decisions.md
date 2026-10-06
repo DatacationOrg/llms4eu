@@ -482,4 +482,3 @@ pages), "mentioned" places and the agent geo tools (the agents are gone), and
 geo metadata in Chroma (re-scoring happens after retrieval, from
 `page_locations`). If a multi-country eval shows countries or regions matter,
 the next step is a country-code match from Wikidata, before boundary files.
-
