@@ -1,3 +1,4 @@
+from typing import Any
 import os
 from pathlib import Path
 
@@ -23,7 +24,7 @@ def load_local_env() -> None:
     load_dotenv(ROOT / ".env")
 
 
-def load_yaml(path: Path) -> dict:
+def load_yaml(path: Path) -> dict[str, Any]:
     """Read a tiny per-service YAML config file."""
     return yaml.safe_load(path.read_text()) or {}
 

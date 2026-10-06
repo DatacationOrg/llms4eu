@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+from typing import Any
 from collections import defaultdict
 
 
 def score_rankings(
-    rows: list[dict],
+    rows: list[dict[str, Any]],
     rankings: dict[str, list[str]],
     ks: tuple[int, ...],
     mrr_k: int,

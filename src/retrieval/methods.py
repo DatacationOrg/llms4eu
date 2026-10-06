@@ -66,9 +66,9 @@ def missing_retriever_indexes(names: list[str]) -> dict[str, str]:
         raise ValueError(f"Unknown retriever: {', '.join(unknown)}")
 
     return {
-        name: specs[name].provider
+        name: provider
         for name in names
-        if specs[name].provider and not collection_ready(specs[name].provider)
+        if (provider := specs[name].provider) and not collection_ready(provider)
     }
 
 
@@ -81,7 +81,7 @@ def _specs() -> dict[str, RetrieverSpec]:
             lambda name=name, suffix=suffix: _reranker(name, suffix, SparseRetriever()),
         )
     for provider in enabled_provider_names():
-        stages = {
+        stages: dict[str, Callable[[], Retriever]] = {
             provider: lambda provider=provider: _vector(provider),
             f"{provider}_hybrid": lambda provider=provider: _hybrid(provider),
         }

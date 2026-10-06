@@ -15,7 +15,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, replace
 from functools import cache
 from pathlib import Path
-from typing import Literal, NamedTuple
+from typing import Literal, NamedTuple, cast
 
 from pydantic import BaseModel, Field
 
@@ -69,7 +69,10 @@ class GeoRetriever:
             )
             for n, i in enumerate(scoped):
                 chunks = fuse(
-                    ranked.get(n, []), places[i], self.page_points(), self.weight
+                    ranked.get(n, []),
+                    cast(Place, places[i]),
+                    self.page_points(),
+                    self.weight,
                 )
                 results[i] = chunks[:limit]
         return results

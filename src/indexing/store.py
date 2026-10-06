@@ -1,11 +1,16 @@
 from __future__ import annotations
 
 import hashlib
+import json
+from collections.abc import Mapping
 from contextlib import suppress
 from functools import cache
 from pathlib import Path
+from typing import Any, cast
 
 import chromadb
+from chromadb.api import ClientAPI
+from chromadb.api.types import PyEmbedding
 from tqdm import tqdm
 
 from src.db.pages import chunk_variant, variant_tag
@@ -48,7 +53,9 @@ def query_chunk_vectors_batch(
 
     for start in range(0, len(vectors), batch_size):
         result = collection.query(
-            query_embeddings=vectors[start : start + batch_size],
+            query_embeddings=cast(
+                "list[PyEmbedding]", vectors[start : start + batch_size]
+            ),
             n_results=limit,
             include=["metadatas", "distances"],
         )
@@ -117,7 +124,7 @@ def rebuild_chunk_collection(provider: str) -> None:
         )
         collection.upsert(
             ids=[chunk.id for chunk in batch_chunks],
-            embeddings=vectors,
+            embeddings=cast("list[PyEmbedding]", vectors),
             metadatas=[_metadata(chunk) for chunk in batch_chunks],
         )
     print(f"indexed {collection.count()} chunks into {collection_name}")
@@ -153,7 +160,7 @@ def _load_chunks() -> list[PageChunk]:
         ]
 
 
-def _metadata(chunk: PageChunk) -> dict:
+def _metadata(chunk: PageChunk) -> dict[str, Any]:
     return {
         "id": chunk.id,
         "page_id": chunk.page_id,
@@ -189,18 +196,18 @@ def _chunks_digest() -> str:
 def _chunk_texts(ids: list[str]) -> dict[str, str]:
     if not ids:
         return {}
-    placeholders = ", ".join("?" for _ in ids)
     with connect() as conn:
         return {
             row["id"]: row["text"]
             for row in conn.execute(
-                f"select id, text from page_chunks where id in ({placeholders})",
-                ids,
+                "select id, text from page_chunks "
+                "where id in (select value from json_each(?))",
+                (json.dumps(ids),),
             )
         }
 
 
-def _batch_chunk_ids_from_result(result: dict) -> list[str]:
+def _batch_chunk_ids_from_result(result: Mapping[str, Any]) -> list[str]:
     return [
         chunk_id
         for offset in range(len(result.get("ids", [])))
@@ -208,7 +215,7 @@ def _batch_chunk_ids_from_result(result: dict) -> list[str]:
     ]
 
 
-def _chunk_ids_from_result(result: dict, offset: int) -> list[str]:
+def _chunk_ids_from_result(result: Mapping[str, Any], offset: int) -> list[str]:
     ids = result.get("ids", [])[offset]
     metadatas = result.get("metadatas", [])[offset]
     return [
@@ -217,7 +224,7 @@ def _chunk_ids_from_result(result: dict, offset: int) -> list[str]:
 
 
 def _scored_chunks_from_result(
-    result: dict,
+    result: Mapping[str, Any],
     offset: int,
     texts: dict[str, str],
 ) -> list[RankedChunk]:
@@ -234,7 +241,7 @@ def _scored_chunks_from_result(
 
 
 @cache
-def _client() -> chromadb.PersistentClient:
+def _client() -> ClientAPI:
     # Cache the client: a fresh PersistentClient per query leaks connections to the
     # store and eventually fails readiness checks mid-run.
     return chromadb.PersistentClient(path=str(chroma_path()))

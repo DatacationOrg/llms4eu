@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
-from typing import Protocol, TypeVar
+from typing import Literal, Protocol, TypeVar, cast
 
 from langchain_ollama import ChatOllama
 from pydantic import BaseModel
@@ -23,6 +23,7 @@ DEFAULT_RETRIES = 3
 T = TypeVar("T", bound=BaseModel)
 Message = tuple[str, str]
 StructuredPrompt = str | Sequence[Message]
+StructuredMethod = Literal["function_calling", "json_mode", "json_schema"]
 
 
 # Kept deliberately: the shared structured-output path for local models, not tied to any one experiment.
@@ -42,7 +43,7 @@ class LocalOllamaStructuredLlm:
     reasoning: bool | str | None = True
     num_ctx: int | None = None
     num_predict: int | None = None
-    method: str = "json_schema"
+    method: StructuredMethod = "json_schema"
 
     def structured_output(
         self,
@@ -77,7 +78,7 @@ class LocalOllamaStructuredLlm:
             # function_calling yields None when the model answers without
             # calling the tool; that is a failed attempt, not a valid result.
             if result is not None:
-                return result
+                return cast(T, result)
             last_error = ValueError("model returned no structured output")
         detail = (
             f"{type(last_error).__name__}: {last_error}"
@@ -120,7 +121,7 @@ def structured_local_model(
     reasoning: bool | str | None = True,
     num_ctx: int | None = None,
     num_predict: int | None = None,
-    method: str = "json_schema",
+    method: StructuredMethod = "json_schema",
 ):
     """Create a local Ollama chat model that returns the requested Pydantic shape.
 

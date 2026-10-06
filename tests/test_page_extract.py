@@ -33,6 +33,7 @@ def test_ordinary_article_is_classified_as_prose():
 
     assert result is not None, "well-formed prose must not fall through to render"
     assert result.metadata.page_kind == "prose"
+    assert result.markdown_content is not None
     assert "Brestanica" in result.markdown_content.markdown
 
 

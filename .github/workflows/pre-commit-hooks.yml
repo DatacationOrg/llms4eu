@@ -1,0 +1,46 @@
+name: Run pre-commit hooks and tests
+on:
+  workflow_dispatch: {}
+
+  # Final (non-draft) PRs to main only. ready_for_review fires when a draft is marked ready.
+  pull_request:
+    branches:
+      - main
+    types: [opened, synchronize, reopened, ready_for_review]
+
+jobs:
+  hooks:
+    # Skip drafts
+    if: github.event_name == 'workflow_dispatch' || !github.event.pull_request.draft
+    name: hooks (${{ matrix.upgrade && 'uv lock --upgrade' || 'locked' }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        upgrade: [false, true]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-python: true
+          cache-dependency-glob: |
+            pyproject.toml
+            uv.lock
+      - name: Cache pre-commit environment
+        uses: actions/cache@v5
+        with:
+          path: ~/.cache/prek
+          key: ${{ runner.os }}-prek-${{ hashFiles('.pre-commit-config.yaml') }}
+      - name: Upgrade every dependency (not committed, only tested)
+        if: matrix.upgrade
+        run: uv lock --upgrade
+      - name: Install
+        run: uv sync --locked
+      - name: Pre-commit hooks on all files
+        run: uvx prek run --all-files
+      - name: Pytest
+        run: uv run pytest

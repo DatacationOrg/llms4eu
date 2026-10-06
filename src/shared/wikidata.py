@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from typing import Any
 import httpx
 
 WIKIDATA_API = "https://www.wikidata.org/w/api.php"
@@ -9,7 +10,7 @@ HEADERS = {"User-Agent": "llms4eu-tourism-rag (Datacation research)"}
 HUMAN = "Q5"
 
 
-def _get(url: str, **params: object) -> dict:
+def _get(url: str, **params: str | int) -> dict[str, Any]:
     response = httpx.get(
         url, params={**params, "format": "json"}, headers=HEADERS, timeout=30
     )
@@ -70,5 +71,5 @@ def search(name: str, language: str) -> list[tuple[str, str]]:
     return [(hit["id"], hit.get("label", "")) for hit in hits]
 
 
-def _value(claim: dict) -> dict:
+def _value(claim: dict[str, Any]) -> dict[str, Any]:
     return claim["mainsnak"].get("datavalue", {}).get("value") or {}

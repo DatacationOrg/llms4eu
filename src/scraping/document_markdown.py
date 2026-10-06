@@ -63,7 +63,7 @@ def find_document_links(html: str, page_url: str) -> list[DocumentLink]:
         href = anchor.get("href")
         if not href:
             continue
-        absolute_url = urljoin(page_url, href)
+        absolute_url = urljoin(page_url, str(href))
         if not _looks_like_document_url(absolute_url):
             continue
         label = " ".join(anchor.get_text(" ", strip=True).split())

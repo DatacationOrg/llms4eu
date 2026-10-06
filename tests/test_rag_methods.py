@@ -1,8 +1,13 @@
+from typing import cast
+
 import pytest
 
 from src.retrieval import methods
 from src.indexing import embedders
 from src.indexing.embedders import build_indexer, provider_names
+from src.retrieval.retrievers.fusion import WeightedScoreFusionRetriever
+from src.retrieval.retrievers.vector import VectorChunkRetriever
+from src.retrieval.retrievers.rerank import CrossEncoderRerankRetriever
 
 
 def test_retriever_catalog_generates_public_names():
@@ -49,7 +54,9 @@ def test_ensure_retriever_ready_reports_missing_index(monkeypatch):
 def test_reranker_uses_discovered_defaults(monkeypatch):
     monkeypatch.setattr(methods, "enabled_provider_names", lambda: ["stub"])
 
-    retriever = methods.build_retriever("stub_rerank")
+    retriever = cast(
+        CrossEncoderRerankRetriever, methods.build_retriever("stub_rerank")
+    )
 
     assert retriever.max_length == 2048
 
@@ -58,13 +65,16 @@ def test_hybrid_rerank_wraps_a_vector_and_sparse_pair(monkeypatch):
     """The compound name must match what it actually composes."""
     monkeypatch.setattr(methods, "enabled_provider_names", lambda: ["nemotron"])
 
-    retriever = methods.build_retriever("nemotron_hybrid_rerank")
-    hybrid = retriever.base_retriever
+    retriever = cast(
+        CrossEncoderRerankRetriever,
+        methods.build_retriever("nemotron_hybrid_rerank"),
+    )
+    hybrid = cast(WeightedScoreFusionRetriever, retriever.base_retriever)
     vector, sparse = hybrid.retrievers
 
     assert retriever.name == "nemotron_hybrid_rerank"
     assert hybrid.name == "nemotron_hybrid"
-    assert vector.provider == "nemotron"
+    assert cast(VectorChunkRetriever, vector).provider == "nemotron"
     assert sparse.name == "sparse"
 
 

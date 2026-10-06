@@ -20,12 +20,12 @@ providers:
     batch_size: 8
     dtype: bfloat16
     attn_implementation: sdpa
-    revision: a5e0f804b9e90a1ca6784ecbf6e41595774fc834
+    revision: a5e0f804b9e90a1ca6784ecbf6e41595774fc834  # pragma: allowlist secret
   nemotron8b:
     model_name: nvidia/Nemotron-3-Embed-8B-BF16
     batch_size: 2
     dtype: bfloat16
     attn_implementation: sdpa
-    revision: c44c20ab3f6b430336706847a6372de4b2eb3dbd
+    revision: c44c20ab3f6b430336706847a6372de4b2eb3dbd  # pragma: allowlist secret
 index_upsert_batch_size: 128
 query_batch_size: 128

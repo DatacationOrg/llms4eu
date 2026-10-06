@@ -23,7 +23,7 @@ class WeightedScoreFusionRetriever:
             for chunk_id, score in _normalized_scores(chunks).items():
                 scores[chunk_id] = scores.get(chunk_id, 0.0) + weight * score
 
-        ranked_ids = sorted(scores, key=scores.get, reverse=True)
+        ranked_ids = sorted(scores, key=scores.__getitem__, reverse=True)
         return [
             RankedChunk(id=chunk_id, score=scores[chunk_id], text=by_id[chunk_id].text)
             for chunk_id in ranked_ids[:limit]
@@ -57,7 +57,9 @@ class WeightedScoreFusionRetriever:
                     score=scores[chunk_id],
                     text=chunks_by_query[query_index][chunk_id].text,
                 )
-                for chunk_id in sorted(scores, key=scores.get, reverse=True)[:limit]
+                for chunk_id in sorted(scores, key=scores.__getitem__, reverse=True)[
+                    :limit
+                ]
             ]
             for query_index, scores in fused.items()
         }
