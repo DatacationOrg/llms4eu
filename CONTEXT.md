@@ -2,30 +2,23 @@
 
 ## Terms
 
-**Raw page**
-A fetched source page stored in the local raw-pages SQLite database with metadata
-and Markdown content.
+**Page**
+A Wikipedia page about an EU place (`wikipages.parquet`, `Page`): metadata and its
+Markdown `text`, which is what gets chunked and searched.
 
 **Markdown page**
 The normalized text representation produced by scraping. It is the input to
 chunking and should not depend on any retrieval method.
 
-**Page chunk**
-A heading-aware slice of a Markdown page. Current defaults target 1,800
-characters, allow up to 2,600 characters for long paragraphs, and drop tiny
-chunks below 300 characters when a page produces multiple chunks.
+**Chunk**
+A heading-aware slice of a page (`chunks.parquet`, `Chunk`), cut at several target
+sizes (`SIZES`, see `src/db/README.md`). Indexing, retrieval and eval work on one
+size at a time (`CHUNK_SIZE`).
 
-**Chunk variant**
-One named way of cutting the pages. `base` is the cut the pipeline runs on;
-other variants (`c900`, ...) are alternative cuts stored beside it, each with
-its own chunk ids, labels and vector collections, so chunk size can be
-compared without disturbing the pipeline.
-
-**Chunk summary**
-A short search-oriented description of a page chunk. It is derived content used
-for past embedding and retrieval experiments, not a replacement for the chunk
-text. Chunk summaries were removed from the steady-state database path after the
-experiment.
+**Summary and role**
+Ling 3.1 Flash notes: a page `summary` (at most 3 sentences) and a chunk `role`
+(one sentence on what kind of information the chunk adds to its page). Derived
+columns for experiments, made by `datagen/`, not a replacement for the text.
 
 **Indexer**
 A provider-specific embedding backend behind a common interface. Current
@@ -42,5 +35,6 @@ the retrieval/RAG layer; eval compares them but does not own their
 implementation.
 
 **Eval dataset**
-Approved factual questions, answers, and gold chunk ids used to compare ranking
-methods. Eval owns labels and metrics; it should not own reusable pipeline steps.
+The wiki QA questions (`qa/wiki_qa_rag.parquet`): a gold page and evidence quotes
+per question. A chunk is relevant when it is on the gold page and holds a quote.
+Eval owns relevance and metrics; it should not own reusable pipeline steps.
