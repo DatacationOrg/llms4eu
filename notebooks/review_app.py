@@ -50,33 +50,41 @@ PLAN += [
 NATURAL = (
     "natural",
     "Would a real person ask this?",
-    "Anyone at all counts here: a tourist, a local, a historian, a quiz fan. Yes: some real person could type or say "
-    "this to a search engine or chatbot, in this form. Hard questions are meant to be vague, as by someone who "
-    "half-remembers the place. No: it reads like a riddle built from the page rather than a question anyone has: "
-    "mentions 'the article', asks for codes or register data, stacks details only a reader of the page would know, "
-    "or gives the answer away. Example: a question about a 1620 land grant is natural (a historian asks it), "
-    "but not a tourist question.",
+    (
+        "Anyone at all counts here: a tourist, a local, a historian, a quiz fan. Yes: some real person could type or say "
+        "this to a search engine or chatbot, in this form. Hard questions are meant to be vague, as by someone who "
+        "half-remembers the place. No: it reads like a riddle built from the page rather than a question anyone has: "
+        "mentions 'the article', asks for codes or register data, stacks details only a reader of the page would know, "
+        "or gives the answer away. Example: a question about a 1620 land grant is natural (a historian asks it), "
+        "but not a tourist question."
+    ),
 )
 FLUENT = (
     "fluent",
     "Fluent and correct language?",
-    "Yes: a native speaker could have written it; Belgian Dutch wording is fine. No: grammar or spelling errors, "
-    "garbled or invented words, words from another language, or a stiff literal translation. Ignore style taste.",
+    (
+        "Yes: a native speaker could have written it; Belgian Dutch wording is fine. No: grammar or spelling errors, "
+        "garbled or invented words, words from another language, or a stiff literal translation. Ignore style taste."
+    ),
 )
 UNIQUE = (
     "unique",
     "Points to this one place?",
-    "Yes: the name plus locator (easy) or the combination of details (hard) fits this place and no other EU place "
-    "of this type you can think of. No: another place plausibly fits as well, e.g. a common lake name in the same "
-    "municipality, or 'a 12th-century castle in Germany'. Do not search exhaustively; unsure if you cannot tell.",
+    (
+        "Yes: the name plus locator (easy) or the combination of details (hard) fits this place and no other EU place "
+        "of this type you can think of. No: another place plausibly fits as well, e.g. a common lake name in the same "
+        "municipality, or 'a 12th-century castle in Germany'. Do not search exhaustively; unsure if you cannot tell."
+    ),
 )
 ANSWER = (
     "answer",
     "Answer correct and in the page?",
-    "Yes: it answers what was asked, every part of it, and the page supports it. Check the highlighted evidence; "
-    "open the full text when the evidence does not cover a detail. Extra details are fine if they are in the "
-    "page. No: a wrong or unsupported fact, answers a different question, or misses part of a two-part question. "
-    "If the page contradicts what you know, judge by the page and write it in the notes.",
+    (
+        "Yes: it answers what was asked, every part of it, and the page supports it. Check the highlighted evidence; "
+        "open the full text when the evidence does not cover a detail. Extra details are fine if they are in the "
+        "page. No: a wrong or unsupported fact, answers a different question, or misses part of a two-part question. "
+        "If the page contradicts what you know, judge by the page and write it in the notes."
+    ),
 )
 CHECKS = {
     "easy": [NATURAL, FLUENT, UNIQUE, ANSWER],
@@ -87,9 +95,11 @@ CHECKS = {
         (
             "alternatives",
             "Do the listed other pages really fit too?",
-            "Open each other page. Yes: they fit the question as well as the gold page, so it is truly ambiguous. "
-            "No: at least one clearly does not fit (the LLM judge was wrong). Some fit, some not: unsure, say "
-            "which in the notes.",
+            (
+                "Open each other page. Yes: they fit the question as well as the gold page, so it is truly ambiguous. "
+                "No: at least one clearly does not fit (the LLM judge was wrong). Some fit, some not: unsure, say "
+                "which in the notes."
+            ),
         ),
     ],
     "rejected": [
@@ -99,23 +109,29 @@ CHECKS = {
         (
             "judge_right",
             "Was rejecting it right?",
-            "See 'Failed checks'. Yes: the answer really has that problem. No: the answer is fine and the judge "
-            "was too strict, e.g. the detail is in the page but outside the quoted evidence.",
+            (
+                "See 'Failed checks'. Yes: the answer really has that problem. No: the answer is fine and the judge "
+                "was too strict, e.g. the detail is in the page but outside the quoted evidence."
+            ),
         ),
     ],
     "translation": [
         (
             "faithful",
             "Translation means the same?",
-            "Compare with the original via the English line. Yes: same question, place names kept correctly, "
-            "no constraint added or dropped. No: the meaning changed, a name is mistranslated, or a detail "
-            "is lost.",
+            (
+                "Compare with the original via the English line. Yes: same question, place names kept correctly, "
+                "no constraint added or dropped. No: the meaning changed, a name is mistranslated, or a detail "
+                "is lost."
+            ),
         ),
         (
             "natural",
             "Translation sounds natural?",
-            "Yes: a native speaker of the translation language would ask it this way. No: understandable but "
-            "clearly translated, odd word order, wrong words.",
+            (
+                "Yes: a native speaker of the translation language would ask it this way. No: understandable but "
+                "clearly translated, odd word order, wrong words."
+            ),
         ),
     ],
     "unanswerable": [
@@ -124,9 +140,11 @@ CHECKS = {
         (
             "unanswerable",
             "Really not answerable from the page?",
-            "Read 'Why', then search the full page text. Yes: the page does not answer it (not_covered), or "
-            "it contradicts the premise (false_premise). No: the page does answer it, or the premise is true. "
-            "Note it if the question is a stock template, e.g. ticket prices or opening hours.",
+            (
+                "Read 'Why', then search the full page text. Yes: the page does not answer it (not_covered), or "
+                "it contradicts the premise (false_premise). No: the page does answer it, or the premise is true. "
+                "Note it if the question is a stock template, e.g. ticket prices or opening hours."
+            ),
         ),
     ],
     "compare": [
@@ -135,8 +153,10 @@ CHECKS = {
         (
             "answer",
             "Answer correct for both places?",
-            "Yes: both facts match their pages and the comparison or arithmetic is right. No: a fact is wrong for "
-            "either place, or the conclusion is wrong.",
+            (
+                "Yes: both facts match their pages and the comparison or arithmetic is right. No: a fact is wrong for "
+                "either place, or the conclusion is wrong."
+            ),
         ),
     ],
     "realism": [
@@ -145,17 +165,21 @@ CHECKS = {
         (
             "tourist",
             "Would a tourist ask this?",
-            "Narrower than the previous check: only our user counts, a tourist choosing where to go, planning a visit, "
-            'standing on site, or curious after the trip. Yes: it fits one of those moments ("what is this castle?", '
-            '"how high is it?", "which castle did we see near X?"). No: only another persona would ask it (a quiz '
-            "writer, a historian, a hydrologist), even if the question itself is natural. Optional.",
+            (
+                "Narrower than the previous check: only our user counts, a tourist choosing where to go, planning a visit, "
+                'standing on site, or curious after the trip. Yes: it fits one of those moments ("what is this castle?", '
+                '"how high is it?", "which castle did we see near X?"). No: only another persona would ask it (a quiz '
+                "writer, a historian, a hydrologist), even if the question itself is natural. Optional."
+            ),
         ),
         (
             "clues",
             "Could someone know these clues without reading the page?",
-            "Yes: the clues are things a visitor could see, hear or remember: region, type of place, what it looks like, "
-            "a well-known story, a rough age. No: they are things you only know from the page: exact numbers or dates, "
-            "register data, administrative classifications, exact distances. Note the clue that decided it.",
+            (
+                "Yes: the clues are things a visitor could see, hear or remember: region, type of place, what it looks like, "
+                "a well-known story, a rough age. No: they are things you only know from the page: exact numbers or dates, "
+                "register data, administrative classifications, exact distances. Note the clue that decided it."
+            ),
         ),
     ],
     "meta": [
@@ -164,9 +188,11 @@ CHECKS = {
         (
             "gold",
             "Gold list looks right and complete?",
-            "Yes: every listed place is of the asked type and inside the area. No: a listed place is clearly wrong, or "
-            "a place you know (or see in the anchor page) is clearly missing. Completeness cannot be fully checked: "
-            "unsure is fine.",
+            (
+                "Yes: every listed place is of the asked type and inside the area. No: a listed place is clearly wrong, or "
+                "a place you know (or see in the anchor page) is clearly missing. Completeness cannot be fully checked: "
+                "unsure is fine."
+            ),
         ),
     ],
 }
@@ -185,9 +211,9 @@ def build(plan=PLAN, exclude: frozenset = frozenset()) -> list[dict]:
     """The items of `plan`, skipping the item keys in `exclude` (already in the sample)."""
     con = duckdb.connect()
     for f in ["rag", "unanswerable", "compare", "meta", "clean", "challenge"]:
-        con.sql(f"create view {f} as select * from '{QA}/wiki_qa_{f}.parquet'")
+        con.sql(f"create view {f} as select * from '{QA}/wiki_qa_{f}.parquet'")  # nosec B608 - SQL built from the PLAN constants; item keys are passed as a parameter
     con.sql(
-        f"create table pages as select * exclude (text) from read_json_auto('{PAGES}')"
+        f"create table pages as select * exclude (text) from read_json_auto('{PAGES}')"  # nosec B608 - SQL built from the PLAN constants; item keys are passed as a parameter
     )
     con.sql("""create table gloss as select id, q, any_value(q_en) q_en from (
         select id, item->>'question' q, item->>'question_en' q_en from clean
@@ -201,16 +227,16 @@ def build(plan=PLAN, exclude: frozenset = frozenset()) -> list[dict]:
         if file == "rag":
             sql = f"""select r.*, g.q_en question_en from rag r left join gloss g on g.id = r.id and g.q = r.question
                       where {by_lang} and {where} and not list_contains($skip, 'rag|' || r.id || '|' || r.n)
-                      order by hash(r.id || r.n || {SEED}) limit {n}"""
+                      order by hash(r.id || r.n || {SEED}) limit {n}"""  # nosec B608 - SQL built from the PLAN constants; item keys are passed as a parameter
         else:
             key = "key" if file == "meta" else "id"
-            sql = f"select * from {file} where {by_lang} and {where} order by hash({key} || question || {SEED}) limit {n}"
+            sql = f"select * from {file} where {by_lang} and {where} order by hash({key} || question || {SEED}) limit {n}"  # nosec B608 - SQL built from the PLAN constants; item keys are passed as a parameter
         params = {"skip": sorted(exclude)} if file == "rag" else None
         for row in con.execute(sql, params).df().to_dict("records"):
             items.append(item(con, stratum, lang, file, row))
     texts = dict(
         con.execute(
-            f"select id, text from read_json_auto('{PAGES}') where list_contains(?, id)",
+            f"select id, text from read_json_auto('{PAGES}') where list_contains(?, id)",  # nosec B608 - SQL built from the PLAN constants; item keys are passed as a parameter
             [sorted({p["id"] for i in items for p in i["pages"]})],
         ).fetchall()
     )
@@ -335,13 +361,13 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         rec = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
-        rec["at"] = datetime.now().isoformat(timespec="seconds")
+        rec["at"] = datetime.now().astimezone().isoformat(timespec="seconds")
         with LABELS.open("a") as fh:
             fh.write(json.dumps(rec, ensure_ascii=False) + "\n")
         self.send("{}")
 
-    def log_message(self, *args):
-        pass
+    def log_message(self, format, *args):  # noqa: A002 - the base class names it `format`
+        pass  # quiet: no request log on the shared server's terminal
 
 
 PAGE = """<!doctype html><html><head><meta charset="utf-8"><title>Wiki QA review</title><style>

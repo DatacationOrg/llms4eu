@@ -13,7 +13,7 @@ import json
 import math
 import warnings
 import zlib
-from datetime import date
+from datetime import UTC, datetime
 from pathlib import Path
 
 import duckdb
@@ -40,7 +40,7 @@ warnings.filterwarnings(
 def connect() -> duckdb.DuckDBPyConnection:
     con = duckdb.connect()
     for f in ["rag", "unanswerable", "compare", "meta", "tables", "clean", "challenge"]:
-        con.sql(f"create view {f} as select * from '{QA}/wiki_qa_{f}.parquet'")
+        con.sql(f"create view {f} as select * from '{QA}/wiki_qa_{f}.parquet'")  # nosec B608 - analysis SQL built from constants in this file, no user input
     # dev = crc32(wikidata_id) % 5 == 0 (report, stage 11): which pages *could* have dev questions
     con.create_function(
         "is_dev", lambda w: zlib.crc32(w.encode()) % 5 == 0, ["VARCHAR"], "BOOLEAN"
@@ -50,7 +50,7 @@ def connect() -> duckdb.DuckDBPyConnection:
         "gen_half", lambda i: zlib.crc32(i.encode()) % 2, ["VARCHAR"], "BIGINT"
     )
     con.sql(f"""create table pages as select * exclude (text), char_count < 2000 stub, is_dev(wikidata_id) dev,
-                ntile(5) over (order by char_count, id) chars_q from read_json_auto('{PAGES}')""")
+                ntile(5) over (order by char_count, id) chars_q from read_json_auto('{PAGES}')""")  # nosec B608 - analysis SQL built from constants in this file, no user input
     con.sql("""create table gloss as select id, q, any_value(q_en) q_en from (
         select id, item->>'question' q, item->>'question_en' q_en from clean
         union all select id, repaired->>'question', repaired->>'question_en' from clean where starts_with(repaired, '{')
@@ -84,14 +84,14 @@ def per_lang(
     df = pd.concat(
         [
             con.sql(
-                f"select {lang} lang, {select} from {frm} where {where} group by 1"
+                f"select {lang} lang, {select} from {frm} where {where} group by 1"  # nosec B608 - analysis SQL built from constants in this file, no user input
             ).df(),
             con.sql(
-                f"select 'sv excl. bot' lang, {select} from {frm} where {where} and {lang} = 'sv' and not {bot}"
+                f"select 'sv excl. bot' lang, {select} from {frm} where {where} and {lang} = 'sv' and not {bot}"  # nosec B608 - analysis SQL built from constants in this file, no user input
             ).df(),
-            con.sql(f"select 'all' lang, {select} from {frm} where {where}").df(),
+            con.sql(f"select 'all' lang, {select} from {frm} where {where}").df(),  # nosec B608 - analysis SQL built from constants in this file, no user input
             con.sql(
-                f"select 'all excl. bot' lang, {select} from {frm} where {where} and not {bot}"
+                f"select 'all excl. bot' lang, {select} from {frm} where {where} and not {bot}"  # nosec B608 - analysis SQL built from constants in this file, no user input
             ).df(),
         ]
     )
@@ -141,7 +141,7 @@ def part1(con) -> list[str]:
     s.append(
         table(
             con.sql(f"""select qtype, count(*) filter (where kind = 'corpus') corpus, count(*) filter (where kind = 'challenge') challenge
-        from rag where {RAG_DEV} group by 1 order by 2 desc""").df()
+        from rag where {RAG_DEV} group by 1 order by 2 desc""").df()  # nosec B608 - analysis SQL built from constants in this file, no user input
         )
     )
     s.append("Other files per language (dev; `ok` rows / all rows):")
@@ -151,7 +151,7 @@ def part1(con) -> list[str]:
         c as (select lang, count(*) filter (where ok) c_ok, count(*) c_all from compare where {DEV} group by 1),
         m as (select lang, count(*) filter (where ok) m_ok, count(*) m_all from meta where {DEV} group by 1)
         select lang, u_ok unanswerable_ok, u_all unanswerable_all, c_ok compare_ok, c_all compare_all, m_ok meta_ok, m_all meta_all
-        from u full join c using (lang) full join m using (lang) order by coalesce(u_ok, 0) + coalesce(c_ok, 0) + coalesce(m_ok, 0) desc""").df()
+        from u full join c using (lang) full join m using (lang) order by coalesce(u_ok, 0) + coalesce(c_ok, 0) + coalesce(m_ok, 0) desc""").df()  # nosec B608 - analysis SQL built from constants in this file, no user input
         )
     )
 
@@ -186,7 +186,7 @@ def part1(con) -> list[str]:
     s.append(
         table(
             con.sql(
-                f"select {SITELINK_BUCKETS} sitelinks_bucket, count(*) pages, count(*) / sum(count(*)) over () share_of_pages from pages group by 1 order by min(sitelinks)"
+                f"select {SITELINK_BUCKETS} sitelinks_bucket, count(*) pages, count(*) / sum(count(*)) over () share_of_pages from pages group by 1 order by min(sitelinks)"  # nosec B608 - analysis SQL built from constants in this file, no user input
             ).df()
         )
     )
@@ -197,13 +197,13 @@ def part1(con) -> list[str]:
     s.append(
         table(
             con.sql(f"""select x_lang, count(*) n, count(distinct lang) source_languages, avg(x_ok::int) x_ok, avg((x_ok is null)::int) not_judged
-        from rag where {RAG_DEV} group by 1 order by 2 desc""").df()
+        from rag where {RAG_DEV} group by 1 order by 2 desc""").df()  # nosec B608 - analysis SQL built from constants in this file, no user input
         )
     )
     s.append(
         table(
             con.sql(f"""select count(*) pairs, sum(n) n, min(n) min_per_pair, median(n) median_per_pair, max(n) max_per_pair
-        from (select lang, x_lang, count(*) n from rag where {RAG_DEV} group by all)""").df()
+        from (select lang, x_lang, count(*) n from rag where {RAG_DEV} group by all)""").df()  # nosec B608 - analysis SQL built from constants in this file, no user input
         )
     )
 
@@ -211,13 +211,13 @@ def part1(con) -> list[str]:
     s.append(
         table(
             con.sql(f"""select kind, coalesce(radius_km::varchar, '-') radius_km, count(*) n, min(n_gold) gold_min, median(n_gold) gold_p50,
-        max(n_gold) gold_max from meta where ok and {DEV} group by all order by all""").df()
+        max(n_gold) gold_max from meta where ok and {DEV} group by all order by all""").df()  # nosec B608 - analysis SQL built from constants in this file, no user input
         )
     )
     s.append(
         table(
             con.sql(f"""select n_gold, count(*) filter (where kind = 'geo') geo, count(*) filter (where kind = 'list') list
-        from meta where ok and {DEV} group by 1 order by 1""").df()
+        from meta where ok and {DEV} group by 1 order by 1""").df()  # nosec B608 - analysis SQL built from constants in this file, no user input
         )
     )
     s.append(
@@ -227,7 +227,7 @@ def part1(con) -> list[str]:
     s.append(
         table(
             con.sql(f"""select 'rag ' || kind file, count(*) judged, avg(pool_saturated::int) pool_saturated from rag where {RAG_DEV} and qrels_judged group by 1
-        union all select 'unanswerable', count(*), avg(pool_saturated::int) from unanswerable where ok and {DEV} and qrels_judged""").df()
+        union all select 'unanswerable', count(*), avg(pool_saturated::int) from unanswerable where ok and {DEV} and qrels_judged""").df()  # nosec B608 - analysis SQL built from constants in this file, no user input
         )
     )
     return s
@@ -266,7 +266,7 @@ def part2(con) -> list[str]:
         "answer_ok question; per question = weighted by questions, per kind."
     )
     con.sql(
-        f"create temp table qp as select id, count(*) nq, count(*) filter (where kind = 'corpus') nq_corpus, count(*) filter (where kind = 'challenge') nq_challenge from rag where {RAG_DEV} group by 1"
+        f"create temp table qp as select id, count(*) nq, count(*) filter (where kind = 'corpus') nq_corpus, count(*) filter (where kind = 'challenge') nq_challenge from rag where {RAG_DEV} group by 1"  # nosec B608 - analysis SQL built from constants in this file, no user input
     )
     con.sql(
         "create temp table dp as select p.*, coalesce(nq, 0) nq, coalesce(nq_corpus, 0) nq_corpus, coalesce(nq_challenge, 0) nq_challenge from pages p left join qp using (id) where dev"
@@ -294,7 +294,7 @@ def part2(con) -> list[str]:
         table(
             con.sql(f"""select {SITELINK_BUCKETS} sitelinks_bucket, count(*) dev_pages, avg((nq > 0)::int) share_with_q, avg(nq) q_per_page,
         avg(nq_corpus) corpus_q_per_page, avg(nq_challenge) challenge_q_per_page,
-        avg(nq) filter (where not machine_generated) q_per_page_excl_bot from dp group by 1 order by min(sitelinks)""").df()
+        avg(nq) filter (where not machine_generated) q_per_page_excl_bot from dp group by 1 order by min(sitelinks)""").df()  # nosec B608 - analysis SQL built from constants in this file, no user input
         )
     )
 
@@ -362,14 +362,14 @@ def part2(con) -> list[str]:
         x as (select key, count(distinct p.country) countries, count(distinct split_part(gid, '/', 1)) langs from g join pages p on p.id = g.gid group by 1)
         select a.country anchor_country, count(*) questions, avg((countries > 1)::int) multi_country, avg((langs > 1)::int) multi_language,
                median(m.n_gold) gold_p50
-        from meta m join x using (key) join pages a on a.id = m.anchor group by 1 order by 2 desc, 1""").df()
+        from meta m join x using (key) join pages a on a.id = m.anchor group by 1 order by 2 desc, 1""").df()  # nosec B608 - analysis SQL built from constants in this file, no user input
         )
     )
     s.append(
         table(
             con.sql(f"""with g as (select key, unnest(gold_pages) gid from meta where ok and {DEV} and kind = 'geo'),
         x as (select key, count(distinct p.country) countries, count(distinct split_part(gid, '/', 1)) langs from g join pages p on p.id = g.gid group by 1)
-        select 'all dev geo' as scope, count(*) questions, avg((countries > 1)::int) multi_country, avg((langs > 1)::int) multi_language from x""").df()
+        select 'all dev geo' as scope, count(*) questions, avg((countries > 1)::int) multi_country, avg((langs > 1)::int) multi_language from x""").df()  # nosec B608 - analysis SQL built from constants in this file, no user input
         )
     )
     return s
@@ -378,10 +378,12 @@ def part2(con) -> list[str]:
 def part3(con) -> list[str]:
     s = [
         "## Part 3: Difficulty and retrieval breakdowns (stored ranks)",
-        "`rank_o` = [dense rank, dense margin, BM25 rank] of the gold page; 101 = not in the top 100. **These hits count the gold "
-        "page only**, not the other fitting pages in `relevant`, so they are a lower bound where questions are ambiguous. "
-        "**Dense ranks are missing for most rows** (title + first 1,000 chars per page, kept only where the row was unchanged "
-        "since the GPU run); every dense number below is over the rows that have one, with its coverage.",
+        (
+            "`rank_o` = [dense rank, dense margin, BM25 rank] of the gold page; 101 = not in the top 100. **These hits count the gold "
+            "page only**, not the other fitting pages in `relevant`, so they are a lower bound where questions are ambiguous. "
+            "**Dense ranks are missing for most rows** (title + first 1,000 chars per page, kept only where the row was unchanged "
+            "since the GPU run); every dense number below is over the rows that have one, with its coverage."
+        ),
     ]
 
     s.append("### 8. Distributions per kind and language (dev, answer_ok)")
@@ -430,7 +432,7 @@ def part3(con) -> list[str]:
         s.append(
             table(
                 con.sql(
-                    f"select kind, {expr} bucket, {hits} from {RAGP} where {RAG_DEV} group by 1, 2 order by 1, {order}"
+                    f"select kind, {expr} bucket, {hits} from {RAGP} where {RAG_DEV} group by 1, 2 order by 1, {order}"  # nosec B608 - analysis SQL built from constants in this file, no user input
                 ).df()
             )
         )
@@ -440,7 +442,7 @@ def part3(con) -> list[str]:
             s.append(
                 table(
                     con.sql(
-                        f"select kind, {expr} bucket, {hits} from {RAGP} where {RAG_DEV} and not machine_generated group by 1, 2 order by 1, {order}"
+                        f"select kind, {expr} bucket, {hits} from {RAGP} where {RAG_DEV} and not machine_generated group by 1, 2 order by 1, {order}"  # nosec B608 - analysis SQL built from constants in this file, no user input
                     ).df()
                 )
             )
@@ -457,7 +459,7 @@ def part3(con) -> list[str]:
                 count(*) n, avg(lex_overlap) lex_mean, avg((rank_o[3] <= 5)::int) bm25_hit5, avg((rank_o[3] <= 10)::int) bm25_hit10
                 from rag where {RAG_DEV} and kind = 'challenge' and not machine_generated
                   and lang in (select lang from rag where {RAG_DEV} and kind = 'challenge' and not machine_generated group by 1 having count(*) >= 1000)
-                group by 1, 2 order by 1, min(sitelinks)""").df()
+                group by 1, 2 order by 1, min(sitelinks)""").df()  # nosec B608 - analysis SQL built from constants in this file, no user input
         )
     )
 
@@ -477,7 +479,7 @@ def part3(con) -> list[str]:
         table(
             con.sql(f"""select lang || ' > ' || x_lang pair, {xl} from rag where {RAG_DEV} and x_ok group by lang, x_lang
         having count(*) filter (where rank_o[1] is not null and rank_x[1] is not null) >= 30
-        order by dense_hit10_x - dense_hit10_o, pair limit 25""").df()
+        order by dense_hit10_x - dense_hit10_o, pair limit 25""").df()  # nosec B608 - analysis SQL built from constants in this file, no user input
         )
     )
     return s
@@ -489,7 +491,10 @@ def is_list(x) -> bool:
 
 def sample(con) -> pd.DataFrame:
     """40 rows to check by hand: 15 rag (5 with other fitting pages), 10 unanswerable, 10 meta, 5 compare. Fixed seed."""
-    order = lambda key: f"order by hash({key} || {SEED})"  # noqa: E731
+
+    def order(key: str) -> str:
+        return f"order by hash({key} || {SEED})"
+
     rag = """select 'rag' file, r.kind stratum, r.lang, r.id, r.question, g.q_en question_en, r.answer, r.title gold_title,
         r.relevant other_ids from rag r left join gloss g on g.id = r.id and g.q = r.question where r.answer_ok and r.split = 'dev'"""
     parts = [
@@ -506,16 +511,16 @@ def sample(con) -> pd.DataFrame:
     for t in ["false_premise", "not_covered"]:
         parts.append(
             con.sql(f"""select 'unanswerable' file, type stratum, lang, id, question, question_en, why answer, title gold_title, relevant other_ids
-            from unanswerable where ok and {DEV} and type = '{t}' {order("id")} limit 5""").df()
+            from unanswerable where ok and {DEV} and type = '{t}' {order("id")} limit 5""").df()  # nosec B608 - analysis SQL built from constants in this file, no user input
         )
     for kind, n in [("geo", 7), ("list", 3)]:
         parts.append(
             con.sql(f"""select 'meta' file, kind stratum, lang, coalesce(anchor, key) id, question, question_en, spec answer, '-' gold_title,
-            gold_pages other_ids from meta where ok and {DEV} and kind = '{kind}' {order("key")} limit {n}""").df()
+            gold_pages other_ids from meta where ok and {DEV} and kind = '{kind}' {order("key")} limit {n}""").df()  # nosec B608 - analysis SQL built from constants in this file, no user input
         )
     parts.append(
         con.sql(f"""select 'compare' file, qtype stratum, lang, pages[1] id, question, question_en, answer, '-' gold_title,
-        pages other_ids from compare where ok and {DEV} {order("id || question")} limit 5""").df()
+        pages other_ids from compare where ok and {DEV} {order("id || question")} limit 5""").df()  # nosec B608 - analysis SQL built from constants in this file, no user input
     )
     df = pd.concat(parts, ignore_index=True)
     ids = sorted({i for x in df.other_ids if is_list(x) for i in x} | set(df.id))
@@ -541,18 +546,20 @@ def part5(con) -> list[str]:
     chars, n_pages = con.sql("select sum(char_count), count(*) from pages").fetchone()
     chunks = int(chars / CHUNK_CHARS)
     hard_dev = con.sql(
-        f"select count(*) from rag where {RAG_DEV} and kind = 'challenge'"
+        f"select count(*) from rag where {RAG_DEV} and kind = 'challenge'"  # nosec B608 - analysis SQL built from constants in this file, no user input
     ).fetchone()[0]
     bal_dev = con.sql(
-        f"select count(*) from rag where {RAG_DEV} and balanced"
+        f"select count(*) from rag where {RAG_DEV} and balanced"  # nosec B608 - analysis SQL built from constants in this file, no user input
     ).fetchone()[0]
-    meta_dev = con.sql(f"select count(*) from meta where ok and {DEV}").fetchone()[0]
+    meta_dev = con.sql(f"select count(*) from meta where ok and {DEV}").fetchone()[0]  # nosec B608 - analysis SQL built from constants in this file, no user input
     s = [
         "## Part 5: Needs a run (not run)",
-        f"Sizes from the data: {n_pages:,} pages, {chars / 1e6:.0f}M characters, about **{chunks:,} chunks** at the repo's "
-        f"{CHUNK_CHARS}-char chunk size; dev answer_ok: {hard_dev:,} hard questions, {bal_dev:,} on balanced pages; {meta_dev:,} dev meta "
-        "questions. GPU times are rough estimates for the shared A6000 (not measured here); every item first needs one index of "
-        "the corpus (**~1-3 h** with Qwen3-Embedding-0.6B, longer for 4B/8B or Nemotron 8B).",
+        (
+            f"Sizes from the data: {n_pages:,} pages, {chars / 1e6:.0f}M characters, about **{chunks:,} chunks** at the repo's "
+            f"{CHUNK_CHARS}-char chunk size; dev answer_ok: {hard_dev:,} hard questions, {bal_dev:,} on balanced pages; {meta_dev:,} dev meta "
+            "questions. GPU times are rough estimates for the shared A6000 (not measured here); every item first needs one index of "
+            "the corpus (**~1-3 h** with Qwen3-Embedding-0.6B, longer for 4B/8B or Nemotron 8B)."
+        ),
     ]
     s.append(
         table(
@@ -601,19 +608,21 @@ def part6(con) -> list[str]:
     real = "labels->>'realistic'"
     s = [
         "## Part 6: The `realistic` label on hard questions",
-        "`realistic` is one of the 13 quality labels (Bunny or Ling, one call per page). The hard-question filter "
-        "(`challenge_ok`) **ignores** it, and the labeller's overall `verdict` too, so unrealistic questions stayed in. "
-        "Its definition in `qspec.SPEC` (tmp_labeling, not in the repo) is one line: *Would a real visitor or curious person "
-        "ask the question in `item`, rather than a database or trivia question?*, judged with the full article in view, as one of "
-        "13 labels in one call per page. Easy questions are always `realistic = true`: "
-        "any flag dropped them.",
+        (
+            "`realistic` is one of the 13 quality labels (Bunny or Ling, one call per page). The hard-question filter "
+            "(`challenge_ok`) **ignores** it, and the labeller's overall `verdict` too, so unrealistic questions stayed in. "
+            "Its definition in `qspec.SPEC` (tmp_labeling, not in the repo) is one line: *Would a real visitor or curious person "
+            "ask the question in `item`, rather than a database or trivia question?*, judged with the full article in view, as one of "
+            "13 labels in one call per page. Easy questions are always `realistic = true`: "
+            "any flag dropped them."
+        ),
     ]
     s.append("### What goes with it (dev, answer_ok, hard)")
     s.append(
         table(
             con.sql(f"""with t as (select {real} realistic, labels->>'verdict' verdict, labels->>'duplicate' duplicate, count(*) n
                 from rag where {hard} group by 1, 2, 3)
-                select *, n / sum(n) over () share_of_hard from t order by 1, 2, 3""").df()
+                select *, n / sum(n) over () share_of_hard from t order by 1, 2, 3""").df()  # nosec B608 - analysis SQL built from constants in this file, no user input
         )
     )
     s.append(
@@ -646,7 +655,7 @@ def part6(con) -> list[str]:
         s.append(
             table(
                 con.sql(f"""select {expr} bucket, count(*) n, avg(({real} = 'false')::int) unrealistic, avg(lex_overlap) lex_mean,
-                    avg((rank_o[3] <= 10)::int) bm25_hit10 from rag where {hard} group by 1 order by 2 desc, 1""").df()
+                    avg((rank_o[3] <= 10)::int) bm25_hit10 from rag where {hard} group by 1 order by 2 desc, 1""").df()  # nosec B608 - analysis SQL built from constants in this file, no user input
             )
         )
     s.append(
@@ -658,7 +667,7 @@ def part6(con) -> list[str]:
                 where answer_ok and kind = 'challenge' and lang = 'en'
                 -- a draw with no overlap with the review app's blind realism sample, so reading the report gives no labels away
                 qualify row_number() over (partition by {real} order by hash(id || n || {SEED} || 'report3')) <= 4
-                order by 1, 2""").df()
+                order by 1, 2""").df()  # nosec B608 - analysis SQL built from constants in this file, no user input
         )
     )
     return s
@@ -667,19 +676,21 @@ def part6(con) -> list[str]:
 def summary() -> list[str]:
     return [
         "## How the data was made (summary of the report, src/db/README.md and src/db/schemas/)",
-        "| | |\n|---|---|\n"
-        "| generated by | easy questions: Qwen3.5-4B + LoRA student (250k) and Space Bunny teacher (104k); hard questions: Space Bunny and Ling 3.1 Flash by page hash; answers, evidence, translations and all extra files (unanswerable, compare, meta phrasing, variants): Ling; table answers: code |\n"
-        "| judged by | quality labels: Bunny / Ling (13 labels); answers: Ling and Bunny, AND over both (`answer_ok`); translations: both (`x_ok`); extra files: a second Ling call; qrels: Ling over the BM25 top 20; tables: Claude Sonnet recomputed 200; Sonnet blind spot checks of 30-200 items per layer; no human labels |\n"
-        "| filters | easy: verdict keep and not identical across pages; hard: `challenge_ok` (supported, not self-answering, fluent, unique, ...) and not `likely_ambiguous` (BM25 > 10 and dense > 10); answers: every criterion; translations: both judges; extra files: their `check` + verbatim evidence |\n"
-        "| LLM-judged columns | `labels`, `criteria`, `answer_ok`, `x_ok`, `reasoning`, `time_sensitive`, `qtype`, `page_tags` (Gemma 4 E4B LoRA), `variants.check`, `check` (unanswerable, compare, meta), qrels (`gold_match`, `gold_answers`, `relevant`, `partial`, `answering`, `hard_negatives`, `n_relevant`, `hits`, `pool_saturated`), `sonnet` (tables) |\n"
-        "| computed, not judged | `rank_o`, `rank_x`, `lex_overlap`, `title_in_question`, `stub`, `page_template_sim`, `evidence_pos`, `evidence_in_table`, `spans`, `verbatim`, `split`, `balanced`, meta gold sets (Wikidata metadata + haversine), table answers |\n"
-        "| known limits | free preview models that change over time; one model family checks most extra layers; qrels pool is BM25 only; translations noisy in small languages |",
+        (
+            "| | |\n|---|---|\n"
+            "| generated by | easy questions: Qwen3.5-4B + LoRA student (250k) and Space Bunny teacher (104k); hard questions: Space Bunny and Ling 3.1 Flash by page hash; answers, evidence, translations and all extra files (unanswerable, compare, meta phrasing, variants): Ling; table answers: code |\n"
+            "| judged by | quality labels: Bunny / Ling (13 labels); answers: Ling and Bunny, AND over both (`answer_ok`); translations: both (`x_ok`); extra files: a second Ling call; qrels: Ling over the BM25 top 20; tables: Claude Sonnet recomputed 200; Sonnet blind spot checks of 30-200 items per layer; no human labels |\n"
+            "| filters | easy: verdict keep and not identical across pages; hard: `challenge_ok` (supported, not self-answering, fluent, unique, ...) and not `likely_ambiguous` (BM25 > 10 and dense > 10); answers: every criterion; translations: both judges; extra files: their `check` + verbatim evidence |\n"
+            "| LLM-judged columns | `labels`, `criteria`, `answer_ok`, `x_ok`, `reasoning`, `time_sensitive`, `qtype`, `page_tags` (Gemma 4 E4B LoRA), `variants.check`, `check` (unanswerable, compare, meta), qrels (`gold_match`, `gold_answers`, `relevant`, `partial`, `answering`, `hard_negatives`, `n_relevant`, `hits`, `pool_saturated`), `sonnet` (tables) |\n"
+            "| computed, not judged | `rank_o`, `rank_x`, `lex_overlap`, `title_in_question`, `stub`, `page_template_sim`, `evidence_pos`, `evidence_in_table`, `spans`, `verbatim`, `split`, `balanced`, meta gold sets (Wikidata metadata + haversine), table answers |\n"
+            "| known limits | free preview models that change over time; one model family checks most extra layers; qrels pool is BM25 only; translations noisy in small languages |"
+        ),
     ]
 
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--date", default=date.today().isoformat())
+    ap.add_argument("--date", default=datetime.now(UTC).date().isoformat())
     day = ap.parse_args().date
     con = connect()
     manifest = json.loads((QA / "manifest.json").read_text())
@@ -689,12 +700,16 @@ def main() -> None:
         sample(con).to_csv(sample_path, index=False)
     head = [
         f"# Wiki places QA set: audit ({day})",
-        f"Generated by `experiments/wiki_audit/audit.py` from the stored columns of the {manifest['built']} build "
-        "(`/data/llms4eu/wiki/qa`, read-only). No model calls and no retrieval runs. Unless stated otherwise: dev split, "
-        "ok / answer_ok rows, per language with `sv excl. bot` and `all excl. bot` rows (bot = `machine_generated`, the "
-        "Swedish lake register; only Swedish has bot pages).",
-        f"Part 4, the human-check sample (40 rows, seed {SEED}), is in [`{sample_path.name}`]({sample_path.name}): verdict "
-        "columns are empty, to be filled in by hand.",
+        (
+            f"Generated by `experiments/wiki_audit/audit.py` from the stored columns of the {manifest['built']} build "
+            "(`/data/llms4eu/wiki/qa`, read-only). No model calls and no retrieval runs. Unless stated otherwise: dev split, "
+            "ok / answer_ok rows, per language with `sv excl. bot` and `all excl. bot` rows (bot = `machine_generated`, the "
+            "Swedish lake register; only Swedish has bot pages)."
+        ),
+        (
+            f"Part 4, the human-check sample (40 rows, seed {SEED}), is in [`{sample_path.name}`]({sample_path.name}): verdict "
+            "columns are empty, to be filled in by hand."
+        ),
     ]
     report = OUT / f"audit-{day}.md"
     # hand-written findings above the marker survive a rerun; everything below it is regenerated
