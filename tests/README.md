@@ -4,8 +4,7 @@ The tests stay narrow on purpose: they cover what could break silently, and
 nothing that only restates a one-line wrapper.
 
 Contracts that span two files, where drift is invisible until runtime:
-`test_page_schema.py` checks `PageMetadata`'s fields against the columns in
-`sql/raw_pages.sql`; `test_prompts.py` checks every file in `prompts/` renders
+`test_prompts.py` checks every file in `prompts/` renders
 and that a missing variable raises instead of shipping a literal `$name`.
 
 Silent-corruption risks: `test_embedding_cache.py` asks for the same texts in

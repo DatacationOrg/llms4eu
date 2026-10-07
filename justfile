@@ -5,7 +5,7 @@ set windows-shell := ["pwsh", "-NoLogo", "-Command"]
 default:
     @just --list --unsorted
 
-# 1. Fetch the Slovenian source URLs into the page database.
+# 1. Fetch source URLs and append the pages to $LLMS4EU_DATA/scraped/<source>.jsonl.
 fetch-pages SOURCE="data/brestanica.json":
     uv run python -m src.scraping.fetch_pages {{SOURCE}}
 

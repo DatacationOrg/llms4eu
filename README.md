@@ -32,7 +32,7 @@ ollama pull gpt-oss:20b
 ## Usage
 
 ```bash
-just fetch-pages   # fetch the Slovenian source URLs into the page database
+just fetch-pages   # fetch source URLs, append the pages to a JSONL
 just chunk         # split fetched Markdown into heading-aware page chunks
 just locate-pages  # Wikidata point per page, for the *_geo methods
 just index qwen    # embed those chunks into a Chroma collection
