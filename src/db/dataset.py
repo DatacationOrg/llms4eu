@@ -1,6 +1,6 @@
 """The wiki places dataset: load it. One pydantic model per Parquet file in
-`schemas/`, each listing its file's columns. Rows are questions about the pages in
-`pages.jsonl`; a page id looks like `svwiki/Q123`.
+`schemas/`, each listing its file's columns. `Page` is what a system searches over; the
+other files are questions about the pages, by page id (`svwiki/Q123`).
 Test on `ok` rows (`answer_ok` in `Rag`), tune on `split == "dev"`.
 
     hard = load(Rag, ["id", "question"], answer_ok=True, kind="challenge").to_pandas()
@@ -10,7 +10,6 @@ Test on `ok` rows (`answer_ok` in `Rag`), tune on `split == "dev"`.
 
 from __future__ import annotations
 
-import json
 import os
 from collections.abc import Iterable, Iterator
 from pathlib import Path
@@ -20,11 +19,22 @@ import pyarrow.parquet as pq
 from src.db.schemas.base import Row
 from src.db.schemas.compare import Compare
 from src.db.schemas.meta import Meta
+from src.db.schemas.page import Page
 from src.db.schemas.rag import Rag
 from src.db.schemas.tables import Tables
 from src.db.schemas.unanswerable import Unanswerable
 
-__all__ = ["Compare", "Meta", "Rag", "Tables", "Unanswerable", "load", "pages", "read"]
+__all__ = [
+    "Compare",
+    "Meta",
+    "Page",
+    "Rag",
+    "Tables",
+    "Unanswerable",
+    "load",
+    "pages",
+    "read",
+]
 
 ROOT = Path(os.getenv("DATASET_DIR", "/data/llms4eu/wiki"))  # or a copy of it
 
@@ -46,7 +56,6 @@ def read(model: type[Row], **where) -> Iterator[Row]:
 
 
 def pages(ids: Iterable[str]) -> dict[str, dict]:
-    """Page id -> page (title, text, metadata); one pass over pages.jsonl."""
-    want = set(ids)
-    with open(ROOT / "pages.jsonl") as fh:
-        return {p["id"]: p for p in map(json.loads, fh) if p["id"] in want}
+    """Page id -> page (title, text, metadata)."""
+    table = pq.read_table(path(Page), filters=[("id", "in", list(set(ids)))])
+    return {p["id"]: p for p in table.to_pylist()}

@@ -4,6 +4,7 @@ import pytest
 from src.db import dataset
 
 MODELS = [
+    dataset.Page,
     dataset.Rag,
     dataset.Unanswerable,
     dataset.Compare,
