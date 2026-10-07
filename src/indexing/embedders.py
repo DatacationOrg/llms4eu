@@ -5,7 +5,6 @@ from functools import cache
 from pathlib import Path
 from typing import Any, Protocol, cast
 
-
 import torch
 from sentence_transformers import SentenceTransformer
 

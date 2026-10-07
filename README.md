@@ -1,14 +1,15 @@
 # LLMs4EU - Tourism - RAG
 
-Local retrieval research over Slovenian tourism pages. SQLite stores canonical
-content, Chroma stores derived vector indexes, and everything runs inside the
-Python environment.
+Local retrieval research over Wikipedia pages of EU places (castles, lakes, caves,
+...; 24 languages). The data is Parquet files with one pydantic model each, read
+through `src/db/dataset.py`; embeddings are stored next to them as `.npy`.
+Everything runs inside the Python environment.
 
 ## Requirements
 
 - [uv](https://docs.astral.sh/uv/)
 - [just](https://just.systems/)
-- [Ollama](https://ollama.com/) — needed for `just eval-generate`
+- [Ollama](https://ollama.com/) — needed for the geo retriever's place lookup
 
 ## Setup
 
@@ -17,77 +18,51 @@ uv sync --extra dev   # install all dependencies
 cp .env.example .env  # set LLMS4EU_DATA, the shared artifact store
 ```
 
-All generated data lives outside the repo in one place, `LLMS4EU_DATA`
-(default `/data/llms4eu`): the page database, the Chroma vector cache,
-embedding caches and benchmark checkpoints. The repo tracks
-code, SQL schema and the source URL list only.
-
-```bash
-ollama pull gemma4:e4b
-# Optional for eval question generation:
-ollama pull gemma4:26b-a4b-it-q4_K_M
-ollama pull gpt-oss:20b
-```
+The dataset lives in `DATASET_DIR` (default `/data/llms4eu/wiki`, see
+`src/db/README.md`). Caches, checkpoints and scraped pages live in `LLMS4EU_DATA`
+(default `/data/llms4eu`). The repo tracks code only.
 
 ## Usage
 
 ```bash
-just fetch-pages   # fetch source URLs, append the pages to a JSONL
-just chunk         # split fetched Markdown into heading-aware page chunks
-just locate-pages  # Wikidata point per page, for the *_geo methods
-just index qwen    # embed those chunks into a Chroma collection
-just rechunk       # after changing chunk_size/overlap: rechunk, move labels
-just chunk-compare # score the named chunk variants side by side
-just test          # run the non-LLM test suite
-```
-
-Retrieval evaluation over the scraped pages:
-
-```bash
-just eval-generate 10                 # generate labelled questions
-just eval-evidence                    # anchor answers to quotes (before rechunk)
-just eval --methods qwen,sparse       # compare named retrieval methods
-just eval-all                         # whole catalog, resumable
-just eval-inspect                     # look at the labelled dataset
+just chunk                          # cut the pages into chunks.parquet, all sizes
+just index qwen                     # embed every chunk size (GPU)
+just index nemotron --api           # the same on OpenRouter's free endpoint
+just eval --methods qwen,sparse     # compare named retrieval methods
+CHUNK_SIZE=<size> just eval         # on another chunk size
+just chunk-compare --methods qwen   # every chunk size in one table
+just eval-all                       # whole catalog, resumable
+just fetch-pages                    # scrape source URLs into a JSONL of pages
+just test                           # run the non-LLM test suite
 ```
 
 ## Shape
 
 ```text
-data/           brestanica.json, the tracked Slovenian source URLs
-sql/            page and eval schema, portable to SQLite and Postgres
-src/scraping/   fetch pages, extract Markdown, store in SQLite
-src/db/         the wiki places dataset (dataset.py, schemas/); legacy/ the old page DB
-src/preprocess/ heading-aware page chunking, page locations
-src/indexing/   embedding providers, embedding cache, Chroma collections
+data/           brestanica.json, tracked source URLs
+src/db/         the dataset: dataset.py loads it, schemas/ one model per file
+src/scraping/   fetch pages, extract Markdown, append to a JSONL
+src/preprocess/ heading-aware chunking into chunks.parquet
+src/indexing/   embedding providers, embeddings/<provider>/<size>.npy, vector search
 src/retrieval/  chunk retrieval methods and catalog
-src/eval/       retrieval evaluation over labelled questions
+src/eval/       retrieval evaluation on the wiki QA questions
 src/shared/     env and artifact paths, prompt loading, LLM helper
+datagen/        how generated columns were made; not used by the pipeline
 prompts/        LLM prompt templates, loaded by src.shared.prompts
-tests/          schema contract, retrieval, extraction
+tests/          data contract, chunking, retrieval, extraction
 ```
 
-Durable and regenerable artifacts alike live under `LLMS4EU_DATA`
-(`db/pages.db`, `chroma/`, `embeddings/`, `checkpoints/`). SQLite page chunks
-are the source of truth for chunk text;
-Chroma collections are derived indexes over those chunks.
+The first Slovenian corpus (an SQLite page database) is not in this format; a
+later step could convert it.
 
 ---
 
 ## Roadmap
 
-This repo focuses on a clean, portable page corpus and a measured retrieval
-pipeline over it.
+**Current:** Parquet + `.npy` vectors, exact vector search, everything local.
 
-**Current:** SQLite + Chroma, everything local, no services needed.
-
-**Next step:** swap storage backends for larger shared runs:
-- SQLite → **Supabase** (free tier, under 500 MB, shared across teams)
-- Chroma → **Qdrant** (free tier, managed vector index)
-
-The SQL schema and module boundaries are designed to make that swap small.
-Before scaling up, we need to align with other teams on what data collection
-tools and shared infrastructure are available.
+**Next step:** an approximate vector index (FAISS or Qdrant) built from the stored
+vectors, for fast queries over the larger chunk sizes and more models.
 
 ## Docs
 

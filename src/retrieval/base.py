@@ -36,3 +36,11 @@ def retrieve_batch_default(
     return {
         index: retriever.retrieve(query, limit) for index, query in enumerate(queries)
     }
+
+
+def top_k(scores, limit: int):
+    """Indices of the `limit` highest scores, best first."""
+    import numpy as np
+
+    top = np.argpartition(-scores, min(limit, len(scores) - 1))[:limit]
+    return top[np.argsort(-scores[top])]
