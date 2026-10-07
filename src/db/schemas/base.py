@@ -40,15 +40,28 @@ class Row(BaseModel):
 
 
 class Qrels(BaseModel):
-    """Which other pages fit the question, judged over its BM25 top 20 (null = not judged)."""
+    """Which other pages fit the question, judged by an LLM over its BM25 top 20.
+    Every field but `qrels_judged` is null when the question was not judged."""
+
+    model_config = ConfigDict(use_attribute_docstrings=True)
 
     qrels_judged: bool
-    gold_match: str | None = None  # the gold page's own judgement: yes / partly / no
+    """Whether the other pages were judged at all."""
+    gold_match: Literal["yes", "partly", "no"] | None = None
+    """The judge's verdict on the gold page itself, a control."""
     gold_answers: bool | None = None
-    relevant: list[str] | None = None  # other pages it fits fully
-    partial: list[str] | None = None  # other pages it fits partly
-    answering: list[str] | None = None  # pages whose text answers it
-    hard_negatives: list[str] | None = None  # similar pages that do not fit
-    n_relevant: int | None = None  # gold + relevant
+    """Whether the gold page's text answers the question."""
+    relevant: list[str] | None = None
+    """Other page ids the question fits fully; they count as correct."""
+    partial: list[str] | None = None
+    """Other page ids the question fits partly."""
+    answering: list[str] | None = None
+    """Page ids whose text answers the question."""
+    hard_negatives: list[str] | None = None
+    """Similar page ids that do not fit: training negatives."""
+    n_relevant: int | None = None
+    """Pages the question fits: the gold page plus `relevant`, 1 to 21."""
     hits: Literal["unique", "few", "many"] | None = None
-    pool_saturated: bool | None = None  # likely more matches than judged
+    """`n_relevant` in words: 1, 2 to 3, or 4 and more."""
+    pool_saturated: bool | None = None
+    """Whether more pages likely fit than the 20 judged."""
