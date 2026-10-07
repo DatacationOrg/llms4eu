@@ -5,11 +5,11 @@ The project's data and how to read it.
 ## Wiki places dataset (the main one)
 
 133k Wikipedia pages of EU places (24 languages), cut into chunks, embedded, and questions
-about them. On thebeast under `/data/llms4eu/wiki/` (`WIKI_DIR` for a copy):
+about them. On thebeast under `/data/llms4eu/wiki/` (`DATASET_DIR` for a copy):
 
 | path | model (`schemas/<name>.py`) | rows | what |
 |---|---|---|---|
-| `pages.parquet` | `Page` | 133k | the pages: `id`, `title`, `text` (Markdown), metadata, Ling `summary` |
+| `wikipages.parquet` | `Page` | 133k | the pages: `id`, `title`, `text` (Markdown), metadata, Ling `summary` |
 | `chunks.parquet` | `Chunk` | 1.8M | the pages cut at 256 / 512 / 1024 / 2048 tokens (`size`), with `breadcrumb` and Ling `role` |
 | `embeddings/<model>/<size>.npy` | | | float16 unit vectors, row i = chunk i of that size |
 | `qa/wiki_qa_rag.parquet` | `Rag` | 531k | a question about one page: easy (names the place) or hard (describes it) |
@@ -18,11 +18,11 @@ about them. On thebeast under `/data/llms4eu/wiki/` (`WIKI_DIR` for a copy):
 | `qa/wiki_qa_meta.parquet` | `Meta` | 4k | a question with a set of pages as its answer (list, geo) |
 | `qa/wiki_qa_tables.parquet` | `Tables` | 339 | a question that aggregates a table in a page |
 
-Each model lists its file's columns; `wiki_qa.py` loads them. Questions point at pages by
+Each model lists its file's columns; `dataset.py` loads them. Questions point at pages by
 `id` (`svwiki/Q123`). Test on `ok` rows (`answer_ok` in `Rag`), tune on `split == "dev"`.
 
 ```python
-from src.db.wiki_qa import Chunk, Rag, Unanswerable, embeddings, load, pages, read
+from src.db.dataset import Chunk, Rag, Unanswerable, embeddings, load, pages, read
 
 hard = load(Rag, ["id", "question"], answer_ok=True, kind="challenge").to_pandas()
 for q in read(Unanswerable, ok=True):  # validated models
@@ -41,7 +41,7 @@ How the files are made (each step resumable, `pages.jsonl` is only read):
 
 | step | command | writes |
 |---|---|---|
-| chunk | `just wiki-chunks` (`wiki_chunks.py`) | `pages.parquet`, `chunks.parquet`; rerun to copy in new notes |
+| chunk | `just wiki-chunks` (`wiki_chunks.py`) | `wikipages.parquet`, `chunks.parquet`; rerun to copy in new notes |
 | notes | `just wiki-notes summaries`, `just wiki-notes roles --size 512` (`wiki_notes.py`) | `notes.db` |
 | embed | `just wiki-embed qwen3-embedding-0.6b` (`wiki_embed.py`) | `embeddings/` |
 

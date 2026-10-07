@@ -62,7 +62,7 @@ lint:
     uv run ruff check --fix .
     uv run ruff format .
 
-# Wiki dataset (src/db): cut pages.jsonl into pages.parquet + chunks.parquet.
+# Wiki dataset (src/db): cut pages.jsonl into wikipages.parquet + chunks.parquet.
 wiki-chunks *ARGS:
     uv run python -m src.db.wiki_chunks {{ARGS}}
 

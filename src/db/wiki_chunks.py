@@ -1,4 +1,4 @@
-"""Build `pages.parquet` and `chunks.parquet` from `pages.jsonl` (read only), adding the
+"""Build `wikipages.parquet` and `chunks.parquet` from `pages.jsonl` (read only), adding the
 Ling notes (`summary`, `role`) found in `notes.db`. Run again to pick up new notes.
 
 Chunking follows aihub-core (`aihub_core/search/chunking.py`): split at the page's
@@ -21,7 +21,7 @@ from typing import NamedTuple
 import pyarrow as pa
 import pyarrow.parquet as pq
 
-from src.db.wiki_qa import ROOT, Chunk, Page, path
+from src.db.dataset import ROOT, Chunk, Page, path
 
 SIZES = (256, 512, 1024, 2048)
 TOKENIZER = "Qwen/Qwen3-Embedding-0.6B"

@@ -6,7 +6,7 @@ from src.db.schemas.base import Row
 class Page(Row):
     """A Wikipedia page about an EU place: what the system searches over."""
 
-    file = "pages.parquet"
+    file = "wikipages.parquet"
     id: str  # <lang>wiki/<Wikidata id>, the page id every question file uses
     wikiname: str  # e.g. dewiki
     wikidata_id: str

@@ -16,9 +16,9 @@ from concurrent.futures import ThreadPoolExecutor
 
 import numpy as np
 
+from src.db.dataset import ROOT, Chunk, load
 from src.db.schemas.chunk import represent
 from src.db.wiki_chunks import SIZES
-from src.db.wiki_qa import ROOT, Chunk, load
 from src.shared.env import load_local_env
 
 # name -> (model, dimensions, document prefix)

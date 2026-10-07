@@ -1,27 +1,27 @@
 import pyarrow.parquet as pq
 import pytest
 
-from src.db import wiki_qa
+from src.db import dataset
 from src.db.wiki_chunks import chunk_page
 from src.db.wiki_notes import cap
 
 MODELS = [
-    wiki_qa.Page,
-    wiki_qa.Chunk,
-    wiki_qa.Rag,
-    wiki_qa.Unanswerable,
-    wiki_qa.Compare,
-    wiki_qa.Meta,
-    wiki_qa.Tables,
+    dataset.Page,
+    dataset.Chunk,
+    dataset.Rag,
+    dataset.Unanswerable,
+    dataset.Compare,
+    dataset.Meta,
+    dataset.Tables,
 ]
 
 
 @pytest.mark.parametrize("model", MODELS, ids=lambda m: m.file)
 def test_file_matches_its_model(model):
-    if not wiki_qa.path(model).exists():
+    if not dataset.path(model).exists():
         pytest.skip("wiki data not on this machine")
-    assert set(pq.read_schema(wiki_qa.path(model)).names) == set(model.model_fields)
-    assert next(wiki_qa.read(model))
+    assert set(pq.read_schema(dataset.path(model)).names) == set(model.model_fields)
+    assert next(dataset.read(model))
 
 
 def test_chunks_keep_breadcrumbs_and_sizes():

@@ -1,6 +1,6 @@
 # How the wiki places QA test set was made (2026-09-25 to 2026-10-05)
 
-The test set in `/data/llms4eu/wiki/qa/` (models, columns and loader: `src/db/wiki_qa.py`) is built in twelve stages on top of the Wikipedia places corpus. This report gives, per stage, what was
+The test set in `/data/llms4eu/wiki/qa/` (models, columns and loader: `src/db/dataset.py`) is built in twelve stages on top of the Wikipedia places corpus. This report gives, per stage, what was
 done, with which model and settings, which filter decides what is kept, and what the checks measured, so the set can
 be judged and, roughly, rebuilt. Exact reruns are not possible: the free models are stochastic and change behind
 their endpoints. The scripts, prompts and the full decision log are not in the repo: they live on thebeast in

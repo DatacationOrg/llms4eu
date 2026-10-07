@@ -41,7 +41,7 @@ __all__ = [
     "read",
 ]
 
-ROOT = Path(os.getenv("WIKI_DIR", "/data/llms4eu/wiki"))  # or a copy of it
+ROOT = Path(os.getenv("DATASET_DIR", "/data/llms4eu/wiki"))  # or a copy of it
 
 
 def path(model: type[Row]) -> Path:

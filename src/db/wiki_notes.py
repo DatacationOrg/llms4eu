@@ -22,9 +22,9 @@ from concurrent.futures import ThreadPoolExecutor
 
 import httpx
 
+from src.db.dataset import Chunk, Page, load
 from src.db.schemas.chunk import represent
 from src.db.wiki_chunks import NOTES
-from src.db.wiki_qa import Chunk, Page, load
 from src.shared.env import load_local_env
 
 MODEL = "inclusionai/ling-3.1-flash-free"  # free on the Vercel AI Gateway
