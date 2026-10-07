@@ -13,9 +13,9 @@ from chromadb.api import ClientAPI
 from chromadb.api.types import PyEmbedding
 from tqdm import tqdm
 
-from src.db.pages import chunk_variant, variant_tag
-from src.db.pages import connect_pages as connect
-from src.db.pages import initialize_page_artifacts_db
+from src.db.legacy.pages import chunk_variant, variant_tag
+from src.db.legacy.pages import connect_pages as connect
+from src.db.legacy.pages import initialize_page_artifacts_db
 from src.indexing.documents import PageChunk, text_for_embedding
 from src.retrieval.base import RankedChunk
 from src.shared.env import chroma_path, load_local_env, load_yaml

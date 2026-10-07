@@ -9,11 +9,11 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
-from src.db.pages import chunk_variant, variant_tag
-from src.db.pages import (
+from src.db.legacy.pages import chunk_variant, variant_tag
+from src.db.legacy.pages import (
     connect_pages as connect,
 )
-from src.db.pages import (
+from src.db.legacy.pages import (
     initialize_page_artifacts_db as initialize_eval_db,
 )
 from src.eval.metrics import (
