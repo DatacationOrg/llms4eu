@@ -3,8 +3,9 @@
 The test set in `/data/llms4eu/wiki/qa/` (models, columns and loader: `src/db/dataset.py`) is built in twelve stages on top of the Wikipedia places corpus. This report gives, per stage, what was
 done, with which model and settings, which filter decides what is kept, and what the checks measured, so the set can
 be judged and, roughly, rebuilt. Exact reruns are not possible: the free models are stochastic and change behind
-their endpoints. The scripts, prompts and the full decision log are not in the repo: they live on thebeast in
-`llms4eu/tmp_labeling/` (`CLEANING_LOG.md` is the day-by-day log, `xcheck/` every blind check's input and result).
+their endpoints. The scripts, prompts and the day-by-day decision log are in `datagen/wiki_qa/` (copied from the
+workspace `tmp_labeling/` on thebeast); adapters, training sets and every blind check's input and result
+(`xcheck/`) are in `/data/llms4eu/wiki/datagen/wiki_qa/`.
 The stage table names the script for each step and the columns it fills.
 
 ## Models and endpoints
@@ -27,7 +28,7 @@ it, and no model judges its own output in the same call.
 
 | # | stage | script (tmp_labeling) | ends up in |
 |---|---|---|---|
-| 0 | corpus | `src/data_prep/wiki_places.py` (corpus PR) | `/data/llms4eu/wiki/pages.jsonl` |
+| 0 | corpus | `datagen/corpus/wiki_places.py` | `/data/llms4eu/wiki/pages.jsonl` |
 | 1 | page tags | `tag_spec.py`, `train_lora.py --task cls`, `run_vllm.py` | `rag.page_tags` |
 | 2 | corpus questions | `gen_questions.py`, `train_lora.py --task qg`, `run_vllm.py` | `clean` |
 | 3 | rule checks | `rule_checks.py` | (suspect flags only) |
