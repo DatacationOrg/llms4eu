@@ -46,3 +46,9 @@ skips = ["*test_*.py"] # pytest needs assert; still flagged in src
 
 [tool.pyright]
 typeCheckingMode = "standard"
+exclude = ["datagen/wiki_qa", ".venv"]
+
+# datagen/wiki_qa is a record of the scripts that made the QA data, kept as they ran.
+[tool.ruff]
+extend-exclude = ["datagen/wiki_qa"]
+force-exclude = true
