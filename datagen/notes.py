@@ -10,7 +10,7 @@ until `export` writes them into `wikipages.parquet` and `chunks.parquet`:
 Resumable: done ids are skipped, failures are retried on the next run.
 
     uv run python -m datagen.notes summaries --workers 100
-    uv run python -m datagen.notes roles --size <size> --workers 100
+    uv run python -m datagen.notes roles --workers 100   # every size, largest first
     uv run python -m datagen.notes export
 """
 
@@ -180,14 +180,21 @@ def export() -> None:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("job", choices=["summaries", "roles", "export"])
-    parser.add_argument("--size", type=int, choices=SIZES, default=max(SIZES))
+    parser.add_argument(
+        "--sizes",
+        type=int,
+        nargs="+",
+        choices=SIZES,
+        default=sorted(SIZES, reverse=True),
+    )
     parser.add_argument("--workers", type=int, default=100)
     args = parser.parse_args()
     load_local_env()
     if args.job == "summaries":
         summaries(args.workers)
     elif args.job == "roles":
-        roles(args.size, args.workers)
+        for size in args.sizes:
+            roles(size, args.workers)
     else:
         export()
 
