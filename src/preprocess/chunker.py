@@ -26,9 +26,8 @@ from typing import NamedTuple
 
 import numpy as np
 import pyarrow as pa
-import pyarrow.parquet as pq
 
-from src.db.dataset import ROOT, SIZES, Chunk, Page, load, path
+from src.db.dataset import ROOT, SIZES, Chunk, Page, load, path, write
 from src.db.schemas.chunk import represent
 from src.shared.env import load_yaml
 
@@ -166,21 +165,6 @@ def _sizer(size: int):
     )
 
 
-def write(table: pa.Table, target) -> None:
-    """Write next to the target, then swap it in: a crash never leaves half a file."""
-    tmp = target.with_name(target.name + ".tmp")
-    pq.write_table(table, tmp, compression="zstd", row_group_size=50_000)
-    os.replace(tmp, target)
-
-
-def pages_from_jsonl() -> None:
-    """`wikipages.parquet` from the scraped `pages.jsonl` (read only), `summary` empty."""
-    import pyarrow.json as pj
-
-    table = pj.read_json(ROOT / "pages.jsonl")
-    write(table.append_column("summary", pa.nulls(len(table), pa.string())), path(Page))
-
-
 def _key(chunk: dict) -> tuple:
     return chunk["page_id"], represent(
         chunk["title"], chunk["breadcrumb"], chunk["text"]
@@ -221,7 +205,7 @@ def main() -> None:
     parser.add_argument("--workers", type=int, default=os.cpu_count())
     workers = parser.parse_args().workers
     if not path(Page).exists():
-        pages_from_jsonl()
+        raise SystemExit("no wikipages.parquet yet: run python -m src.preprocess.pages")
     pages = load(Page, ["id", "title", "text"]).to_pylist()
     with Pool(workers) as pool:
         chunks = [c for cs in pool.imap(chunk_page, pages, chunksize=64) for c in cs]
@@ -231,7 +215,7 @@ def main() -> None:
     swaps = _carry_over(chunks)
     # ponytail: chunks and vectors are swapped one rename after another, not atomically;
     # after a crash between them, a rerun finds the row counts differ and re-embeds.
-    write(pa.Table.from_pylist(chunks), path(Chunk))
+    write(Chunk, pa.Table.from_pylist(chunks))
     for written, target in swaps:
         os.replace(written, target)
     print(

@@ -16,6 +16,7 @@ from collections.abc import Iterable, Iterator
 from pathlib import Path
 
 import numpy as np
+import pyarrow as pa
 import pyarrow.parquet as pq
 
 from src.db.schemas.base import Row
@@ -44,6 +45,7 @@ __all__ = [
     "pages",
     "read",
     "vectors_path",
+    "write",
 ]
 
 ROOT = Path(os.getenv("DATASET_DIR", "/data/llms4eu/wiki"))  # or a copy of it
@@ -64,6 +66,15 @@ def load(model: type[Row], columns: list[str] | None = None, **where):
     """The file as a pyarrow Table (`.to_pandas()`), only `columns`, rows matching `where`."""
     filters = [(k, "==", v) for k, v in where.items()] or None
     return pq.read_table(path(model), columns=columns, filters=filters)
+
+
+def write(model: type[Row], table: pa.Table) -> None:
+    """Replace the model's file: written beside it, then swapped in, so a crash never
+    leaves half a file."""
+    target = path(model)
+    tmp = target.with_name(target.name + ".tmp")
+    pq.write_table(table, tmp, compression="zstd", row_group_size=50_000)
+    os.replace(tmp, target)
 
 
 def read(model: type[Row], **where) -> Iterator[Row]:

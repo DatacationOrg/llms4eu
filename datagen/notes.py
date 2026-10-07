@@ -26,9 +26,8 @@ from concurrent.futures import ThreadPoolExecutor
 import httpx
 import pyarrow as pa
 
-from src.db.dataset import ROOT, SIZES, Chunk, Page, load, path
+from src.db.dataset import ROOT, SIZES, Chunk, Page, load, write
 from src.db.schemas.chunk import represent
-from src.preprocess.chunker import write
 from src.shared.env import load_local_env
 
 NOTES = ROOT / "notes.db"
@@ -182,9 +181,7 @@ def export() -> None:
         ids, current = data.column("id").to_pylist(), data.column(column).to_pylist()
         filled = [notes[table].get(i, old) for i, old in zip(ids, current)]
         index = data.schema.get_field_index(column)
-        write(
-            data.set_column(index, column, pa.array(filled, pa.string())), path(model)
-        )
+        write(model, data.set_column(index, column, pa.array(filled, pa.string())))
         print(f"{column}: {sum(v is not None for v in filled)} of {len(ids)}")
 
 
