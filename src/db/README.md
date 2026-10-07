@@ -28,7 +28,8 @@ hard = load(Rag, ["id", "question"], answer_ok=True, kind="challenge").to_pandas
 for q in read(Unanswerable, ok=True):  # validated models
     print(q.question, q.why)
 texts = pages(hard.id)  # page id -> page
-chunks = load(Chunk, size=512).to_pandas()  # embed chunk.embedded(): title, breadcrumb, text
+# embed chunk.embedded(): title, breadcrumb, text
+chunks = load(Chunk, size=512).to_pandas()
 ids, vectors = embeddings("qwen3-embedding-0.6b", 512)  # same rows as `chunks`
 ```
 

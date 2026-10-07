@@ -67,12 +67,26 @@ def openrouter(model_id: str, workers: int = 8):
     )
 
     def request(texts: list[str]) -> np.ndarray:
-        for attempt in range(8):
+        attempt = 0
+        while attempt < 8:
             try:
                 r = client.post(
                     "https://openrouter.ai/api/v1/embeddings",
                     json={"model": model_id, "input": texts},
                 )
+                if (
+                    "free-models-per-day" in r.text
+                ):  # 1000 requests a day: wait for the reset
+                    reset = int(
+                        r.json()["error"]["metadata"]["headers"]["X-RateLimit-Reset"]
+                    )
+                    print(
+                        "daily limit, waiting until",
+                        time.ctime(reset / 1000),
+                        flush=True,
+                    )
+                    time.sleep(max(60.0, reset / 1000 - time.time() + 60))
+                    continue
                 if r.status_code in (400, 413) and len(texts) > 1:  # too big: halve it
                     half = len(texts) // 2
                     return np.concatenate(
@@ -83,7 +97,8 @@ def openrouter(model_id: str, workers: int = 8):
                 return v / np.linalg.norm(v, axis=1, keepdims=True)
             except (httpx.HTTPError, KeyError, ValueError) as e:
                 print("retry", attempt, type(e).__name__, str(e)[:120], flush=True)
-                time.sleep(30 * (attempt + 1))
+                attempt += 1
+                time.sleep(30 * attempt)
         raise RuntimeError("OpenRouter kept failing; rerun to resume")
 
     pool = ThreadPoolExecutor(workers)
