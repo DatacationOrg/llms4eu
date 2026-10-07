@@ -1,3 +1,5 @@
+# datagen/wiki_qa is a record of the scripts that made the QA data, kept as they ran.
+exclude: ^datagen/wiki_qa/
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
