@@ -30,7 +30,7 @@ Category = Literal[
     "castle", "castle_ruin", "fortification", "national_park", "nature_reserve",
     "natural_monument", "forest", "cave", "waterfall", "lake", "mountain", "garden",
 ]  # fmt: skip
-"""Kind of place, from its Wikidata class (`datagen/corpus/config.yaml`)."""
+"""Kind of place, from its Wikidata class (instance of)."""
 
 
 class Row(BaseModel):
