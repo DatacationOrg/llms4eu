@@ -40,6 +40,11 @@ dev = [
     "pytest>=9.0.3",
     "ruff>=0.15.14",
 ]
+notebook = [
+    "duckdb>=1.5.6",
+    "ipykernel>=7.4.0",
+    "matplotlib>=3.11.2",
+]
 
 [tool.bandit.assert_used]
 skips = ["*test_*.py"] # pytest needs assert; still flagged in src

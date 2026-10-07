@@ -52,3 +52,7 @@ How the files are made (`pages.jsonl` and `qa/` are only read):
 
 Not confidential, copy it where you need it; do not publish it.
 How the questions were made: `docs/reports/wiki-qgen/wiki-qa-dataset.md`.
+To click through them (statistics, popularity bias, difficulty, ambiguity, generator artifacts, examples with
+English glosses): `notebooks/explore_wiki_qa.ipynb` (`uv sync --group notebook`); judge a sample by hand with
+`uv run --group notebook python notebooks/review_app.py`; an audit from the stored columns:
+`docs/reports/wiki-audit/`.
