@@ -1,9 +1,11 @@
 # Preprocess
 
+`pages.py` (`just pages`) turns the scraped `pages.jsonl` into `wikipages.parquet`;
+a rerun keeps the summaries already there.
+
 `chunker.py` (`just chunk`) cuts every page of `wikipages.parquet` into
 `chunks.parquet` at every size in `SIZES` (tokens of the default embedding model),
-one row per chunk with its `size` (see `src/db/README.md`). It also builds
-`wikipages.parquet` from the scraped `pages.jsonl` the first time.
+one row per chunk with its `size` (see `src/db/README.md`).
 
 How a page is cut, following aihub-core's chunker:
 

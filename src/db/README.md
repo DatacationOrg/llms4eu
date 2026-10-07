@@ -45,7 +45,8 @@ How the files are made (`pages.jsonl` and `qa/` are only read):
 
 | step | command | writes |
 |---|---|---|
-| chunk | `just chunk` (`src/preprocess/chunker.py`) | `wikipages.parquet` (first time), `chunks.parquet` |
+| pages | `just pages` (`src/preprocess/pages.py`) | `wikipages.parquet` |
+| chunk | `just chunk` (`src/preprocess/chunker.py`) | `chunks.parquet` |
 | embed | `just index qwen`, `just index nemotron --api` (`src/indexing`) | `embeddings/<provider>/<size>.npy` |
 | notes | `datagen/notes.py`, not part of the pipeline | `summary`, `role` |
 

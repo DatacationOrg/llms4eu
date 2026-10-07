@@ -11,6 +11,10 @@ fetch-pages SOURCE="data/brestanica.json":
 
 # Indexing, retrieval and eval work on one chunk size, CHUNK_SIZE (see src/db/README.md).
 
+# 0. Turn the scraped pages.jsonl into wikipages.parquet (keeps existing summaries).
+pages:
+    uv run python -m src.preprocess.pages
+
 # 1. Cut the pages into chunks.parquet at every size. On a rechunk, unchanged chunks
 # keep their vectors and roles.
 chunk:
