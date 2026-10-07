@@ -1,34 +1,12 @@
-from src.db.legacy.pages import connect_pages
+import json
+from pathlib import Path
+
 from src.scraping.page_extract import FetchResult
-from src.scraping.schema import PageMetadata
-from src.shared.env import ROOT
 
 
-def initialize_raw_pages_db() -> None:
-    schema = (ROOT / "sql" / "raw_pages.sql").read_text(encoding="utf-8")
-    with connect_pages() as conn:
-        conn.executescript(schema)
-
-
-def upsert_fetch_result(result: FetchResult) -> None:
-    metadata = result.metadata
-    columns = PageMetadata.db_columns()
-    placeholders = ", ".join(["?"] * len(columns))
-    updates = ", ".join(
-        f"{column} = excluded.{column}" for column in columns if column != "id"
-    )
-
-    with connect_pages() as conn:
-        conn.execute(
-            f"insert into page_metadata ({', '.join(columns)}) values ({placeholders}) "  # nosec B608 - columns are PageMetadata fields, values are bound
-            f"on conflict(id) do update set {updates}",
-            metadata.db_values(),
-        )
-        conn.execute(
-            "delete from page_markdown_content where page_id = ?", (metadata.id,)
-        )
-        if result.markdown_content:
-            conn.execute(
-                "insert into page_markdown_content (page_id, markdown) values (?, ?)",
-                (result.markdown_content.page_id, result.markdown_content.markdown),
-            )
+def append_fetch_result(result: FetchResult, out: Path) -> None:
+    """One JSON line per fetched page: its metadata and `text`, the Markdown (or "")."""
+    row = result.metadata.model_dump(mode="json")
+    row["text"] = result.markdown_content.markdown if result.markdown_content else ""
+    with out.open("a", encoding="utf-8") as fh:
+        fh.write(json.dumps(row, ensure_ascii=False) + "\n")

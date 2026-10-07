@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from typing import Any
 from collections import defaultdict
+from typing import Any
 
 
 def score_rankings(
@@ -52,9 +52,10 @@ def _render_table(headers: list[str], rows: list[list[str]]) -> str:
         max(len(row[index]) for row in [headers, *rows])
         for index in range(len(headers))
     ]
-    row_line = lambda cells: (  # noqa: E731
-        "| " + " | ".join(cell.ljust(widths[i]) for i, cell in enumerate(cells)) + " |"
-    )
+
+    def row_line(cells: list[str]) -> str:
+        return "| " + " | ".join(c.ljust(widths[i]) for i, c in enumerate(cells)) + " |"
+
     return "\n".join(
         [
             row_line(headers),
