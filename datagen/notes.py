@@ -9,8 +9,8 @@ until `export` writes them into `wikipages.parquet` and `chunks.parquet`:
 
 Resumable: done ids are skipped, failures are retried on the next run.
 
-    uv run python -m datagen.notes summaries --workers 100
-    uv run python -m datagen.notes roles --workers 100   # every size, largest first
+    uv run python -m datagen.notes summaries
+    uv run python -m datagen.notes roles   # every size, largest first
     uv run python -m datagen.notes export
 """
 
@@ -35,17 +35,19 @@ NOTES = ROOT / "notes.db"
 
 MODEL = "inclusionai/ling-3.1-flash-free"  # free on the Vercel AI Gateway
 URL = "https://ai-gateway.vercel.sh/v1/chat/completions"
+MAX_SENTENCES = {"summaries": 3, "roles": 1}
 MAX_CHARS = 300
+WINDOW = 2000  # answers saved per commit
 ARTICLE_CHARS = 24_000  # ponytail: long pages are summarised from their first 24k chars
 
-SUMMARY = """Summarise this Wikipedia article about a place in at most 3 short sentences \
-(under 300 characters in total). Write in the article's language ({lang}). Answer with \
+SUMMARY = """Summarise this Wikipedia article about a place in at most {sentences} short \
+sentences (under {chars} characters in total). Write in the article's language ({lang}). Answer with \
 the summary only.
 
 {text}"""
 
 ROLE = """Below is a summary of a Wikipedia article about a place, then one chunk of that \
-article. In one short sentence (under 200 characters), say what kind of information this \
+article. In one short sentence (under {chars} characters), say what kind of information this \
 chunk contributes to the article (for example its history, how to visit, a list of \
 sources). Do not summarise the whole article. Write in the article's language ({lang}). \
 Answer with the sentence only.
@@ -89,7 +91,7 @@ def ask(client: httpx.Client, prompt: str) -> str | None:
         return None
 
 
-def run(table: str, items: list[tuple[str, str]], sentences: int, workers: int) -> None:
+def run(table: str, items: list[tuple[str, str]], workers: int) -> None:
     """Ask Ling for every (id, prompt) not yet in `table`, saving as answers come in."""
     db = sqlite3.connect(NOTES)
     db.execute(
@@ -106,11 +108,11 @@ def run(table: str, items: list[tuple[str, str]], sentences: int, workers: int) 
             print(f"{table}: {len(done)} done, {len(todo)} to do", flush=True)
             if not todo:
                 return
-            for start in range(0, len(todo), 2000):  # bounded queue, commit per window
-                window = todo[start : start + 2000]
+            for start in range(0, len(todo), WINDOW):
+                window = todo[start : start + WINDOW]
                 answers = pool.map(lambda item: ask(client, item[1]), window)
                 rows = [
-                    (i, cap(a, sentences), a, MODEL)
+                    (i, cap(a, MAX_SENTENCES[table]), a, MODEL)
                     for (i, _), a in zip(window, answers)
                     if a
                 ]
@@ -128,10 +130,18 @@ def run(table: str, items: list[tuple[str, str]], sentences: int, workers: int) 
 def summaries(workers: int) -> None:
     pages = load(Page, ["id", "in_language", "text"]).to_pylist()
     items = [
-        (p["id"], SUMMARY.format(lang=p["in_language"], text=p["text"][:ARTICLE_CHARS]))
+        (
+            p["id"],
+            SUMMARY.format(
+                sentences=MAX_SENTENCES["summaries"],
+                chars=MAX_CHARS,
+                lang=p["in_language"],
+                text=p["text"][:ARTICLE_CHARS],
+            ),
+        )
         for p in pages
     ]
-    run("summaries", items, 3, workers)
+    run("summaries", items, workers)
 
 
 def roles(size: int, workers: int) -> None:
@@ -145,6 +155,7 @@ def roles(size: int, workers: int) -> None:
         (
             c["id"],
             ROLE.format(
+                chars=MAX_CHARS,
                 lang=lang[c["page_id"]],
                 summary=summary[c["page_id"]],
                 chunk=represent(c["title"], c["breadcrumb"], c["text"]),
@@ -153,7 +164,7 @@ def roles(size: int, workers: int) -> None:
         for c in chunks
         if c["page_id"] in summary and c["role"] is None  # kept over a rechunk
     ]
-    run("roles", items, 1, workers)
+    run("roles", items, workers)
 
 
 def export() -> None:
@@ -187,7 +198,7 @@ def main() -> None:
         choices=SIZES,
         default=sorted(SIZES, reverse=True),
     )
-    parser.add_argument("--workers", type=int, default=100)
+    parser.add_argument("--workers", type=int, default=60)
     args = parser.parse_args()
     load_local_env()
     if args.job == "summaries":

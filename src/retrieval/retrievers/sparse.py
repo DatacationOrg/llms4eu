@@ -12,6 +12,7 @@ from src.shared.env import load_yaml
 
 CONFIG = load_yaml(Path(__file__).parents[1] / "config.yaml")
 TOKEN_PATTERN = r"[^\W_]+"
+QUERY_BATCH = 64  # queries scored at once: each is a dense row over every chunk
 
 
 @dataclass(frozen=True)
@@ -30,9 +31,9 @@ class SparseRetriever:
     ) -> dict[int, list[RankedChunk]]:
         corpus = _corpus(chunk_size(), self.k1, self.b)
         results = {}
-        for start in range(0, len(queries), 64):  # 64 dense score rows at a time
+        for start in range(0, len(queries), QUERY_BATCH):
             # A query term counts as often as it occurs in the query.
-            terms = corpus.vectorizer.transform(queries[start : start + 64])
+            terms = corpus.vectorizer.transform(queries[start : start + QUERY_BATCH])
             for offset, row in enumerate((terms @ corpus.weights.T).toarray()):
                 results[start + offset] = [
                     RankedChunk(corpus.ids[i], float(row[i]), corpus.texts[i])

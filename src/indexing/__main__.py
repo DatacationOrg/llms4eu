@@ -23,6 +23,9 @@ from src.indexing.embedders import CONFIG, load_embedder
 from src.shared.env import load_local_env
 
 WINDOW = 8192  # rows embedded between flushes to disk
+# OpenRouter's embedding endpoint takes at most this many inputs, and 1-2 MB, per request.
+API_MAX_INPUTS = 256
+API_MAX_BYTES = 1_000_000
 
 
 def vectors_file(provider: str, size: int, dims: int) -> np.ndarray:
@@ -60,7 +63,7 @@ def local(provider: str, batch_size: int):
     return prefix, embed
 
 
-def openrouter(provider: str, workers: int = 8):
+def openrouter(provider: str, workers: int):
     """(document prefix, texts -> unit vectors) from OpenRouter's free endpoint."""
     import httpx
 
@@ -102,11 +105,10 @@ def openrouter(provider: str, workers: int = 8):
     pool = ThreadPoolExecutor(workers)
 
     def embed(texts: list[str]) -> np.ndarray:
-        # At most 256 inputs and between 1 and 2 MB of body per request.
         batches, batch, used = [], [], 0
         for text in texts:
             cost = len(json.dumps(text).encode()) + 1
-            if batch and (len(batch) == 256 or used + cost > 1_000_000):
+            if batch and (len(batch) == API_MAX_INPUTS or used + cost > API_MAX_BYTES):
                 batches.append(batch)
                 batch, used = [], 0
             batch.append(text)
@@ -116,8 +118,12 @@ def openrouter(provider: str, workers: int = 8):
     return prefix, embed
 
 
-def run(provider: str, sizes: list[int], api: bool, batch_size: int) -> None:
-    prefix, embed = openrouter(provider) if api else local(provider, batch_size)
+def run(
+    provider: str, sizes: list[int], api: bool, batch_size: int, workers: int
+) -> None:
+    prefix, embed = (
+        openrouter(provider, workers) if api else local(provider, batch_size)
+    )
     dims = embed([prefix + "dimensions"]).shape[1]
     for size in sizes:
         out = vectors_file(provider, size, dims)
@@ -143,10 +149,11 @@ def main() -> None:
     parser.add_argument("--method", choices=sorted(CONFIG["providers"]), default="qwen")
     parser.add_argument("--sizes", type=int, nargs="+", choices=SIZES, default=SIZES)
     parser.add_argument("--api", action="store_true", help="OpenRouter instead of GPU")
-    parser.add_argument("--batch-size", type=int, default=32)
+    parser.add_argument("--batch-size", type=int, default=32, help="GPU batch")
+    parser.add_argument("--workers", type=int, default=8, help="parallel API requests")
     args = parser.parse_args()
     load_local_env()
-    run(args.method, args.sizes, args.api, args.batch_size)
+    run(args.method, args.sizes, args.api, args.batch_size, args.workers)
 
 
 if __name__ == "__main__":

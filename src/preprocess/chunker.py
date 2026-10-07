@@ -16,6 +16,7 @@ in every `embeddings/<model>/<size>.npy`; the others are NaN until re-embedded.
 
 from __future__ import annotations
 
+import argparse
 import os
 import re
 from multiprocessing import Pool
@@ -217,11 +218,14 @@ def _carry_over(chunks: list[dict]) -> list[tuple]:
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--workers", type=int, default=os.cpu_count())
+    workers = parser.parse_args().workers
     if not path(Page).exists():
         pages_from_jsonl()
     pages = load(Page, ["id", "title", "text"]).to_pylist()
-    with Pool(16) as pool:
-        chunks = [c for cs in pool.imap(chunk_page, pages, 64) for c in cs]
+    with Pool(workers) as pool:
+        chunks = [c for cs in pool.imap(chunk_page, pages, chunksize=64) for c in cs]
     chunks.sort(key=lambda c: c["size"])  # stable: page order and n kept within a size
     for chunk in chunks:
         chunk["role"] = None
