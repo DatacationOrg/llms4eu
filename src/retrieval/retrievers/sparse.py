@@ -8,8 +8,8 @@ from functools import cache
 
 from pathlib import Path
 
-from src.db.pages import chunk_variant
-from src.db.pages import connect_pages as connect
+from src.db.legacy.pages import chunk_variant
+from src.db.legacy.pages import connect_pages as connect
 from src.retrieval.base import RankedChunk, retrieve_batch_default
 from src.shared.env import load_yaml
 

@@ -5,9 +5,9 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from src.db.pages import DEFAULT_CHUNK_VARIANT, chunk_variant, variant_tag
-from src.db.pages import connect_pages as connect
-from src.db.pages import initialize_page_artifacts_db
+from src.db.legacy.pages import DEFAULT_CHUNK_VARIANT, chunk_variant, variant_tag
+from src.db.legacy.pages import connect_pages as connect
+from src.db.legacy.pages import initialize_page_artifacts_db
 from src.shared.env import load_yaml
 
 CONFIG = load_yaml(Path(__file__).with_name("config.yaml"))

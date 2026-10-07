@@ -3,7 +3,7 @@ import sqlite3
 import pytest
 
 import src.preprocess.chunker as chunker
-from src.db.pages import initialize_page_artifacts_db
+from src.db.legacy.pages import initialize_page_artifacts_db
 from src.eval.compare_chunkings import chars_at_k
 from src.eval.evaluate import load_eval_rows
 from src.eval.evidence import relabel
