@@ -31,7 +31,9 @@ texts = pages(hard.id)  # page id -> page
 ```
 
 Not confidential, copy it where you need it (`WIKI_QA_DIR=<copy of qa/>`); do not publish it.
-How it was made: `docs/reports/wiki-qgen/wiki-qa-dataset.md`.
+How it was made: `docs/reports/wiki-qgen/wiki-qa-dataset.md`. To click through it (statistics, popularity bias,
+difficulty, ambiguity, generator artifacts, examples with English glosses): `notebooks/explore_wiki_qa.ipynb`
+(`uv sync --group notebook`); judge a sample by hand with `uv run --group notebook python notebooks/review_app.py`.
 
 ## Legacy: Slovenian page database
 
