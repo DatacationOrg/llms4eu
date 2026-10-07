@@ -17,6 +17,7 @@ dependencies = [
   "tqdm>=4.67.0",
   "trafilatura>=2.0.0",
   "docling>=2.120.3",
+  "pyarrow>=25.0.1",
 ]
 
 [build-system]

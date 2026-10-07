@@ -1,3 +1,11 @@
+import os
+import tempfile
+
+# Before anything imports src: every module's dataset and artifact root is a scratch
+# folder for the whole session, so no test can write to the real data under /data.
+os.environ["DATASET_DIR"] = tempfile.mkdtemp(prefix="dataset-")
+os.environ["LLMS4EU_DATA"] = tempfile.mkdtemp(prefix="llms4eu-data-")
+
 import sqlite3
 
 import pytest

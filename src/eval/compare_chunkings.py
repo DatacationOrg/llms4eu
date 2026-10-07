@@ -15,7 +15,7 @@ import os
 from datetime import date
 from pathlib import Path
 
-from src.db.pages import connect_pages as connect
+from src.db.legacy.pages import connect_pages as connect
 from src.eval.evaluate import CONFIG, EvalRun, REPORTS_DIR, run_eval
 from src.eval.evidence import relabel
 from src.eval.metrics import plain_table
