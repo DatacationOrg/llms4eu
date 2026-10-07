@@ -1,0 +1,53 @@
+# Wikidata country item -> ISO2 and official languages; each place's article
+# is taken in the first of these it exists in. Written out because
+# Wikidata has no ISO code on the Netherlands item and no ISO 639-1 code on
+# Modern Greek.
+countries:
+  Q40: {iso: AT, languages: [de]}
+  Q31: {iso: BE, languages: [nl, fr, de]}
+  Q219: {iso: BG, languages: [bg]}
+  Q224: {iso: HR, languages: [hr]}
+  Q229: {iso: CY, languages: [el, tr]}
+  Q213: {iso: CZ, languages: [cs]}
+  Q35: {iso: DK, languages: [da]}
+  Q191: {iso: EE, languages: [et]}
+  Q33: {iso: FI, languages: [fi, sv]}
+  Q142: {iso: FR, languages: [fr]}
+  Q183: {iso: DE, languages: [de]}
+  Q41: {iso: GR, languages: [el]}
+  Q28: {iso: HU, languages: [hu]}
+  Q27: {iso: IE, languages: [ga, en]}
+  Q38: {iso: IT, languages: [it]}
+  Q211: {iso: LV, languages: [lv]}
+  Q37: {iso: LT, languages: [lt]}
+  Q32: {iso: LU, languages: [lb, fr, de]}
+  Q233: {iso: MT, languages: [mt, en]}
+  Q55: {iso: NL, languages: [nl]}
+  Q36: {iso: PL, languages: [pl]}
+  Q45: {iso: PT, languages: [pt]}
+  Q218: {iso: RO, languages: [ro]}
+  Q214: {iso: SK, languages: [sk]}
+  Q215: {iso: SI, languages: [sl]}
+  Q29: {iso: ES, languages: [es]}
+  Q34: {iso: SE, languages: [sv]}
+
+# Category -> Wikidata class. Direct instance-of only: following subclasses
+# times out on the larger countries.
+types:
+  castle: Q23413
+  castle_ruin: Q17715832
+  fortification: Q57821
+  national_park: Q46169
+  nature_reserve: Q179049
+  natural_monument: Q23790
+  forest: Q4421
+  cave: Q35509
+  waterfall: Q34038
+  lake: Q23397
+  mountain: Q8502
+  garden: Q1107656
+
+# Footer text that marks a bot-written article; export flags these rows
+# `machine_generated` instead of dropping them. Swedish lake register pages.
+machine_markers:
+  - maskinellt skapad
