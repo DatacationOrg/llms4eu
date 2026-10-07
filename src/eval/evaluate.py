@@ -212,10 +212,12 @@ def load_eval_rows(
         row["page_id"] = row["id"]
         row["id"] = f"{row['page_id']}:{row['kind']}:{row['n']}"
         row["question_type"] = row["qtype"]
-    rows.sort(key=lambda row: hashlib.sha1(row["id"].encode()).hexdigest())
-    limit = limit or CONFIG["question_limit"]
+    rows.sort(
+        key=lambda row: hashlib.sha1(row["id"].encode(), usedforsecurity=False).digest()
+    )
+    wanted: int = limit or CONFIG["question_limit"]
 
-    pages = {row["page_id"] for row in rows[: limit * 2]}  # room for unmatched ones
+    pages = {row["page_id"] for row in rows[: wanted * 2]}  # room for unmatched ones
     chunks = load(Chunk, ["id", "page_id", "text"], size=chunk_size())
     chunks = chunks.filter(pc.field("page_id").isin(list(pages))).to_pylist()
     by_page: dict[str, dict[str, str]] = defaultdict(dict)
@@ -224,7 +226,7 @@ def load_eval_rows(
 
     questions, relevance = [], []
     for row in rows:
-        if len(questions) == limit:
+        if len(questions) == wanted:
             break
         found = {
             chunk_id

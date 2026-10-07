@@ -19,6 +19,7 @@ from __future__ import annotations
 import argparse
 import os
 import re
+from functools import cache
 from multiprocessing import Pool
 from pathlib import Path
 from typing import NamedTuple
@@ -33,7 +34,7 @@ from src.shared.env import load_yaml
 
 EMBEDDING = load_yaml(Path(__file__).parents[1] / "indexing" / "config.yaml")
 MIN_TOKENS = 50
-TOKENIZER = EMBEDDING["providers"][EMBEDDING["default_provider"]]["model_name"]
+TOKENIZER = EMBEDDING["providers"][EMBEDDING["default_provider"]]  # model, revision
 # `# <title>` opens every page; the title is embedded separately, so it is no breadcrumb.
 _HEADERS = [("#", "h1"), ("##", "h2"), ("###", "h3")]
 _EDIT_LINK = re.compile(r"\[[^\[\]|\n]{1,40} \| [^\[\]\n]{1,60}\]")
@@ -139,32 +140,30 @@ def _render(group: list[_Section], shared: tuple[str, ...]) -> str:
     return "\n\n".join(parts)
 
 
-_tokenizer = None
-_sizers: dict[int, object] = {}
+@cache
+def _tokenizer():
+    from transformers import AutoTokenizer
+
+    return AutoTokenizer.from_pretrained(
+        TOKENIZER["model_name"], revision=TOKENIZER["revision"]
+    )
 
 
 def _count(text: str) -> int:
-    global _tokenizer
-    if _tokenizer is None:
-        from transformers import AutoTokenizer
-
-        _tokenizer = AutoTokenizer.from_pretrained(TOKENIZER)
-    return len(_tokenizer(text, add_special_tokens=False)["input_ids"])
+    return len(_tokenizer()(text, add_special_tokens=False)["input_ids"])
 
 
+@cache
 def _sizer(size: int):
-    if size not in _sizers:
-        from langchain_text_splitters import RecursiveCharacterTextSplitter
+    from langchain_text_splitters import RecursiveCharacterTextSplitter
 
-        _count("")  # loads the tokenizer
-        _sizers[size] = RecursiveCharacterTextSplitter.from_huggingface_tokenizer(
-            _tokenizer,
-            chunk_size=size,
-            chunk_overlap=0,
-            separators=_SEPARATORS,
-            keep_separator="end",
-        )
-    return _sizers[size]
+    return RecursiveCharacterTextSplitter.from_huggingface_tokenizer(
+        _tokenizer(),
+        chunk_size=size,
+        chunk_overlap=0,
+        separators=_SEPARATORS,
+        keep_separator="end",
+    )
 
 
 def write(table: pa.Table, target) -> None:

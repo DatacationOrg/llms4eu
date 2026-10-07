@@ -5,13 +5,15 @@ from functools import cache
 from pathlib import Path
 
 import numpy as np
+from scipy.sparse import csr_matrix
+from sklearn.feature_extraction.text import CountVectorizer
 
 from src.db.dataset import Chunk, chunk_size, load
 from src.retrieval.base import RankedChunk, top_k
 from src.shared.env import load_yaml
 
 CONFIG = load_yaml(Path(__file__).parents[1] / "config.yaml")
-TOKEN_PATTERN = r"[^\W_]+"
+WORD_PATTERN = r"[^\W_]+"
 QUERY_BATCH = 64  # queries scored at once: each is a dense row over every chunk
 
 
@@ -47,23 +49,23 @@ class SparseRetriever:
 class Corpus:
     ids: list[str]
     texts: list[str]
-    vectorizer: object
-    weights: object  # chunks x terms, BM25 weight of each term in each chunk
+    vectorizer: CountVectorizer
+    weights: csr_matrix  # chunks x terms, BM25 weight of each term in each chunk
 
 
 @cache
 def _corpus(size: int, k1: float, b: float) -> Corpus:
     # BM25 indexes the raw chunk text; title and breadcrumbs are dense-side context.
-    from sklearn.feature_extraction.text import CountVectorizer
-
     chunks = load(Chunk, ["id", "text"], size=size).to_pydict()
     vectorizer = CountVectorizer(
-        lowercase=False, preprocessor=str.casefold, token_pattern=TOKEN_PATTERN
+        lowercase=False, preprocessor=str.casefold, token_pattern=WORD_PATTERN
     )
-    counts = vectorizer.fit_transform(chunks["text"]).tocsr().astype(np.float32)
+    counts = csr_matrix(vectorizer.fit_transform(chunks["text"]), dtype=np.float32)
     lengths = np.maximum(np.asarray(counts.sum(axis=1)).ravel(), 1)
-    document_count = counts.shape[0]
-    document_frequency = np.bincount(counts.indices, minlength=counts.shape[1])
+    document_count = len(chunks["id"])
+    document_frequency = np.bincount(
+        counts.indices, minlength=len(vectorizer.vocabulary_)
+    )
     idf = np.log(
         1 + (document_count - document_frequency + 0.5) / (document_frequency + 0.5)
     )

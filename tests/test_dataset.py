@@ -1,3 +1,5 @@
+# pyright: reportAttributeAccessIssue=false
+# (pyarrow.compute functions are generated at import, unknown to the type checker)
 """The real dataset's contract, read only: every file in place, columns as its model
 says, rows that validate, and ids, sizes, evidence and vectors that fit together."""
 

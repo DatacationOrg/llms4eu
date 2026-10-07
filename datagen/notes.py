@@ -103,7 +103,7 @@ def run(table: str, items: list[tuple[str, str]], workers: int) -> None:
     )
     with ThreadPoolExecutor(workers) as pool:
         while True:  # passes until every item has an answer: the gateway drops many
-            done = {i for (i,) in db.execute(f"select id from {table}")}
+            done = {i for (i,) in db.execute(f"select id from {table}")}  # nosec B608 - fixed table name
             todo = [(i, p) for i, p in items if i not in done]
             print(f"{table}: {len(done)} done, {len(todo)} to do", flush=True)
             if not todo:
@@ -171,7 +171,7 @@ def export() -> None:
     """Fill `summary` / `role` in the Parquet files; notes for gone ids are skipped."""
     with sqlite3.connect(NOTES) as db:
         notes = {
-            t: dict(db.execute(f"select id, text from {t}"))
+            t: dict(db.execute(f"select id, text from {t}"))  # nosec B608 - fixed table names
             for t in ("summaries", "roles")
         }
     for model, table, column in (

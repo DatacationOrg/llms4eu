@@ -52,9 +52,10 @@ def _render_table(headers: list[str], rows: list[list[str]]) -> str:
         max(len(row[index]) for row in [headers, *rows])
         for index in range(len(headers))
     ]
-    row_line = lambda cells: (
-        "| " + " | ".join(cell.ljust(widths[i]) for i, cell in enumerate(cells)) + " |"
-    )
+
+    def row_line(cells: list[str]) -> str:
+        return "| " + " | ".join(c.ljust(widths[i]) for i, c in enumerate(cells)) + " |"
+
     return "\n".join(
         [
             row_line(headers),

@@ -14,6 +14,7 @@ import json
 import os
 import time
 from concurrent.futures import ThreadPoolExecutor
+from typing import cast
 
 import numpy as np
 
@@ -28,12 +29,12 @@ API_MAX_INPUTS = 256
 API_MAX_BYTES = 1_000_000
 
 
-def vectors_file(provider: str, size: int, dims: int) -> np.ndarray:
+def vectors_file(provider: str, size: int, dims: int) -> np.memmap:
     """The memory-mapped vectors file, created full of NaN on first use."""
     path = vectors_path(provider, size)
     rows = load(Chunk, ["id"], size=size).num_rows
     if path.exists():
-        out = np.load(path, mmap_mode="r+")
+        out = cast(np.memmap, np.load(path, mmap_mode="r+"))
         if out.shape != (rows, dims):
             raise SystemExit(f"{path} is {out.shape}, chunks need {(rows, dims)}")
         return out
@@ -55,7 +56,7 @@ def local(provider: str, batch_size: int):
     model.max_seq_length = 2 * max(
         SIZES
     )  # the largest chunks plus title and breadcrumb
-    prefix = (model.prompts or {}).get("document", "")
+    prefix = (model.prompts or {}).get("document") or ""
 
     def embed(texts: list[str]) -> np.ndarray:
         return model.encode(texts, batch_size=batch_size, normalize_embeddings=True)

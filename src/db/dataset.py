@@ -88,7 +88,8 @@ def embeddings(provider: str, size: int) -> tuple[list[str], np.ndarray]:
     Rows not embedded yet are NaN (see `missing`)."""
     ids = load(Chunk, ["id"], size=size).column("id").to_pylist()
     vectors = np.load(vectors_path(provider, size), mmap_mode="r")
-    assert len(ids) == len(vectors), "embeddings are from another chunking"
+    if len(ids) != len(vectors):
+        raise ValueError(f"{vectors_path(provider, size)} is from another chunking")
     return ids, vectors
 
 

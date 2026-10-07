@@ -7,6 +7,7 @@ default_provider: qwen
 providers:
   qwen:
     model_name: Qwen/Qwen3-Embedding-0.6B
+    revision: 97b0c614be4d77ee51c0cef4e5f07c00f9eb65b3  # pragma: allowlist secret
     batch_size: 8
   qwen4b:
     model_name: Qwen/Qwen3-Embedding-4B
