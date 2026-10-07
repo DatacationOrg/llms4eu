@@ -1,50 +1,41 @@
 # Clue ablation: how much does retrieval depend on the detail in a question?
 
-**Status (2026-10-07): parked after the pilot.** Phase A tooling works on 30 questions; the full extraction is
-blocked on LLM throughput (see [Blockers](#blockers)).
+*This file: one experiment, the source of truth for its findings and decisions. Cross-experiment summary and ratings: [overview](../README.md).*
 
-## Question
+## In short (2026-10-07)
 
-Hard questions in the wiki QA set describe a place without naming it, with about **5 clues each** (pilot). They were
-generated to be unique among 133k pages, so the generator stacked details: exact years, areas, records
-([audit findings 11-12](../../docs/reports/wiki-audit/audit-2026-10-06.md)). A tourist gives fewer, vaguer clues.
+**Status: parked after a 30-question pilot.** The tooling works; the full clue extraction is blocked on LLM throughput (the free API models are rate-limited, the local GPU route is not yet measured since a speed fix). Part of the question is now answered without an LLM by removing anchors (numbers, names) from questions: [language anchors, step 3](../language_anchors/README.md#step-3-anchors-removed-from-the-full-question).
 
-Instead of labelling questions as realistic or not (tried; too ambiguous), treat **detail as an experimental
-variable**: how does retrieval change when the same information need carries fewer clues, or other kinds of clues?
+**Insights (pilot, n = 30: signals, not results)**
 
-What this measures: the effect of the **amount and type of information** in a question. What it does not measure:
-vocabulary mismatch (the clues stay page wording) or real user behaviour.
+1. **Hard questions carry many clues:** 5 on average (3-7), mostly location, type, feature, quantity and date. Fits the finding that they were generated to be unique, so details were stacked. *Evidence: gpt-oss:20b extraction, 98% of clues quoted literally from the question.*
+2. **Clue counting with an LLM is feasible but fuzzy at the edges:** two LLMs agree within one clue on 18 of 20 questions; documentary clues (numbers, dates) are counted more consistently than clues in general. *Evidence: 20 questions, two extractors.*
+3. **On these questions dense retrieval does far worse than BM25:** 33% vs 83% hit@10 at 512-token chunks, the same at 256; hybrid (0.7 dense) falls in between, 77%. Dense finds the right kind of place in the right region, not the right one ([why](../language_anchors/README.md#dense-failure-analysis-30-pilot-questions)). Later evidence suggests BM25's lead is inflated by the numbers the generator added.
 
-## Design
+**Next, when unparked:** measure local GPU speed with the context fix; human clue count on ~30 items; then phase A on 300-1,000 questions.
 
-**A clue** is one constraint on the place: one attribute with one value, **quoted literally** from the question
-(checkable by string match). Attributes: `name`, `location`, `type`, `feature`, `quantity`, `date`, `event`,
-`other` ([prompt](../../prompts/clue_extract.md)). Per clue, computed rather than judged:
+## Question and design
 
-- lexical match: do its content words occur in the gold page?
-- selectivity: document frequency of its words; for location and type, metadata counts
-- documentary or not: follows from the attribute (`quantity`, `date`, records)
+Treat **detail as an experimental variable** instead of labelling questions as realistic or not (tried; too ambiguous, see [audit finding 12](../../docs/reports/wiki-audit/audit-2026-10-06.md)): how does retrieval change when the same information need carries fewer clues, or other kinds of clues? This measures the effect of the amount and type of information, not vocabulary mismatch (the clues stay page wording) or real user behaviour.
 
-**Phase A (correlational, cheap):**
+**A clue** is one constraint on the place: one attribute with one value, **quoted literally** from the question, so it can be checked by string match. Attributes: `name`, `location`, `type`, `feature`, `quantity`, `date`, `event`, `other` ([prompt](../../prompts/clue_extract.md)). Per clue, computed rather than judged: lexical match with the gold page, selectivity (document frequency; metadata counts for location and type), documentary or not (follows from the attribute).
 
-1. Sample: 1,000 dev hard questions on `balanced` pages (<= 400 pages per language), fixed hash order.
-2. Extract clues (LLM, literal quotes); check against a human count on ~30 items.
-3. Fresh gold-page ranks with the pipeline's retrievers: dense (Qwen3-Embedding-0.6B), BM25, hybrid, on the
-   512-token chunks (and other sizes once embedded). The stored `rank_o` dense ranks are not used (lead-only index,
-   a third of the rows).
-4. Relate hit@k to number of clues, number of lexically matching clues, selectivity and attribute class, per
-   language.
+- **Phase A (correlational):** 1,000 dev hard questions on `balanced` pages; extract clues; fresh gold-page ranks (dense, BM25, hybrid; not the stored `rank_o`); relate hit@k to number, match, selectivity and type of clues, per language.
+- **Phase B (causal, only if A shows a dependence):** compose variants from the extracted clues so phrasing stays constant (all clues / without quantity, date and record clues / location + type + one feature); score the gold rank plus an ambiguity bound from metadata; check that composed questions still fit the gold page.
 
-**Phase B (causal, only if A shows a dependence):** compose variants **from the extracted clues** (so phrasing is
-held constant): all clues / without `quantity` + `date` + record clues / location + type + one feature. Score the
-gold rank plus an ambiguity bound from metadata (pages with the same type and location); judge fitting pages only
-on a calibration sample. Guards: check the composed question still fits the gold page; stratify by language and
-baseline rank.
+Considered and dropped: a random-removal control (noisy), rewriting the original question (mixes style with detail), per-question realism labels (ambiguous).
 
-Considered and dropped: a random-removal control (noisy, little insight); rewriting the original question (mixes
-style with detail); classifying realism per question (ambiguous, see audit finding 12).
+## Blockers
 
-## What exists
+- **API throughput:** the Vercel AI Gateway rejects most requests with an instant 503 for `inclusionai/ling-3.1-flash-free` (about 3 get through, then refusals, even at 5 per minute) and `poolside/laguna-s-2.1-free` (4 of 10; also ignores forced tool calls). The colleague who generated the data hits the same limits. Fixed on our side: pydantic's `$defs` schema caused a 400 with Ling, so the tool schema is inlined.
+- **Local GPU speed:** the first gpt-oss run took ~20 s per question, but with Ollama's 131k-token context; the 4,096-token limit is in the code and not yet measured.
+- **Embeddings:** Qwen is complete at 256 and 512 tokens, only 51% at 1024 and 8% at 2048, so larger chunk sizes cannot be compared fairly yet.
+
+---
+
+## Details
+
+### What exists
 
 | file | does |
 |---|---|
@@ -59,55 +50,24 @@ uv run python -m experiments.clue_ablation.extract --backend ling --n 30        
 CHUNK_SIZE=512 uv run python -m experiments.clue_ablation.ranks --n 30
 ```
 
-## Results so far (pilot, n = 30: signals, not results)
+### Pilot numbers
 
-**Clue extraction (gpt-oss:20b):**
+Clue extraction (gpt-oss:20b, 30 questions): 151 clues, 148 quoted exactly (a literal substring check: copied, not paraphrased; split and classes not yet checked by a human). Attributes: location 41, type 30, feature 22, quantity 21, date 17, event 14, other 6. Two extractors on 20 other questions: total counts identical on 10, within one on 18; documentary counts identical on 14, within one on 19.
 
-- 98% of clues quoted exactly: 148 of 151, measured as a literal substring check. This says the model copied rather
-  than paraphrased; split and classes are not checked yet.
-- Mean 5.0 clues per question, range 3-7. Attributes: location 41, type 30, feature 22, quantity 21, date 17,
-  event 14, other 6.
-- Two LLMs' clue counts on 20 other questions agreed exactly on 10, within one on 18; documentary counts agreed
-  better (14 exact, 19 within one). Segmentation is the main source of difference, hence the literal-quote rule.
-
-**Retrieval on the same 30 hard questions, hit@10:**
+Retrieval on the same 30 hard questions, hit@10:
 
 | retriever | 512-token chunks | 256-token chunks |
 |---|---|---|
 | dense, Qwen3-Embedding-0.6B | 33% | 33% |
-| BM25 | 83% | 87% |
+| BM25 (pipeline) | 83% | 87% |
 | hybrid (0.7 dense + 0.3 BM25) | 77% | 63% |
 
-- Dense on 30 **easy** questions: 30/30 in the top 10, so the setup is sound.
-- On hard questions, dense left 14 of 30 out of the top 100; BM25 ranked 22 first.
-- Hybrid is below BM25: the default weights favour dense.
+Dense on 30 easy questions: 30/30 in the top 10, so the setup is sound. On hard questions dense left 14 of 30 out of the top 100; BM25 ranked 22 first.
 
-**Why dense fails** (follow-up, see [language anchors](../language_anchors/README.md#findings-so-far)): its top-10
-for a failed question is the right kind of place in the right region (same category 76%, country 88%) but not the
-right one; it loses the distinguishing details. So the prediction for phase B: removing quantity, date and name
-clues hurts BM25 much more than dense.
+### Next steps (when unparked)
 
-**Inferences to test:** BM25 lives off the exact anchors that survived the banned-word step (years, numbers, names);
-dense may fail because clues are spread over chunks (not supported so far: 256 = 512) or because many places look
-alike. The pipeline's default hybrid weights may not suit described-place questions. Worth telling the team
-before the chunk-size comparison, once confirmed on more questions.
-
-## Blockers
-
-- **API throughput.** The Vercel AI Gateway now rejects most requests with an instant 503 for both
-  `inclusionai/ling-3.1-flash-free` (about 3 requests get through, then refusals, even at 5 per minute) and
-  `poolside/laguna-s-2.1-free` (4 of 10; also ignores forced tool calls). The colleague who used it for generation
-  hits the same limits now. Fixed on our side: pydantic's `$defs` schema caused a 400 with Ling, so the tool schema
-  is inlined.
-- **Local GPU speed.** The first gpt-oss run took ~20 s per question on the shared GPU, but it ran with Ollama's
-  131k-token context. The 4,096-token limit is in the code now and **not yet measured**.
-- **Embeddings.** Qwen is complete at 256 and 512 tokens, but only 51% at 1024 and 8% at 2048 (nemotron: 10% at
-  1024, 83% at 2048). Larger chunk sizes cannot be compared fairly until they are complete.
-
-## Next steps
-
-1. Measure gpt-oss speed with `--num-ctx 4096` on the 30 pilot questions (run when `nvidia-smi` shows the GPU free).
-2. Choose the sample size from that speed: 300 questions (about 1.5-2 h at the old speed) or 1,000 (overnight).
+1. Measure gpt-oss speed with `--num-ctx 4096` on the 30 pilot questions (when `nvidia-smi` shows the GPU free).
+2. Choose the sample size from that speed: 300 questions or 1,000 (overnight).
 3. Human check: count clues on ~30 items, compare with the extraction.
-4. Compute per-clue lexical match and selectivity; run phase A step 4.
-5. Decide on phase B from the result; rerun ranks at 1024 / 2048 once embedded.
+4. Compute per-clue lexical match and selectivity; run phase A.
+5. Decide on phase B; rerun ranks at 1024 / 2048 once embedded.

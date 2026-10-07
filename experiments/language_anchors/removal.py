@@ -1,0 +1,108 @@
+"""Step 3: remove the anchors from the full question. Does BM25 still find the page without its numbers and names?
+
+    uv run python -m experiments.language_anchors.removal --n 300
+
+Same sample as step 2 (dev, answer_ok, x_ok; n easy + n hard). Anchors are the tokens a question shares with its
+translation, by kind (shared_tokens.py); a variant deletes them from the original and from the translated question:
+`-numbers`, `-names`, `-both`. Deleting words breaks sentences, which does not matter for BM25 (bag of words); dense
+needs placeholders instead (later). A variant is scored only on questions that lose something. Questions may now fit
+several places, so hits are counted on the gold page and on gold + `relevant` (where judged). DuckDB BM25 (fts.py).
+"""
+
+from __future__ import annotations
+
+import argparse
+import re
+
+import numpy as np
+import pandas as pd
+
+from experiments.language_anchors.fts import FtsRetriever
+from experiments.language_anchors.shared_tokens import WORD, anchors
+from experiments.language_anchors.translated_topk import DEPTH, sample, top_pages
+from src.db.dataset import chunk_size
+
+VARIANTS = {
+    "full": (),
+    "-numbers": ("number",),
+    "-names": ("name",),
+    "-both": ("number", "name"),
+}
+
+
+def without(text: str, tokens: set[str]) -> str:
+    """The text with every word whose casefold is in `tokens` deleted."""
+    return re.sub(
+        r"\s+",
+        " ",
+        WORD.sub(lambda m: "" if m.group().casefold() in tokens else m.group(), text),
+    ).strip()
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser()
+    ap.add_argument(
+        "--n", type=int, default=300, help="questions per kind (easy, hard)"
+    )
+    args = ap.parse_args()
+
+    df = sample(args.n)
+    shared = [anchors(q, x) for q, x in zip(df.question, df.question_x, strict=True)]
+    bm25 = FtsRetriever(chunk_size())
+    rows = []
+    for version in ("question", "question_x"):
+        for variant, kinds in VARIANTS.items():
+            removed = [{t for k in kinds for t in a[k]} for a in shared]
+            texts = [
+                without(t, r) if r else t
+                for t, r in zip(df[version], removed, strict=True)
+            ]
+            found = bm25.retrieve_batch(texts, DEPTH)
+            for i, r in enumerate(df.itertuples()):
+                if variant != "full" and not removed[i]:
+                    continue  # nothing of this kind to remove
+                top10 = top_pages([c.id for c in found[i]], 10)
+                fitting = {r.id} | (
+                    set(r.relevant)
+                    if isinstance(r.relevant, (list, np.ndarray))
+                    else set()
+                )
+                rows.append(
+                    {
+                        "qid": i,
+                        "kind": r.kind,
+                        "version": "original"
+                        if version == "question"
+                        else "translated",
+                        "variant": variant,
+                        "hit10_gold": r.id in top10,
+                        "hit10_any_fitting": bool(fitting & set(top10)),
+                    }
+                )
+    t = pd.DataFrame(rows)
+    print(
+        f"\nBM25 (duckdb), {chunk_size()}-token chunks; {args.n} easy + {args.n} hard; variants only on questions that lose something\n"
+    )
+    # paired: each variant next to the full question on exactly the same questions
+    full = t[t.variant == "full"].set_index(["qid", "version"])["hit10_gold"]
+    t["full_same_questions"] = [
+        full[(q, v)] for q, v in zip(t.qid, t.version, strict=True)
+    ]
+    table = t.groupby(["kind", "version", "variant"], sort=False).agg(
+        n=("hit10_gold", "size"),
+        full_same_questions=("full_same_questions", "mean"),
+        hit10_gold=("hit10_gold", "mean"),
+        hit10_any_fitting=("hit10_any_fitting", "mean"),
+    )
+    print(table.round(3).to_markdown())
+    print("\nExamples (hard, original, -both):\n")
+    for r, a in list(zip(df.itertuples(), shared, strict=True))[:300]:
+        if r.kind == "challenge" and (a["number"] or a["name"]):
+            print(
+                f"- {r.question}\n  -> {without(r.question, set(a['number']) | set(a['name']))}"
+            )
+            break
+
+
+if __name__ == "__main__":
+    main()
