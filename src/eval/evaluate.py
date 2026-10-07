@@ -1,21 +1,19 @@
 from __future__ import annotations
 
-from typing import Any
 import argparse
+import hashlib
 import json
+import re
 import time
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
-from src.db.legacy.pages import chunk_variant, variant_tag
-from src.db.legacy.pages import (
-    connect_pages as connect,
-)
-from src.db.legacy.pages import (
-    initialize_page_artifacts_db as initialize_eval_db,
-)
+import pyarrow.compute as pc
+
+from src.db.dataset import Chunk, Rag, chunk_size, load
 from src.eval.metrics import (
     bold_best_table,
     first_relevant_rank,
@@ -54,7 +52,7 @@ def evaluate(
 ) -> None:
     run = run_eval(method_names, limit=limit, category=category, checkpoint=checkpoint)
     if not run.questions:
-        print("No eval questions found. Run src.eval.generate_dataset first.")
+        print("No eval questions found in wiki_qa_rag.parquet for these filters.")
         return
 
     report = _build_eval_report(
@@ -98,7 +96,7 @@ def _build_eval_report(
 ) -> str:
     lines = [
         f"Methods: {', '.join(run.methods)}",
-        f"Chunk variant: {chunk_variant()}",
+        f"Chunk size: {chunk_size()}",
         f"Questions: {len(run.questions)}",
         f"Limit: {limit if limit is not None else 'all'}",
         f"Category: {category or 'all'}",
@@ -127,7 +125,6 @@ def run_eval(
     category: str | None = None,
     checkpoint: bool = False,
 ) -> EvalRun:
-    initialize_eval_db()
     questions, relevance = load_eval_rows(limit=limit, category=category)
     if not questions:
         return EvalRun([], [], [], {}, {}, [], {})
@@ -176,7 +173,7 @@ def run_eval(
 # ponytail: resume is per method, not per question. A crash loses at most the
 # method in flight. Go per question only if one method's run outgrows a sitting.
 def _checkpoint_path() -> Path:
-    return data_path("checkpoints", f"eval{variant_tag(chunk_variant(), '-')}.json")
+    return data_path("checkpoints", f"eval-{chunk_size()}.json")
 
 
 def _load_checkpoint(signature: list[str]) -> dict[str, Any]:
@@ -201,53 +198,69 @@ def load_eval_rows(
     limit: int | None = None,
     category: str | None = None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    # A question counts for a variant only when its evidence quote was found in
-    # that variant's chunks, so every variant is scored on labelled questions.
-    with connect() as conn:
-        question_sql = """
-                select q.id, q.question, q.answer, q.question_type, q.question_language
-                from eval_questions q
-                where q.approved = 1
-                  and exists (
-                    select 1
-                    from eval_relevant_chunks r
-                    join page_chunks c on c.id = r.chunk_id
-                    where r.question_id = q.id and c.variant = :variant
-                  )
-                """
-        params: dict[str, Any] = {"variant": chunk_variant()}
-        if category is not None:
-            question_sql += "\n                and q.question_type = :category"
-            params["category"] = category
-        question_sql += "\n                order by q.id"
-        if limit is not None:
-            question_sql += "\n                limit :limit"
-            params["limit"] = limit
-        questions = [
-            dict(row)
-            for row in conn.execute(
-                question_sql,
-                params,
+    """Test questions that passed every check (`answer_ok`), in a stable random order.
+
+    A chunk is relevant when it is on the gold page and holds one of the question's
+    evidence quotes; a question none of whose quotes is found in the chunks is left out.
+    """
+    where = {"answer_ok": True, "split": CONFIG["split"]}
+    if category is not None:
+        where["qtype"] = category
+    columns = ["id", "n", "kind", "lang", "question", "answer", "qtype", "evidence"]
+    rows = load(Rag, columns, **where).to_pylist()
+    for row in rows:
+        row["page_id"] = row["id"]
+        row["id"] = f"{row['page_id']}:{row['kind']}:{row['n']}"
+        row["question_type"] = row["qtype"]
+    rows.sort(
+        key=lambda row: hashlib.sha1(row["id"].encode(), usedforsecurity=False).digest()
+    )
+    wanted: int = limit or CONFIG["question_limit"]
+
+    pages = {row["page_id"] for row in rows[: wanted * 2]}  # room for unmatched ones
+    chunks = load(Chunk, ["id", "page_id", "text"], size=chunk_size())
+    chunks = chunks.filter(pc.field("page_id").isin(list(pages))).to_pylist()
+    by_page: dict[str, dict[str, str]] = defaultdict(dict)
+    for chunk in chunks:
+        by_page[chunk["page_id"]][chunk["id"]] = chunk["text"]
+
+    questions, relevance = [], []
+    for row in rows:
+        if len(questions) == wanted:
+            break
+        found = {
+            chunk_id
+            for quote in row["evidence"]
+            for chunk_id in matching_chunks(normalize(quote), by_page[row["page_id"]])
+        }
+        if found:
+            questions.append(row)
+            relevance.extend(
+                {"question_id": row["id"], "chunk_id": chunk_id}
+                for chunk_id in sorted(found)
             )
-        ]
-        question_ids = [row["id"] for row in questions]
-        if not question_ids:
-            return questions, []
-        relevance = [
-            dict(row)
-            for row in conn.execute(
-                """
-                select r.question_id, r.chunk_id
-                from eval_relevant_chunks r
-                join page_chunks c on c.id = r.chunk_id
-                where c.variant = ?
-                  and r.question_id in (select value from json_each(?))
-                order by r.question_id, r.chunk_id
-                """,
-                [chunk_variant(), json.dumps(question_ids)],
-            )
-        ]
     return questions, relevance
+
+
+MIN_QUOTE_CHARS = 20
+
+
+def normalize(text: str) -> str:
+    return " ".join(text.split())
+
+
+def matching_chunks(quote: str, chunks: dict[str, str]) -> list[str]:
+    """Chunks containing the quote, else those containing any of its sentences."""
+    texts = {chunk_id: normalize(text) for chunk_id, text in chunks.items()}
+    found = [chunk_id for chunk_id, text in texts.items() if quote in text]
+    if found:
+        return found
+    # ponytail: a quote cut by a chunk boundary labels each side by sentence; a
+    # single sentence split mid-way is lost.
+    sentences = [
+        s for s in re.split(r"(?<=[.!?])\s+", quote) if len(s) >= MIN_QUOTE_CHARS
+    ]
+    return [cid for cid, text in texts.items() if any(s in text for s in sentences)]
 
 
 def _retrieve_rankings(

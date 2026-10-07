@@ -1,21 +1,25 @@
 # pyright: reportAttributeAccessIssue=false
 # (pyarrow.compute functions are generated at import, unknown to the type checker)
 """The real dataset's contract, read only: every file in place, columns as its model
-says, rows that validate, and ids and evidence that fit together."""
+says, rows that validate, and ids, sizes, evidence and vectors that fit together."""
 
 from functools import cache
 from pathlib import Path
 
+import numpy as np
 import pyarrow as pa
 import pyarrow.compute as pc
 import pyarrow.parquet as pq
 import pytest
 
 from src.db import dataset
+from src.db.dataset import SIZES
+from src.preprocess.chunker import MIN_TOKENS
 
 REAL = Path("/data/llms4eu/wiki")  # tests otherwise run on a scratch DATASET_DIR
 MODELS = [
     dataset.Page,
+    dataset.Chunk,
     dataset.Rag,
     dataset.Unanswerable,
     dataset.Compare,
@@ -58,6 +62,19 @@ def test_pages_are_unique_and_have_text():
     assert longest(pages.column("summary")) <= 300
 
 
+def test_chunks_fit_their_pages_and_sizes():
+    chunks = read(dataset.Chunk, ["id", "page_id", "size", "tokens", "text", "role"])
+    assert len(set(chunks.column("id").to_pylist())) == chunks.num_rows
+    assert set(chunks.column("page_id").to_pylist()) <= page_ids()
+    assert set(chunks.column("size").to_pylist()) == set(SIZES)
+    over = pc.greater(
+        chunks.column("tokens"), pc.add(chunks.column("size"), MIN_TOKENS)
+    )
+    assert not pc.any(over).as_py()
+    assert pc.min(pc.utf8_length(chunks.column("text"))).as_py() > 0
+    assert longest(chunks.column("role")) <= 300
+
+
 def test_questions_point_at_existing_pages():
     assert set(read(dataset.Rag, ["id"]).column("id").to_pylist()) <= page_ids()
     assert (
@@ -85,3 +102,16 @@ def test_evidence_spans_point_at_the_quotes():
     for row in rows:
         for quote, (start, end) in zip(row["evidence"], row["spans"]):
             assert texts[row["id"]][start:end] == quote
+
+
+@pytest.mark.parametrize("file", sorted(REAL.glob("embeddings/*/*.npy")), ids=str)
+def test_embeddings_have_one_unit_vector_per_chunk(file):
+    vectors = np.load(file, mmap_mode="r")
+    size = int(file.stem)
+    rows = pq.read_table(
+        REAL / dataset.Chunk.file, columns=["id"], filters=[("size", "==", size)]
+    )
+    assert len(vectors) == rows.num_rows
+    sample = np.asarray(vectors[:: max(1, len(vectors) // 1000)], np.float32)
+    done = sample[~np.isnan(sample).any(axis=1)]
+    assert np.allclose(np.linalg.norm(done, axis=1), 1, atol=1e-2)

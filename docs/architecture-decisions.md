@@ -65,18 +65,18 @@ best pipeline; `nemotron8b` alone reaches 0.940 at 11 ms/query, above every
 
 ## Chunk Storage
 
-SQLite is source of truth for page chunks. Chroma is derived vector cache.
+Parquet files are the source of truth (2026-10-07; the SQLite page DB and Chroma
+were dropped). One pydantic model per file in `src/db/schemas/`, read through
+`src/db/dataset.py`.
 
-- `page_chunks.text` stores canonical chunk text.
-- `page_chunks.variant` keeps alternative cuts beside the `base` one, so
-  chunk-size experiments (2026-10-06, re-added after the cleanup) run on the
-  same database without touching the pipeline's chunks, labels or indexes.
-  Every stage works on one variant, chosen with `CHUNK_VARIANT`.
-- Chroma stores embeddings plus minimal ids, one collection per provider and
-  variant.
-- Vector retrieval hydrates chunk text from SQLite.
-- Chroma readiness means the collection exists and its chunk digest matches
-  the variant's rows in `page_chunks`.
+- `chunks.parquet` holds every chunk of every size in `SIZES`, `size` tells
+  them apart; every stage works on one size, `CHUNK_SIZE`.
+- `embeddings/<provider>/<size>.npy` holds the vectors, row i = chunk i of that
+  size, NaN until embedded. A rechunk keeps the vectors of unchanged chunks.
+- Vector search is exact over those files; an ANN index built from them is the
+  next step.
+- Eval relevance comes from the questions' evidence quotes, so it survives any
+  rechunk.
 
 ## Chunk Summaries
 
@@ -90,12 +90,13 @@ title, heading path, and chunk text.
 ## Indexing Boundary
 
 `src.indexing` owns the whole indexing side: `embedders` builds the provider,
-`cache` memoizes vectors, `store` owns Chroma mechanics and query-time search,
-and `__main__` is the rebuild CLI.
+`cache` memoizes query vectors, `__main__` embeds the chunks into the stored
+vectors, and `store` answers vector queries over them.
 
 `src/indexing/config.yaml` owns which embedding providers are enabled for this
 project. Retrieval builds `VectorChunkRetriever` instances from the enabled
-provider list and checks Chroma readiness without owning provider definitions.
+provider list and checks that their vectors are complete without owning provider
+definitions.
 
 ## Config Boundary
 
@@ -112,15 +113,11 @@ not project policy.
 
 ## Data Artifacts
 
-Tracked durable artifacts use descriptive paths:
+- `DATASET_DIR` (default `/data/llms4eu/wiki`): the dataset, see `src/db/README.md`.
+- `$LLMS4EU_DATA`: caches (query embeddings, geo places), checkpoints, scraped
+  pages. Defaults to `/data/llms4eu` and is set in `.env`.
 
-- `$LLMS4EU_DATA/db/pages.db`: page SQLite DB.
-- `$LLMS4EU_DATA/chroma/`: regenerable shared vector cache.
-
-`LLMS4EU_DATA` defaults to `/data/llms4eu` and is set in `.env`. Point it at a
-private path when a run should not touch the shared store.
-
-`just index qwen` rebuilds the default chunk-vector provider.
+Tests run on scratch folders for both (`tests/conftest.py`).
 
 ## Open Knowledge Format (removed 2026-09-14, kept as a record)
 

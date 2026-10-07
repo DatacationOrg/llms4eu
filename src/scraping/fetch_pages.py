@@ -10,22 +10,21 @@ from src.scraping.page_fetch import (
     fetch_page,
     read_source_urls,
 )
-from src.scraping.page_store import initialize_raw_pages_db, upsert_fetch_result
+from src.scraping.page_store import append_fetch_result
 from src.scraping.settings import fetch_pages_config
-from src.shared.env import load_local_env, pages_db
-
+from src.shared.env import data_path, load_local_env
 
 config = fetch_pages_config()
 
 
 def scrape_source_file(
     source_path: Path,
+    out: Path,
     workers: int = config.workers,
     domain_delay_seconds: float = config.domain_delay_seconds,
     timeout: float = config.timeout_seconds,
 ) -> dict[str, int]:
     source_urls = read_source_urls(source_path)
-    initialize_raw_pages_db()
 
     throttle = DomainThrottle(domain_delay_seconds)
     counts = {"total": len(source_urls), "ok": 0, "failed": 0, "non_html": 0}
@@ -47,7 +46,7 @@ def scrape_source_file(
                     timeout,
                 )
 
-            upsert_fetch_result(result)
+            append_fetch_result(result, out)
             status = _record_count(counts, result)
             print(f"{status}: {source_url.url}", flush=True)
 
@@ -74,6 +73,9 @@ def _record_count(counts: dict[str, int], result: FetchResult) -> str:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("source_file", type=Path)
+    parser.add_argument(
+        "--out", type=Path, help="JSONL to append to (default: scraped/<source>.jsonl)"
+    )
     parser.add_argument("--workers", type=int, default=config.workers)
     parser.add_argument(
         "--domain-delay",
@@ -85,8 +87,10 @@ def main() -> None:
     args = parser.parse_args()
 
     load_local_env()
+    out = args.out or data_path("scraped", f"{args.source_file.stem}.jsonl")
     counts = scrape_source_file(
         source_path=args.source_file,
+        out=out,
         workers=args.workers,
         domain_delay_seconds=args.domain_delay,
         timeout=args.timeout,
@@ -94,7 +98,7 @@ def main() -> None:
     print(
         "finished: "
         f"total={counts['total']} ok={counts['ok']} "
-        f"failed={counts['failed']} non_html={counts['non_html']} db={pages_db()}"
+        f"failed={counts['failed']} non_html={counts['non_html']} out={out}"
     )
 
 
