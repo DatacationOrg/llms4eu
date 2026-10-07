@@ -4,13 +4,15 @@ The stage retrieves `limit * overfetch` chunks unfiltered; each score becomes
 `(1 - w) * text + w * exp(-km / decay)`, text min-max normalised over the list.
 A page with no location scores 1.0 on geography: the 2026-09-08 run lost 15 of
 72 scoped questions to a hard filter, every one a gold page with no location.
-The model only names the place; Wikidata supplies the coordinates.
+The model only names the place; Wikidata supplies the coordinates. Pages bring their
+own (`Page.latitude` / `longitude`).
 """
 
 from __future__ import annotations
 
 import math
 import re
+import sqlite3
 from collections.abc import Callable
 from dataclasses import dataclass, replace
 from functools import cache
@@ -19,10 +21,10 @@ from typing import Literal, NamedTuple, cast
 
 from pydantic import BaseModel, Field
 
-from src.db.legacy.pages import connect_pages as connect
+from src.db.dataset import Page, load
 from src.retrieval.base import RankedChunk, Retriever
 from src.shared import wikidata
-from src.shared.env import load_yaml
+from src.shared.env import data_path, load_yaml
 from src.shared.llm import LocalOllamaStructuredLlm
 from src.shared.prompts import render
 
@@ -90,7 +92,7 @@ def fuse(
     span = max(chunk.score for chunk in chunks) - low or 1.0
 
     def geo(chunk: RankedChunk) -> float:
-        point = points.get(chunk.id.rsplit(":", 1)[0])
+        point = points.get(chunk.id.rsplit(":", 2)[0])  # <page id>:<size>:<n>
         if point is None:
             return 1.0
         return math.exp(-haversine_km(place[:2], point) / place.decay_km)
@@ -113,27 +115,40 @@ def haversine_km(a: tuple[float, float], b: tuple[float, float]) -> float:
 
 @cache
 def page_points() -> dict[str, tuple[float, float]]:
-    with connect() as conn:
-        rows = conn.execute("select page_id, latitude, longitude from page_locations")
-        return {row["page_id"]: (row["latitude"], row["longitude"]) for row in rows}
+    pages = load(Page, ["id", "latitude", "longitude"]).to_pylist()
+    return {
+        p["id"]: (p["latitude"], p["longitude"])
+        for p in pages
+        if p["latitude"] is not None and p["longitude"] is not None
+    }
+
+
+def _places() -> sqlite3.Connection:
+    """The cache of each query's place (a null point: the query names none)."""
+    conn = sqlite3.connect(data_path("cache", "geo_query_places.sqlite"))
+    conn.execute(
+        "create table if not exists geo_query_places "
+        "(query text primary key, latitude real, longitude real, decay_km real)"
+    )
+    return conn
 
 
 def place_of(query: str) -> Place | None:
     """The query's place, cached; a failed lookup is retried next run, not cached."""
     key = " ".join(query.lower().split())
-    with connect() as conn:
+    with _places() as conn:
         row = conn.execute(
             "select latitude, longitude, decay_km from geo_query_places where query = ?",
             (key,),
         ).fetchone()
     if row is not None:
-        return None if row["latitude"] is None else Place(*row)
+        return None if row[0] is None else Place(*row)
     try:
         place = _resolve(query)
     except Exception as exc:  # a gazetteer or model outage must not end a run
         print(f"geo lookup failed, unscoped: {exc}", flush=True)
         return None
-    with connect() as conn:
+    with _places() as conn:
         conn.execute(
             "insert or replace into geo_query_places values (?, ?, ?, ?)",
             (key, *(place or (None, None, None))),

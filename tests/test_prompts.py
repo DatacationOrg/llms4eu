@@ -4,22 +4,16 @@ from src.shared.prompts import PROMPTS_DIR, render
 
 
 def test_render_substitutes_every_placeholder():
-    text = render(
-        "question_generation.human",
-        title="Castle",
-        heading_path="History",
-        language="sl",
-        text="Zgrajen leta 895.",
-    )
+    text = render("geo_place", question="Wie hoch ist die Burg Clam?")
 
     assert "$" not in text
-    assert "Castle" in text and "Zgrajen leta 895." in text
+    assert "Wie hoch ist die Burg Clam?" in text
 
 
 def test_render_raises_on_a_missing_variable():
     """A silently unrendered $placeholder would ship to the model as literal text."""
     with pytest.raises(KeyError):
-        render("question_generation.human", title="Castle")
+        render("geo_place")
 
 
 @pytest.mark.parametrize("path", sorted(PROMPTS_DIR.glob("*.md")), ids=lambda p: p.stem)
