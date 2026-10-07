@@ -1,5 +1,7 @@
-"""Ling 3.1 Flash notes on the wiki pages, in the page's language, kept in `notes.db`
-(`wiki_chunks` copies them into the Parquet files):
+"""Not used by the pipeline: how the `summary` and `role` columns were made.
+
+Ling 3.1 Flash notes on the wiki pages, in the page's language, kept in `notes.db`
+until `export` writes them into `wikipages.parquet` and `chunks.parquet`:
 
 - `summaries`: each page in at most 3 sentences / 300 characters;
 - `roles`: per chunk, one sentence on what kind of information it adds to its page,
@@ -7,8 +9,9 @@
 
 Resumable: done ids are skipped, failures are retried on the next run.
 
-    uv run python -m src.db.wiki_notes summaries --workers 100
-    uv run python -m src.db.wiki_notes roles --size 2048 --workers 100
+    uv run python -m datagen.notes summaries --workers 100
+    uv run python -m datagen.notes roles --size <size> --workers 100
+    uv run python -m datagen.notes export
 """
 
 from __future__ import annotations
@@ -21,11 +24,14 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 
 import httpx
+import pyarrow as pa
 
-from src.db.dataset import Chunk, Page, load
+from src.db.dataset import ROOT, SIZES, Chunk, Page, load, path
 from src.db.schemas.chunk import represent
-from src.db.wiki_chunks import NOTES
+from src.preprocess.chunker import write
 from src.shared.env import load_local_env
+
+NOTES = ROOT / "notes.db"
 
 MODEL = "inclusionai/ling-3.1-flash-free"  # free on the Vercel AI Gateway
 URL = "https://ai-gateway.vercel.sh/v1/chat/completions"
@@ -133,9 +139,8 @@ def roles(size: int, workers: int) -> None:
     lang = {p["id"]: p["in_language"] for p in pages}
     with sqlite3.connect(NOTES) as db:
         summary = dict(db.execute("select id, text from summaries"))
-    chunks = load(
-        Chunk, ["id", "page_id", "title", "breadcrumb", "text"], size=size
-    ).to_pylist()
+    columns = ["id", "page_id", "title", "breadcrumb", "text", "role"]
+    chunks = load(Chunk, columns, size=size).to_pylist()
     items = [
         (
             c["id"],
@@ -146,22 +151,45 @@ def roles(size: int, workers: int) -> None:
             ),
         )
         for c in chunks
-        if c["page_id"] in summary
+        if c["page_id"] in summary and c["role"] is None  # kept over a rechunk
     ]
     run("roles", items, 1, workers)
 
 
+def export() -> None:
+    """Fill `summary` / `role` in the Parquet files; notes for gone ids are skipped."""
+    with sqlite3.connect(NOTES) as db:
+        notes = {
+            t: dict(db.execute(f"select id, text from {t}"))
+            for t in ("summaries", "roles")
+        }
+    for model, table, column in (
+        (Page, "summaries", "summary"),
+        (Chunk, "roles", "role"),
+    ):
+        data = load(model)
+        ids, current = data.column("id").to_pylist(), data.column(column).to_pylist()
+        filled = [notes[table].get(i, old) for i, old in zip(ids, current)]
+        index = data.schema.get_field_index(column)
+        write(
+            data.set_column(index, column, pa.array(filled, pa.string())), path(model)
+        )
+        print(f"{column}: {sum(v is not None for v in filled)} of {len(ids)}")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("job", choices=["summaries", "roles"])
-    parser.add_argument("--size", type=int, default=2048)
+    parser.add_argument("job", choices=["summaries", "roles", "export"])
+    parser.add_argument("--size", type=int, choices=SIZES, default=max(SIZES))
     parser.add_argument("--workers", type=int, default=100)
     args = parser.parse_args()
     load_local_env()
     if args.job == "summaries":
         summaries(args.workers)
-    else:
+    elif args.job == "roles":
         roles(args.size, args.workers)
+    else:
+        export()
 
 
 if __name__ == "__main__":

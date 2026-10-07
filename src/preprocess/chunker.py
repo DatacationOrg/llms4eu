@@ -1,234 +1,239 @@
+"""Cut the pages into `chunks.parquet` at every size in `SIZES` (`src/db/dataset.py`).
+
+Follows aihub-core (`aihub_core/search/chunking.py`): split at the page's headings,
+pack neighbouring sections up to the size, size-split only a section too big on its own
+(at paragraph, line, then sentence ends); no overlap. A chunk keeps the heading trail
+its sections share as `breadcrumb` and the headings below it inline. Wikipedia edit links
+(`[Bearbeiten | Quelltext bearbeiten]`) are dropped, and with them sections that held
+nothing else; a piece under MIN_TOKENS joins its neighbour. Sizes are tokens of the
+chunk text alone, counted with the default embedding provider's tokenizer.
+
+On a rechunk, a chunk whose embedded text did not change keeps its `role` and its vectors
+in every `embeddings/<model>/<size>.npy`; the others are NaN until re-embedded.
+
+    uv run python -m src.preprocess.chunker
+"""
+
 from __future__ import annotations
 
-import argparse
+import os
 import re
-from dataclasses import dataclass
+from multiprocessing import Pool
 from pathlib import Path
+from typing import NamedTuple
 
-from src.db.legacy.pages import DEFAULT_CHUNK_VARIANT, chunk_variant, variant_tag
-from src.db.legacy.pages import connect_pages as connect
-from src.db.legacy.pages import initialize_page_artifacts_db
+import numpy as np
+import pyarrow as pa
+import pyarrow.parquet as pq
+
+from src.db.dataset import ROOT, SIZES, Chunk, Page, load, path
+from src.db.schemas.chunk import represent
 from src.shared.env import load_yaml
 
-CONFIG = load_yaml(Path(__file__).with_name("config.yaml"))
+EMBEDDING = load_yaml(Path(__file__).parents[1] / "indexing" / "config.yaml")
+MIN_TOKENS = 50
+TOKENIZER = EMBEDDING["providers"][EMBEDDING["default_provider"]]["model_name"]
+# `# <title>` opens every page; the title is embedded separately, so it is no breadcrumb.
+_HEADERS = [("#", "h1"), ("##", "h2"), ("###", "h3")]
+_EDIT_LINK = re.compile(r"\[[^\[\]|\n]{1,40} \| [^\[\]\n]{1,60}\]")
+_SEPARATORS = ["\n\n", "\n", ". ", "! ", "? ", "; ", ", ", " ", ""]
 
-HEADING_RE = re.compile(r"^(#{1,6})\s+(.+)$")
 
-
-@dataclass(frozen=True)
-class Chunk:
-    heading_path: str
+class _Section(NamedTuple):
     text: str
+    trail: tuple[str, ...]
+    cost: int  # tokens of the text and every heading line it may get back
 
 
-def chunk_markdown(
-    markdown: str,
-    size: int | None = None,
-    overlap: int | None = None,
-    min_chars: int | None = None,
-) -> list[Chunk]:
-    """Pack each section's paragraphs into chunks of about `size` characters.
+def chunk_page(page: dict) -> list[dict]:
+    """The page's chunks at every size, in order."""
+    from langchain_text_splitters import MarkdownHeaderTextSplitter
 
-    Consecutive chunks of a section share up to `overlap` characters of trailing
-    paragraphs. A chunk shorter than `min_chars` is merged into the one before
-    it rather than dropped, so no page text is lost.
-    """
-    defaults = variant_settings(DEFAULT_CHUNK_VARIANT)
-    size = size or defaults["size"]
-    overlap = defaults["overlap"] if overlap is None else overlap
-    min_chars = defaults["min_chars"] if min_chars is None else min_chars
-    chunks: list[Chunk] = []
-    for heading_path, paragraphs in _sections(markdown):
-        pieces = [p for text in paragraphs for p in _split_long_paragraph(text, size)]
-        for text in _pack(pieces, size, overlap):
-            if chunks and len(text) < min_chars:
-                previous = chunks[-1]
-                if previous.heading_path != heading_path and heading_path:
-                    text = f"{heading_path}\n\n{text}"
-                chunks[-1] = Chunk(previous.heading_path, f"{previous.text}\n\n{text}")
-            else:
-                chunks.append(Chunk(heading_path, text))
-    return chunks
-
-
-def _pack(pieces: list[str], size: int, overlap: int) -> list[str]:
-    # ponytail: overlap is whole paragraphs/sentences, so a piece longer than
-    # `overlap` is never repeated; split pieces finer if overlap must be exact.
-    texts: list[str] = []
-    current: list[str] = []
-    for piece in pieces:
-        if current and _length(current + [piece]) > size:
-            texts.append("\n\n".join(current))
-            carry: list[str] = []
-            for previous in reversed(current):
-                candidate = [previous, *carry]
-                if _length(candidate) > overlap or _length(candidate + [piece]) > size:
-                    break
-                carry = candidate
-            current = carry
-        current.append(piece)
-    if current:
-        texts.append("\n\n".join(current))
-    return texts
-
-
-def _length(pieces: list[str]) -> int:
-    return sum(len(piece) for piece in pieces) + 2 * (len(pieces) - 1)
-
-
-def variant_settings(variant: str) -> dict[str, int]:
-    """Size, overlap and min_chars of one named cut; `base` is the top-level config."""
-    variants = {DEFAULT_CHUNK_VARIANT: {}, **CONFIG["chunk_variants"]}
-    if variant not in variants:
-        raise SystemExit(
-            f"Unknown chunk variant {variant!r}; add it under chunk_variants in "
-            "src/preprocess/config.yaml"
-        )
-    return {
-        key.removeprefix("chunk_"): variants[variant].get(key, CONFIG[key])
-        for key in ("chunk_size", "chunk_overlap", "chunk_min_chars")
-    }
-
-
-def rebuild_page_chunks(rechunk_all: bool = False, variant: str | None = None) -> None:
-    variant = variant or chunk_variant()
-    settings = variant_settings(variant)
-    initialize_page_artifacts_db()
-    with connect() as conn:
-        if rechunk_all:
-            _drop_chunks(conn, variant)
-        pages = conn.execute(
-            """
-            select m.id, c.markdown
-            from page_metadata m
-            join page_markdown_content c on c.page_id = m.id
-            where m.page_kind != 'empty'
-              and not exists (
-                select 1
-                from page_chunks chunks
-                where chunks.page_id = m.id and chunks.variant = ?
-              )
-            order by m.id
-            """,
-            (variant,),
-        ).fetchall()
-
-        rows = [
-            (
-                f"{page['id']}{variant_tag(variant, ':')}:{index}",
-                page["id"],
-                variant,
-                index,
-                chunk.heading_path or None,
-                chunk.text,
-                len(chunk.text),
+    sections = []
+    for doc in MarkdownHeaderTextSplitter(_HEADERS).split_text(page["text"]):
+        text = _EDIT_LINK.sub("", doc.page_content).strip()
+        if not text:
+            continue
+        trail = tuple(doc.metadata[k] for k in ("h2", "h3") if k in doc.metadata)
+        cost = _count(text) + sum(_count(h) + 2 for h in trail)
+        sections.append(_Section(text, trail, cost))
+    rows = []
+    for size in SIZES:
+        pieces: list[list] = []  # [breadcrumb, text, tokens]
+        for group in _pack(sections, size):
+            shared = _shared_trail(group)
+            body = _render(group, shared)
+            split = _count(body) > size
+            for text in _sizer(size).split_text(body) if split else [body]:
+                pieces.append([" > ".join(shared) or None, text, _count(text)])
+        for n, (breadcrumb, text, tokens) in enumerate(_merge_tiny(pieces, size)):
+            rows.append(
+                {
+                    "id": f"{page['id']}:{size}:{n}",
+                    "page_id": page["id"],
+                    "size": size,
+                    "n": n,
+                    "title": page["title"],
+                    "breadcrumb": breadcrumb,
+                    "text": text,
+                    "tokens": tokens,
+                }
             )
-            for page in pages
-            for index, chunk in enumerate(chunk_markdown(page["markdown"], **settings))
-        ]
-
-        conn.executemany(
-            """
-            insert into page_chunks (
-              id, page_id, variant, chunk_index, heading_path, text, char_count
-            ) values (?, ?, ?, ?, ?, ?, ?)
-            """,
-            rows,
-        )
-
-    print(f"chunked {len(pages)} new pages into {len(rows)} {variant} chunks")
+    return rows
 
 
-def _drop_chunks(conn, variant: str) -> None:
-    """Delete one variant's chunks; refused while a label could not be rebuilt afterwards."""
-    unanchored = conn.execute(
-        """
-        select count(distinct r.question_id) from eval_relevant_chunks r
-        join page_chunks c on c.id = r.chunk_id and c.variant = ?
-        where not exists (select 1 from eval_evidence e where e.question_id = r.question_id)
-        """,
-        (variant,),
-    ).fetchone()[0]
-    if unanchored:
-        raise SystemExit(
-            f"{unanchored} eval questions have no evidence quote, so rechunking would "
-            "delete their labels for good. Run `just eval-evidence` first."
-        )
-    conn.execute("delete from page_chunks where variant = ?", (variant,))
+def _merge_tiny(pieces: list[list], size: int) -> list[list]:
+    """A piece under MIN_TOKENS joins the one before it (the first one, the next),
+    as long as the two stay within size + MIN_TOKENS."""
+    out: list[list] = []
+    for piece in pieces:
+        tiny = piece[2] < MIN_TOKENS or (out and out[-1][2] < MIN_TOKENS)
+        if out and tiny and out[-1][2] + piece[2] + 2 <= size + MIN_TOKENS:  # 2: "\n\n"
+            out[-1][1] += "\n\n" + piece[1]
+            out[-1][2] = _count(out[-1][1])
+        else:
+            out.append(piece)
+    return out
 
 
-def _sections(markdown: str) -> list[tuple[str, list[str]]]:
-    heading_stack: list[tuple[int, str]] = []
-    sections: list[tuple[str, list[str]]] = []
-    paragraphs: list[str] = []
-    current_lines: list[str] = []
-
-    def flush_paragraph() -> None:
-        if current_lines:
-            text = "\n".join(current_lines).strip()
-            if text:
-                paragraphs.append(text)
-            current_lines.clear()
-
-    def flush_section() -> None:
-        flush_paragraph()
-        if paragraphs:
-            heading_path = " > ".join(title for _, title in heading_stack)
-            sections.append((heading_path, paragraphs.copy()))
-            paragraphs.clear()
-
-    for line in markdown.splitlines():
-        stripped = line.strip()
-        heading = HEADING_RE.match(stripped)
-        if heading:
-            flush_section()
-            level = len(heading.group(1))
-            title = _clean_heading(heading.group(2))
-            heading_stack[:] = [
-                (lvl, text) for lvl, text in heading_stack if lvl < level
-            ]
-            heading_stack.append((level, title))
+def _pack(sections: list[_Section], size: int):
+    """Neighbouring sections grouped up to `size`; one too big alone gets its own group."""
+    current, used = [], 0
+    for section in sections:
+        if section.cost > size:
+            if current:
+                yield current
+            yield [section]
+            current, used = [], 0
             continue
-        if not stripped:
-            flush_paragraph()
-            continue
-        current_lines.append(stripped)
-
-    flush_section()
-    return sections or [("", [markdown.strip()])]
-
-
-def _split_long_paragraph(paragraph: str, max_chars: int) -> list[str]:
-    if len(paragraph) <= max_chars:
-        return [paragraph]
-
-    pieces = []
-    remaining = paragraph
-    while len(remaining) > max_chars:
-        split_at = remaining.rfind(". ", 0, max_chars)
-        if split_at < max_chars // 2:
-            split_at = remaining.rfind(" ", 0, max_chars)
-        if split_at < max_chars // 2:
-            split_at = max_chars
-        pieces.append(remaining[: split_at + 1].strip())
-        remaining = remaining[split_at + 1 :].strip()
-    if remaining:
-        pieces.append(remaining)
-    return pieces
+        if current and used + section.cost + 1 > size:
+            yield current
+            current, used = [], 0
+        current.append(section)
+        used += section.cost + 1
+    if current:
+        yield current
 
 
-def _clean_heading(text: str) -> str:
-    return re.sub(r"\s+", " ", text.strip("# *")).strip()
+def _shared_trail(group: list[_Section]) -> tuple[str, ...]:
+    shared = group[0].trail
+    for section in group[1:]:
+        depth = 0
+        while (
+            depth < min(len(shared), len(section.trail))
+            and shared[depth] == section.trail[depth]
+        ):
+            depth += 1
+        shared = shared[:depth]
+    return shared
+
+
+def _render(group: list[_Section], shared: tuple[str, ...]) -> str:
+    """Each section with its headings below the shared trail put back as Markdown."""
+    parts = []
+    for section in group:
+        below = section.trail[len(shared) :]
+        lines = [f"{'#' * (len(shared) + i + 2)} {h}" for i, h in enumerate(below)]
+        parts.append("\n".join([*lines, section.text]))
+    return "\n\n".join(parts)
+
+
+_tokenizer = None
+_sizers: dict[int, object] = {}
+
+
+def _count(text: str) -> int:
+    global _tokenizer
+    if _tokenizer is None:
+        from transformers import AutoTokenizer
+
+        _tokenizer = AutoTokenizer.from_pretrained(TOKENIZER)
+    return len(_tokenizer(text, add_special_tokens=False)["input_ids"])
+
+
+def _sizer(size: int):
+    if size not in _sizers:
+        from langchain_text_splitters import RecursiveCharacterTextSplitter
+
+        _count("")  # loads the tokenizer
+        _sizers[size] = RecursiveCharacterTextSplitter.from_huggingface_tokenizer(
+            _tokenizer,
+            chunk_size=size,
+            chunk_overlap=0,
+            separators=_SEPARATORS,
+            keep_separator="end",
+        )
+    return _sizers[size]
+
+
+def write(table: pa.Table, target) -> None:
+    """Write next to the target, then swap it in: a crash never leaves half a file."""
+    tmp = target.with_name(target.name + ".tmp")
+    pq.write_table(table, tmp, compression="zstd", row_group_size=50_000)
+    os.replace(tmp, target)
+
+
+def pages_from_jsonl() -> None:
+    """`wikipages.parquet` from the scraped `pages.jsonl` (read only), `summary` empty."""
+    import pyarrow.json as pj
+
+    table = pj.read_json(ROOT / "pages.jsonl")
+    write(table.append_column("summary", pa.nulls(len(table), pa.string())), path(Page))
+
+
+def _key(chunk: dict) -> tuple:
+    return chunk["page_id"], represent(
+        chunk["title"], chunk["breadcrumb"], chunk["text"]
+    )
+
+
+def _carry_over(chunks: list[dict]) -> list[tuple]:
+    """Keep the role and vectors of every chunk whose embedded text did not change.
+    Returns the (written, target) vector files to swap in with the new chunks."""
+    if not path(Chunk).exists():
+        return []
+    columns = ["page_id", "size", "title", "breadcrumb", "text", "role"]
+    old = load(Chunk, columns).to_pylist()
+    swaps = []
+    for size in SIZES:
+        before = [c for c in old if c["size"] == size]
+        row = {_key(c): i for i, c in enumerate(before)}
+        after = [c for c in chunks if c["size"] == size]
+        source = np.array([row.get(_key(c), -1) for c in after])
+        kept = source >= 0
+        for chunk, i in zip(after, source):
+            chunk["role"] = before[i]["role"] if i >= 0 else None
+        for target in sorted((ROOT / "embeddings").glob(f"*/{size}.npy")):
+            vectors = np.load(target, mmap_mode="r")
+            new = np.full((len(after), vectors.shape[1]), np.nan, np.float16)
+            if len(vectors) == len(before):  # else from another cut: re-embed all
+                new[kept] = vectors[source[kept]]
+            written = target.with_name(target.name + ".tmp")
+            with open(written, "wb") as fh:
+                np.save(fh, new)
+            swaps.append((written, target))
+        print(f"{size}: {kept.sum()} of {len(after)} chunks unchanged", flush=True)
+    return swaps
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--rebuild",
-        action="store_true",
-        help="rechunk every page of the active variant (then `just rechunk` relabels)",
+    if not path(Page).exists():
+        pages_from_jsonl()
+    pages = load(Page, ["id", "title", "text"]).to_pylist()
+    with Pool(16) as pool:
+        chunks = [c for cs in pool.imap(chunk_page, pages, 64) for c in cs]
+    chunks.sort(key=lambda c: c["size"])  # stable: page order and n kept within a size
+    for chunk in chunks:
+        chunk["role"] = None
+    swaps = _carry_over(chunks)
+    # ponytail: chunks and vectors are swapped one rename after another, not atomically;
+    # after a crash between them, a rerun finds the row counts differ and re-embeds.
+    write(pa.Table.from_pylist(chunks), path(Chunk))
+    for written, target in swaps:
+        os.replace(written, target)
+    print(
+        f"{len(chunks)} chunks", {s: sum(c["size"] == s for c in chunks) for s in SIZES}
     )
-    rebuild_page_chunks(parser.parse_args().rebuild)
 
 
 if __name__ == "__main__":

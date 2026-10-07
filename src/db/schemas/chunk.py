@@ -9,7 +9,7 @@ class Chunk(Row):
     file = "chunks.parquet"
     id: str  # <page id>:<size>:<n>
     page_id: str  # Page.id
-    size: int  # target tokens: 256, 512, 1024 or 2048 (Qwen3 tokenizer)
+    size: int  # target tokens, one of dataset.SIZES
     n: int  # position in the page, from 0
     title: str  # the page title
     # headings above the chunk, e.g. "Geschichte > Neuzeit"
@@ -19,10 +19,7 @@ class Chunk(Row):
     # Ling 3.1 Flash: one sentence on what the chunk adds to the page
     role: str | None = None
 
-    def embedded(self) -> str:
-        """What gets embedded: title, breadcrumb, text (as aihub-core does)."""
-        return represent(self.title, self.breadcrumb, self.text)
-
 
 def represent(title: str, breadcrumb: str | None, text: str) -> str:
+    """What gets embedded for a chunk: title, breadcrumb, text (as aihub-core does)."""
     return "\n".join(part for part in (title, breadcrumb, text) if part)

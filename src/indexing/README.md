@@ -1,54 +1,19 @@
 # Indexing
 
-Builds local vector indexes for document chunks.
+`python -m src.indexing --method <provider>` (`just index qwen`) embeds the chunks of
+every size into `embeddings/<provider>/<size>.npy` under the dataset folder:
+float16 unit vectors, row i = chunk i of `load(Chunk, size=size)`, NaN until
+embedded. Only missing rows are embedded, so a stopped run resumes and a rechunk
+re-embeds only the chunks that changed. `--api` embeds on OpenRouter's free
+endpoint instead of the GPU, for providers listed under `api` in `config.yaml`
+(Nemotron 3 Embed 1B, the same weights; 1000 requests a day, waited out).
 
-The indexer boundary is provider-shaped: every entry under `providers` in
-`config.yaml` (Qwen3-Embedding 0.6B/4B/8B, Nemotron 3 Embed 1B/8B) exposes the same `embed_documents` /
-`embed_query` methods from `src.indexing.embedders`. Every provider runs locally
-through sentence-transformers.
+Providers are the entries under `providers` in `config.yaml` (Qwen3-Embedding
+0.6B/4B/8B, Nemotron 3 Embed 1B/8B), run through sentence-transformers; the folder
+name is the provider name. Documents get the model's own `document` prompt (none for
+Qwen3, `passage: ` for Nemotron), queries its `query` prompt.
 
-Chunk vector collections are derived state in Chroma. SQLite remains the source
-of truth for page metadata, chunk text, and eval labels. `src.indexing.store`
-owns Chroma mechanics and query-time vector search; indexing only orchestrates
-rebuilds.
-
-Current chunk collections are storage names, not public retrieval method names:
-
-```text
-page_chunks_<provider>_chunk             # the base chunk variant
-page_chunks_<provider>_<variant>_chunk   # CHUNK_VARIANT=<variant>
-```
-
-A collection holds one chunk variant (see `src/preprocess`), so indexing a
-variant never replaces the base index.
-
-Each chunk is embedded as its page title, heading breadcrumbs, and chunk text,
-joined by newlines. The retrieved evidence is always the original chunk text.
-
-Every provider reads up to the shared `embedding_max_seq_length` tokens. A
-document longer than that fails indexing with its token count instead of being
-silently truncated; raise the limit or lower `chunk_size` in
-`src/preprocess/config.yaml`.
-
-Model and collection settings live in `config.yaml`.
-
-Rebuild one collection:
-
-```bash
-uv run python -m src.indexing --method qwen
-```
-
-Adding a model is a config entry: the keys are `SentenceTransformerIndexer`
-fields (`model_name`, `batch_size`, `dtype`, `attn_implementation`, `revision`,
-`local_files_only`). The Nemotron models are pinned to a revision and load in
-BF16 with SDPA attention; the 8B models need a CUDA GPU.
-
-Rebuild the default regenerable vector cache:
-
-```bash
-just index qwen
-```
-
-Durable reference databases belong under `$LLMS4EU_DATA/db/`. Regenerable Chroma
-cache artifacts belong under `$LLMS4EU_DATA/chroma/`. Point `LLMS4EU_DATA` at a
-private path when a run should not touch the shared store.
+`store.py` answers vector queries for the CHUNK_SIZE in use: exact dot-product search
+over the stored vectors. An approximate index (FAISS, Qdrant) built from the same
+files is the next step when query latency matters. Query embeddings are cached in
+`$LLMS4EU_DATA/embeddings/cache.sqlite`.

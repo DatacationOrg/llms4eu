@@ -1,8 +1,6 @@
-from typing import Any
 from datetime import datetime
 
 from pydantic import BaseModel, Field
-
 
 __all__ = ["PageMarkdownContent", "PageMetadata"]
 
@@ -24,19 +22,6 @@ class PageMetadata(BaseModel):
     page_kind: str = "prose"
     markdown_chars: int = 0
     error: str | None = None
-
-    @classmethod
-    def db_columns(cls) -> list[str]:
-        return list(cls.model_fields)
-
-    def db_values(self) -> tuple[Any, ...]:
-        values = []
-        for column in self.db_columns():
-            value = getattr(self, column)
-            if isinstance(value, datetime):
-                value = value.isoformat()
-            values.append(value)
-        return tuple(values)
 
 
 class PageMarkdownContent(BaseModel):

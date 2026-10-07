@@ -1,20 +1,17 @@
 from __future__ import annotations
 
-import math
-import re
-from collections import Counter
 from dataclasses import dataclass
 from functools import cache
-
 from pathlib import Path
 
-from src.db.legacy.pages import chunk_variant
-from src.db.legacy.pages import connect_pages as connect
-from src.retrieval.base import RankedChunk, retrieve_batch_default
+import numpy as np
+
+from src.db.dataset import Chunk, chunk_size, load
+from src.retrieval.base import RankedChunk, top_k
 from src.shared.env import load_yaml
 
 CONFIG = load_yaml(Path(__file__).parents[1] / "config.yaml")
-TOKEN_RE = re.compile(r"[^\W_]+", re.UNICODE)
+TOKEN_PATTERN = r"[^\W_]+"
 
 
 @dataclass(frozen=True)
@@ -24,78 +21,53 @@ class SparseRetriever:
     b: float = CONFIG["sparse_b"]
 
     def retrieve(self, query: str, limit: int) -> list[RankedChunk]:
-        corpus = _corpus(chunk_variant())
-        query_terms = _tokens(query)
-        scores = []
-        for chunk in corpus:
-            score = 0.0
-            for term in query_terms:
-                term_frequency = chunk.term_counts.get(term, 0)
-                if not term_frequency:
-                    continue
-                denominator = term_frequency + self.k1 * (
-                    1 - self.b + self.b * chunk.length / corpus.avgdl
-                )
-                score += corpus.idf.get(term, 0.0) * (
-                    term_frequency * (self.k1 + 1) / denominator
-                )
-            if score:
-                scores.append(RankedChunk(chunk.id, score, chunk.text))
-        return sorted(scores, key=lambda chunk: chunk.score, reverse=True)[:limit]
+        return self.retrieve_batch([query], limit)[0]
 
     def retrieve_batch(
         self,
         queries: list[str],
         limit: int,
     ) -> dict[int, list[RankedChunk]]:
-        return retrieve_batch_default(self, queries, limit)
-
-
-@dataclass(frozen=True)
-class ChunkTerms:
-    id: str
-    text: str
-    term_counts: Counter[str]
-    length: int
+        corpus = _corpus(chunk_size(), self.k1, self.b)
+        results = {}
+        for start in range(0, len(queries), 64):  # 64 dense score rows at a time
+            # A query term counts as often as it occurs in the query.
+            terms = corpus.vectorizer.transform(queries[start : start + 64])
+            for offset, row in enumerate((terms @ corpus.weights.T).toarray()):
+                results[start + offset] = [
+                    RankedChunk(corpus.ids[i], float(row[i]), corpus.texts[i])
+                    for i in top_k(row, limit)
+                    if row[i] > 0
+                ]
+        return results
 
 
 @dataclass(frozen=True)
 class Corpus:
-    chunks: list[ChunkTerms]
-    idf: dict[str, float]
-    avgdl: float
-
-    def __iter__(self):
-        return iter(self.chunks)
+    ids: list[str]
+    texts: list[str]
+    vectorizer: object
+    weights: object  # chunks x terms, BM25 weight of each term in each chunk
 
 
 @cache
-def _corpus(variant: str) -> Corpus:
+def _corpus(size: int, k1: float, b: float) -> Corpus:
     # BM25 indexes the raw chunk text; title and breadcrumbs are dense-side context.
-    with connect() as conn:
-        rows = conn.execute(
-            "select id, text from page_chunks where variant = ? order by id", (variant,)
-        ).fetchall()
+    from sklearn.feature_extraction.text import CountVectorizer
 
-    chunks = []
-    document_frequency: Counter[str] = Counter()
-    for row in rows:
-        terms = _tokens(row["text"])
-        term_counts = Counter(terms)
-        chunks.append(ChunkTerms(row["id"], row["text"], term_counts, len(terms) or 1))
-        document_frequency.update(term_counts.keys())
-
-    document_count = len(chunks)
-    if not document_count:
-        return Corpus([], {}, 1.0)
-
-    idf = {
-        term: math.log(1 + (document_count - count + 0.5) / (count + 0.5))
-        for term, count in document_frequency.items()
-    }
-    avgdl = sum(chunk.length for chunk in chunks) / document_count
-    return Corpus(chunks, idf, avgdl)
-
-
-def _tokens(text: str) -> list[str]:
-    return [match.group(0).casefold() for match in TOKEN_RE.finditer(text)]
+    chunks = load(Chunk, ["id", "text"], size=size).to_pydict()
+    vectorizer = CountVectorizer(
+        lowercase=False, preprocessor=str.casefold, token_pattern=TOKEN_PATTERN
+    )
+    counts = vectorizer.fit_transform(chunks["text"]).tocsr().astype(np.float32)
+    lengths = np.maximum(np.asarray(counts.sum(axis=1)).ravel(), 1)
+    document_count = counts.shape[0]
+    document_frequency = np.bincount(counts.indices, minlength=counts.shape[1])
+    idf = np.log(
+        1 + (document_count - document_frequency + 0.5) / (document_frequency + 0.5)
+    )
+    norm = k1 * (1 - b + b * lengths / lengths.mean())
+    rows = np.repeat(np.arange(document_count), np.diff(counts.indptr))
+    tf = counts.data
+    counts.data = idf[counts.indices] * tf * (k1 + 1) / (tf + norm[rows])
+    return Corpus(chunks["id"], chunks["text"], vectorizer, counts)

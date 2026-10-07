@@ -6,7 +6,7 @@ cut at four sizes); the other files are questions about the pages, by page id
     hard = load(Rag, ["id", "question"], answer_ok=True, kind="challenge").to_pandas()
     for q in read(Unanswerable, ok=True): print(q.question, q.why)
     texts = pages(hard.id)
-    ids, vectors = embeddings("qwen3-embedding-0.6b", 512)  # rows of load(Chunk, size=512)
+    ids, vectors = embeddings("qwen", chunk_size())  # rows of load(Chunk, size=...)
 """
 
 from __future__ import annotations
@@ -28,6 +28,8 @@ from src.db.schemas.tables import Tables
 from src.db.schemas.unanswerable import Unanswerable
 
 __all__ = [
+    "DEFAULT_SIZE",
+    "SIZES",
     "Chunk",
     "Compare",
     "Meta",
@@ -35,13 +37,23 @@ __all__ = [
     "Rag",
     "Tables",
     "Unanswerable",
+    "chunk_size",
     "embeddings",
     "load",
+    "missing",
     "pages",
     "read",
+    "vectors_path",
 ]
 
 ROOT = Path(os.getenv("DATASET_DIR", "/data/llms4eu/wiki"))  # or a copy of it
+SIZES = (256, 512, 1024, 2048)  # chunk target sizes, in tokens
+DEFAULT_SIZE = 512
+
+
+def chunk_size() -> int:
+    """The chunk size indexing, retrieval and eval work on: CHUNK_SIZE, else DEFAULT_SIZE."""
+    return int(os.getenv("CHUNK_SIZE", DEFAULT_SIZE))
 
 
 def path(model: type[Row]) -> Path:
@@ -66,10 +78,20 @@ def pages(ids: Iterable[str]) -> dict[str, dict]:
     return {p["id"]: p for p in table.to_pylist()}
 
 
-def embeddings(model: str, size: int) -> tuple[list[str], np.ndarray]:
+def vectors_path(provider: str, size: int) -> Path:
+    """Where one provider's vectors of the chunks of one size live."""
+    return ROOT / "embeddings" / provider / f"{size}.npy"
+
+
+def embeddings(provider: str, size: int) -> tuple[list[str], np.ndarray]:
     """Chunk ids and their unit vectors (float16, memory-mapped), row i = chunk ids[i].
-    Rows not embedded yet are NaN."""
+    Rows not embedded yet are NaN (see `missing`)."""
     ids = load(Chunk, ["id"], size=size).column("id").to_pylist()
-    vectors = np.load(ROOT / "embeddings" / model / f"{size}.npy", mmap_mode="r")
+    vectors = np.load(vectors_path(provider, size), mmap_mode="r")
     assert len(ids) == len(vectors), "embeddings are from another chunking"
     return ids, vectors
+
+
+def missing(vectors: np.ndarray) -> np.ndarray:
+    """Which rows have no vector yet: NaN at either end (the end: a row cut mid-write)."""
+    return np.isnan(vectors[:, 0]) | np.isnan(vectors[:, -1])

@@ -1,11 +1,10 @@
-"""Score the same retrieval methods on every chunk variant, in one table.
+"""Score the same retrieval methods on every chunk size, in one table.
 
-Each variant is chunked, labelled from the evidence quotes, indexed for the
-providers the methods need, and evaluated in turn. `hit@k` and `recall@k` count
-whole chunks, and a chunk twice as long is about twice as likely to hold any
-given answer, so the table also shows each variant's chunk count and the
-characters a reader gets back at k. Every variant's eval is checkpointed, so a
-stopped sweep resumes where it was.
+Each size is evaluated in turn on its own chunks and stored vectors (embed them first
+with `python -m src.indexing`). `hit@k` and `recall@k` count whole chunks, and a chunk
+twice as long is about twice as likely to hold any given answer, so the table also
+shows each size's chunk count and the characters a reader gets back at k. Every size's
+eval is checkpointed, so a stopped sweep resumes where it was.
 """
 
 from __future__ import annotations
@@ -15,38 +14,29 @@ import os
 from datetime import date
 from pathlib import Path
 
-from src.db.legacy.pages import connect_pages as connect
-from src.eval.evaluate import CONFIG, EvalRun, REPORTS_DIR, run_eval
-from src.eval.evidence import relabel
+from src.db.dataset import SIZES, Chunk, load
+from src.eval.evaluate import CONFIG, REPORTS_DIR, EvalRun, run_eval
 from src.eval.metrics import plain_table
-from src.indexing.store import rebuild_chunk_collection
-from src.preprocess.chunker import rebuild_page_chunks, variant_settings
-from src.retrieval.methods import missing_retriever_indexes
 from src.shared.env import load_local_env
 
 
 def compare(
-    variants: list[str],
+    sizes: list[int],
     methods: list[str],
     limit: int | None,
     category: str | None,
     output: Path,
 ) -> None:
     rows = []
-    for variant in variants:
-        variant_settings(variant)  # fail on a typo before any work
-        # Every stage reads the variant from the environment, as a shell would set it.
-        os.environ["CHUNK_VARIANT"] = variant
-        rebuild_page_chunks()
-        relabel()
-        for provider in sorted(set(missing_retriever_indexes(methods).values())):
-            rebuild_chunk_collection(provider)
+    for size in sizes:
+        # Every stage reads the size from the environment, as a shell would set it.
+        os.environ["CHUNK_SIZE"] = str(size)
         run = run_eval(methods, limit=limit, category=category, checkpoint=True)
-        rows.extend(variant_rows(variant, run, _char_counts(variant)))
+        rows.extend(size_rows(str(size), run, _char_counts(size)))
 
     report = "\n".join(
         [
-            f"# Chunk variants, {date.today():%Y-%m-%d}",
+            f"# Chunk sizes, {date.today():%Y-%m-%d}",
             "",
             f"Methods: {', '.join(methods)}",
             f"Limit: {limit if limit is not None else 'all'}",
@@ -68,7 +58,7 @@ _SCORE_NAMES = [
     f"mrr@{CONFIG['mrr_k']}",
 ]
 _HEADERS = [
-    "variant",
+    "size",
     "method",
     "chunks",
     "mean chars",
@@ -79,16 +69,14 @@ _HEADERS = [
 ]
 
 
-def variant_rows(
-    variant: str, run: EvalRun, char_counts: dict[str, int]
-) -> list[list[str]]:
-    """One table row per method: the variant's shape, its scores, and its cost."""
+def size_rows(size: str, run: EvalRun, char_counts: dict[str, int]) -> list[list[str]]:
+    """One table row per method: the size's shape, its scores, and its cost."""
     k = CONFIG["category_hit_k"]
     chunks = len(char_counts)
     mean_chars = sum(char_counts.values()) / chunks if chunks else 0
     return [
         [
-            variant,
+            size,
             method,
             str(chunks),
             f"{mean_chars:.0f}",
@@ -114,31 +102,26 @@ def chars_at_k(
     return sum(totals) / len(totals)
 
 
-def _char_counts(variant: str) -> dict[str, int]:
-    with connect() as conn:
-        return {
-            row["id"]: row["char_count"]
-            for row in conn.execute(
-                "select id, char_count from page_chunks where variant = ?", (variant,)
-            )
-        }
+def _char_counts(size: int) -> dict[str, int]:
+    chunks = load(Chunk, ["id", "text"], size=size).to_pydict()
+    return {i: len(text) for i, text in zip(chunks["id"], chunks["text"])}
 
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--variants", required=True, help="comma-separated names")
+    parser.add_argument("--sizes", type=int, nargs="+", choices=SIZES, default=SIZES)
     parser.add_argument("--methods", default=",".join(CONFIG["default_methods"]))
     parser.add_argument("--limit", type=int)
     parser.add_argument("--category")
     parser.add_argument(
         "--output",
         type=Path,
-        default=REPORTS_DIR / f"chunk_variants_{date.today():%Y-%m-%d}.md",
+        default=REPORTS_DIR / f"chunk_sizes_{date.today():%Y-%m-%d}.md",
     )
     args = parser.parse_args()
     load_local_env()
     compare(
-        [name.strip() for name in args.variants.split(",") if name.strip()],
+        args.sizes,
         [name.strip() for name in args.methods.split(",") if name.strip()],
         args.limit,
         args.category,

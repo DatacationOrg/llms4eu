@@ -11,7 +11,7 @@ Reusable chunk retrieval methods.
 retrieval path calls a hosted API.
 
 - `sparse`: local lexical retrieval over page chunks.
-- `<provider>`: Chroma vector search over page chunks, one per entry in
+- `<provider>`: exact vector search over the stored chunk vectors, one per entry in
   `providers` of `src/indexing/config.yaml`.
 - `*_hybrid`: normalized weighted score fusion over one vector provider plus
   sparse retrieval.
@@ -24,8 +24,8 @@ retrieval path calls a hosted API.
   place and how wide it is; Wikidata gives the point; over 4x candidates each
   score becomes `0.7 * text + 0.3 * exp(-km / decay)`, and a page with no
   location scores 1.0 on geography. Places are cached per query in
-  `geo_query_places`; a lookup failure leaves the query unscoped. Needs
-  `just locate-pages`. Settings are the `geo_*` keys in `config.yaml`.
+  `$LLMS4EU_DATA/cache/geo_query_places.sqlite`; a lookup failure leaves the query
+  unscoped. Page points are `Page.latitude` / `longitude`. Settings are the `geo_*` keys in `config.yaml`.
 
 Hybrid + rerank is the strongest measured configuration. The agentic
 sufficiency and query-reformulation loop was removed after it measured below
