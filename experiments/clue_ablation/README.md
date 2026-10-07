@@ -82,6 +82,11 @@ CHUNK_SIZE=512 uv run python -m experiments.clue_ablation.ranks --n 30
 - On hard questions, dense left 14 of 30 out of the top 100; BM25 ranked 22 first.
 - Hybrid is below BM25: the default weights favour dense.
 
+**Why dense fails** (follow-up, see [language anchors](../language_anchors/README.md#findings-so-far)): its top-10
+for a failed question is the right kind of place in the right region (same category 76%, country 88%) but not the
+right one; it loses the distinguishing details. So the prediction for phase B: removing quantity, date and name
+clues hurts BM25 much more than dense.
+
 **Inferences to test:** BM25 lives off the exact anchors that survived the banned-word step (years, numbers, names);
 dense may fail because clues are spread over chunks (not supported so far: 256 = 512) or because many places look
 alike. The pipeline's default hybrid weights may not suit described-place questions. Worth telling the team
