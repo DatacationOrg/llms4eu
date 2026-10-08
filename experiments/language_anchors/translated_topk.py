@@ -50,13 +50,33 @@ def realistic_anchors(question: str) -> str:
     )
 
 
-def sample(n: int) -> pd.DataFrame:
+def sample(n: int, per_lang: int = 0) -> pd.DataFrame:
+    """Dev, answer_ok, x_ok rows in a fixed hash order: the first n per kind, or (per_lang > 0) the first per_lang
+    per kind and language, so Swedish does not dominate and every language is represented."""
     rag = ROOT / "qa" / "wiki_qa_rag.parquet"
+    partition, limit = ("kind, lang", int(per_lang)) if per_lang else ("kind", int(n))
     return duckdb.sql(
         f"""select id, kind, lang, x_lang, question, question_x, relevant from '{rag}'
         where answer_ok and x_ok and split = 'dev'
-        qualify row_number() over (partition by kind order by hash(id || n || {SEED})) <= {int(n)}"""  # nosec B608 - constants and an int
+        qualify row_number() over (partition by {partition} order by hash(id || n || {SEED})) <= {limit}"""  # nosec B608 - constants and ints
     ).df()
+
+
+def lang_group(lang: str) -> str:
+    """Groups that behave differently for BM25: Swedish (lake register), German (nouns capitalised), other script."""
+    return {"sv": "sv", "de": "de", "el": "el/bg", "bg": "el/bg"}.get(
+        lang, "other Latin"
+    )
+
+
+def wilson(hits: pd.Series) -> str:
+    """Share of True with its 95% Wilson interval, e.g. '44% [37-51]'."""
+    n, p, z = len(hits), float(hits.mean()), 1.96
+    if n == 0:
+        return "-"
+    centre = (p + z * z / (2 * n)) / (1 + z * z / n)
+    half = z * ((p * (1 - p) / n + z * z / (4 * n * n)) ** 0.5) / (1 + z * z / n)
+    return f"{p:.0%} [{max(centre - half, 0):.0%}-{min(centre + half, 1):.0%}]"
 
 
 def main() -> None:
@@ -64,11 +84,17 @@ def main() -> None:
     ap.add_argument(
         "--n", type=int, default=300, help="questions per kind (easy, hard)"
     )
+    ap.add_argument(
+        "--per-lang",
+        type=int,
+        default=0,
+        help="stratified: questions per kind and language (overrides --n)",
+    )
     # duckdb: the lean on-disk BM25 (fts.py); the pipeline's in-memory build gets killed under memory pressure
     ap.add_argument("--engine", choices=["pipeline", "duckdb"], default="pipeline")
     args = ap.parse_args()
 
-    df = sample(args.n)
+    df = sample(args.n, args.per_lang)
     shared = [anchors(q, x) for q, x in zip(df.question, df.question_x, strict=True)]
     df["anchors_only"] = [" ".join(t for ts in a.values() for t in ts) for a in shared]
     # the anchors split by kind: is the specificity in the numbers or in the names?
@@ -120,11 +146,12 @@ def main() -> None:
                     else None,
                     "query_lang_differs": qlang is not None and qlang != r.lang,
                     "x_lang": r.x_lang,
+                    "lang_group": lang_group(r.lang),
                 }
             )
     t = pd.DataFrame(rows)
     print(
-        f"\nBM25 ({args.engine}), {chunk_size()}-token chunks, {args.n} easy + {args.n} hard questions\n"
+        f"\nBM25 ({args.engine}), {chunk_size()}-token chunks, {(df.kind == 'corpus').sum()} easy + {(df.kind == 'challenge').sum()} hard questions\n"
     )
     print(
         t.groupby(["kind", "query"])[
@@ -182,6 +209,17 @@ def main() -> None:
         print(
             f"- [{r.x_lang}] {r.question_x}\n  -> {r.realistic_x}\n  oracle anchors: {r.anchors_only}"
         )
+    print("\nHard questions by page-language group, hit@10 with 95% interval:\n")
+    hard = t[
+        (t.kind == "challenge")
+        & t["query"].isin(["question", "question_x", "anchors_only", "realistic_x"])
+    ]
+    print(
+        hard.groupby(["lang_group", "query"])["hit10"]
+        .agg(n="size", hit10=wilson)
+        .unstack("query")
+        .to_markdown()
+    )
 
 
 if __name__ == "__main__":

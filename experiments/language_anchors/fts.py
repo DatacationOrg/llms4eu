@@ -8,6 +8,8 @@ implementation (DuckDB's tokenizer and parameters), so compare query versions wi
 
 from __future__ import annotations
 
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -42,14 +44,23 @@ class FtsRetriever:
             )
             build.close()
         self.con = duckdb.connect(str(path), read_only=True)
-        self.con.sql(f"set memory_limit='{memory_limit}'")
+        # gentle on the shared server: one thread per query; parallelism comes from a few queries at once
+        self.con.sql(f"set memory_limit='{memory_limit}'; set threads=1")
 
-    def retrieve_batch(self, queries: list[str], limit: int) -> dict[int, list[Hit]]:
+    def retrieve_batch(
+        self, queries: list[str], limit: int, workers: int = 4
+    ) -> dict[int, list[Hit]]:
+        """Queries in parallel: one read-only cursor per thread (DuckDB releases the GIL while it scans)."""
         sql = (
             "select id, s from (select id, fts_main_chunks.match_bm25(id, ?) as s from chunks) "
             f"where s is not null order by s desc limit {int(limit)}"  # nosec B608 - an int; the query is a bound parameter
         )
-        return {
-            i: [Hit(*row) for row in self.con.execute(sql, [q]).fetchall()]
-            for i, q in enumerate(queries)
-        }
+        local = threading.local()
+
+        def search(query: str) -> list[Hit]:
+            if not hasattr(local, "cursor"):
+                local.cursor = self.con.cursor()
+            return [Hit(*row) for row in local.cursor.execute(sql, [query]).fetchall()]
+
+        with ThreadPoolExecutor(workers) as pool:
+            return dict(enumerate(pool.map(search, queries)))

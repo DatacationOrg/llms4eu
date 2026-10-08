@@ -12,15 +12,22 @@
 4. **Dense knows the neighbourhood, not the house.** On hard questions it returns the right kind of place in the right region (same category 76%, same country 88%) but rarely the right one: it loses the distinguishing details. *Evidence: 30-question pilot; dense 33% vs BM25 83% hit@10.*
 5. So **"BM25 works well" holds only within one language**, across languages only for named places, and on hard questions mainly through the numbers the generator added (insight 6). Hybrid inherits the language locking through its BM25 side.
 
-6. **BM25's success on hard questions rests mostly on the numbers the generator added.** In the page's own language, removing the numbers drops hard questions from 54% to **14%**, removing names 55% to 42%, removing both 53% to **12%** (paired, same questions). Easy questions rest on the name: 96% to 21% without it. Since real users rarely give exact numbers, BM25's lead over dense on this test set is probably inflated; the dense side of this comparison is the next check. *Evidence: step 3, 300 + 300 questions; inflected names ("Ljusnans") are not removed, so the name effect is underestimated.*
+6. **BM25's success on hard questions rests mostly on the numbers the generator added.** In the page's own language, removing the numbers drops hard questions from 54% to **14%**, removing names 55% to 42%, removing both 53% to **12%** (paired, same questions). Easy questions rest on the name: 96% to 21% without it. Real users rarely give exact numbers, so BM25's scores on this test set are inflated; but dense does not overtake it without them (insight 7). *Evidence: step 3, 300 + 300 questions; inflected names ("Ljusnans") are not removed, so the name effect is underestimated.*
+
+7. **Removing the exact details does not make dense better than BM25** (confirmed on a larger, stratified sample, see *Robustness*). Outside Swedish, without numbers and names BM25 still finds 44% of hard questions, dense 6% (full: 65% vs 13%). Swedish hard questions (77% of this sample, mostly lake-register questions) are found only through their numbers: without them BM25 drops to 4%, dense stays near 0. So dense (Qwen3-0.6B, 512-token chunks) is weak on described places in general, not only because the generator added numbers. *Evidence: step 4, 300 hard questions (70 non-Swedish: a signal).*
+8. **Dense has no language locking:** easy questions are found 97% of the time after translation (BM25 38%). Dense carries named places across languages, BM25 carries detailed descriptions within a language: the two sides of hybrid complement each other. *Evidence: step 4, 300 easy questions.*
+
+9. **Fusing the full question with its anchors is a cheap, deployable fix.** BM25 on the full question and on its numbers + capitalised words, rankings combined with reciprocal rank fusion: translated hard questions 2% -> **25%**, translated easy 45% -> **77%**, and same-language questions do not suffer but gain a little (hard 71% -> 74%, easy 92% -> 96%). No model, no tuning (standard RRF k = 60). Fused is a little below anchors alone on translated questions (31%, 82%): the full question's language-locked list still pulls. Weak for German queries (hard 2%, easy 69%). *Evidence: step 2c, stratified 929 hard + 1,678 easy, 95% intervals.*
+
+**Robustness (2026-10-08):** steps 2, 2b, 3 and 4 rerun on a stratified sample (up to 100 per language: 929 hard, 1,678 easy; 95% intervals). The direction of every insight holds. Sizes change: outside Swedish, numbers matter less than the first, Swedish-heavy sample suggested (BM25 70% -> 56% without numbers and names, not -> 12%), and the realistic anchor heuristic recovers 31% of translated hard questions (oracle 33%), but only 10% when the translation is German. Chunk size: at 256 tokens dense improves a little (other Latin script 22% -> 27% full, 14% -> 18% without numbers and names), BM25 hardly changes; dense stays far behind. Details in *Robustness* below.
 
 **How far to trust each insight** (robust, general, surprise, value for the team): see the [overview](../README.md#how-much-each-finding-is-worth).
 
-**What it suggests** (not yet tested): a cheap cross-lingual fix is to run BM25 twice, on the full question and on its numbers + capitalised words, and fuse the two lists. Fusion, not replacement: the system does not know whether the question is in the page's language, and the anchor-only query loses to the full question when it is (hard: 43% vs 54%). Also: a language-independent location filter (see [location](../location/README.md)), more BM25 weight than the default 30% for detail-rich questions, and a reranker for dense.
+**What it suggests:** run BM25 twice, on the full question and on its numbers + capitalised words, and fuse the rankings (tested, insight 9). Open: weighting the anchor list higher for questions likely in another language than the pages, and a German exception. Also: a language-independent location filter (see [location](../location/README.md)), more BM25 weight than the default 30% for detail-rich questions, and a reranker for dense.
 
 **Scope:** this corpus has one page per place, in the language of its country. In reality a tourist may find a page in their own language, mainly for famous places (49% of places here exist in only one Wikipedia language). So the language locking matters most for places that only exist in their local language: the obscure ones the project wants to surface. In a corpus with several language versions per place, it could favour famous places (inference). Hit rates count the gold page only; fine for steps 1-2 (questions generated to be unique), relevant from step 3 on.
 
-**Next:** dense on the same anchor-less questions (step 4, GPU, ask first): does dense hold up where BM25 drops? Then fusion (2c); the oracle location filter is in [location](../location/README.md). **Parked:** see the table below.
+**Next:** the oracle location filter is in [location](../location/README.md). **Parked:** see the table below.
 
 ## Decisions
 
@@ -120,11 +127,57 @@ By translation language (hard): German 35% (oracle 59%: every noun is capitalise
 
 Easy questions, original language: -names (261) 96% -> 21%. Translated questions are near 0 in every variant (hard 0.7% -> 0%; easy 41% -> 0.4% without names). Limitation: anchors are tokens shared with the translation, so inflected names ("Ljusnans" vs "Ljusnan") stay in the question.
 
+### Step 2c: fusion
+
+`fusion.py --per-lang 100` (DuckDB BM25, gentle); for the original and the translated question alike: BM25 on the full question and on its realistic anchors (numbers + capitalised words of that question), page rankings fused with reciprocal rank fusion (k = 60); a question without anchors keeps its full ranking. hit@10 [95% interval].
+
+| | n | full | anchors | fused |
+|---|---|---|---|---|
+| hard, original | 929 | 71% [68-73] | 53% [50-56] | 74% [72-77] |
+| hard, translated | 929 | 2% [1-3] | 31% [28-34] | 25% [22-28] |
+| easy, original | 1,678 | 92% [91-93] | 94% [93-95] | 96% [94-96] |
+| easy, translated | 1,678 | 45% [42-47] | 82% [80-84] | 77% [75-79] |
+
+By query language, translated hard: other Latin 2% -> 27%, Greek/Bulgarian 0% -> 18%, Swedish 0% -> 29%, German 0% -> 2% (anchors alone 10%). Same language, hard: Swedish 40% -> 52%, other Latin 72% -> 75%, German 89% -> 91%.
+
+### Robustness: stratified sample, 95% intervals
+
+Up to 100 dev questions per kind and language with `x_ok` (`--per-lang 100`): 929 hard (701 other Latin script, 100 German, 100 Swedish, 28 Greek/Bulgarian) and 1,678 easy. DuckDB BM25 run gently (4 queries in parallel, one thread each, `nice`); dense on the GPU. Removed words replaced by "…".
+
+Hard questions, original language, full -> without numbers and names, hit@10 [95% interval] (n = questions that lose something):
+
+| page language | BM25 | dense |
+|---|---|---|
+| other Latin (540) | 70% -> 56% [52-60] | 21% -> 14% [12-18] |
+| German (90) | 88% -> 72% [62-80] | 19% -> 9% [5-17] |
+| Greek / Bulgarian (17) | 65% -> 47% [26-69] | 18% -> 18% [6-41] |
+| Swedish (94) | 41% -> 1% [0-6] | 0% -> 0% [0-4] |
+
+Without numbers only, other Latin: BM25 68% -> 54%, dense 20% -> 16%; without names only: BM25 80% -> 75%, dense 29% -> 19%.
+
+Translated questions, hit@10: hard BM25 2% (dense 7%); realistic anchors 31% [overall], by translation language: other Latin 33%, Greek/Bulgarian 22%, German 10% (oracle anchors 33%, 26%, 32%). Easy: translated 45%, realistic anchors 82%, oracle anchors 73%. Hard questions by page language with the realistic anchors: other Latin 29% [26-32], German 41% [32-51], Greek/Bulgarian 11% [4-27], Swedish 42% [33-52].
+
+Chunk size, same sample at 256-token chunks (`CHUNK_SIZE=256`), hard questions, other Latin script, full -> without numbers and names: dense 27% [23-30] -> 18% [15-21] (512: 22% -> 14%), BM25 69% -> 54% (512: 72% -> 56%). German: dense 29% -> 17% (512: 19% -> 9%). Smaller chunks help dense by about 5 points (borderline: the intervals touch), consistent with details being diluted in larger chunks as part of the explanation; the 30-question pilot ("256 = 512") was too small to see it.
+
 ### Plan
 
 1. ~~Correlational look~~ (done, step 1).
 2. ~~Why translated hard questions fail~~ (done, step 2).
 2b. ~~Realistic anchors~~ (done).
-2c. **Fusion:** BM25 on the full question and on its anchors, lists fused (e.g. reciprocal rank fusion), for the original and the translated question. The deployable version: does it recover cross-lingual questions without hurting same-language ones?
+2c. ~~Fusion~~ (done; see *Step 2c* below).
 3. ~~**Removal experiment**~~ (done, BM25; dense is step 4) (the opposite of step 2, which kept only the anchors): remove the anchors from the full question, e.g. "de plaats ontstaan in 1932 en is 30 km²" -> "de plaats ontstaan en is km²". {original, translated} x {anchors kept, removed}, levels numbers / names / both, ~500 easy + 500 hard. Most informative: hard in the original language (does BM25 still find them without names and numbers?) and easy translated (how much of their 35-43% is the name). Questions may now fit several places: report the gold rank, count `relevant` pages as hits where judged, and accept the ambiguity (see decisions).
-4. **Dense on the same queries,** with placeholders instead of deleted anchors, after GPU approval.
+4. ~~Dense on the same queries~~ (done, step 4).
+
+### Step 4: dense vs BM25 without anchors
+
+`removal.py --engine dense --placeholder "…"` and `--engine duckdb --placeholder "…"`; removed words become "…" so the sentence stays intact for dense; same 300 + 300 questions; paired (full on the same questions).
+
+| | BM25 full -> without numbers & names | dense full -> without numbers & names |
+|---|---|---|
+| hard, non-Swedish (70; 54 lose something) | 65% -> 44% | 13% -> 6% |
+| hard, Swedish (230; 220) | 51% -> 4% | 1% -> 0.5% |
+| easy, original (300) | 94% | 99.7% |
+| easy, translated (300) | 38% | 97% |
+| easy, without names (261), original / translated | 21% / 0.4% | 17% / 5% |
+
+The sample is not restricted to `balanced` pages, so 77% of its hard questions are Swedish; the 30-question pilot (balanced pages) had dense at 33%. BM25 with the placeholder reproduces the deletion run (step 3) within a point.
