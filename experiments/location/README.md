@@ -7,9 +7,9 @@
 **Insights**
 
 1. **A region leaves few candidates for castles, many for lakes.** Within 10 km of the gold page, the median number of other pages of the same category is 1 for castles and castle ruins (5 or fewer for 84-95% of them), but 12 for lakes and 9 for mountains, with long tails (90th percentile ~100 within 10 km). Finnish and Swedish pages are the densest (median 63 and 44 within 10 km). So resolving the area could nearly settle a castle question but not a lake question. *Evidence: `region_density.py`, 702 gold pages of dev hard questions on balanced pages. 10 km is an optimistic resolution: "western Bohemia" is far wider, and at 25 km the share with 5 or fewer candidates drops from 63% to 36%.*
-2. **Location filters are language-independent, so they could undo BM25's language locking** (inference, untested). A translated question returns 99% pages in the query's language ([language anchors](../language_anchors/README.md)); restricting to the right area removes those distractors whatever their language. It does not solve picking the right place within a dense area (insight 1).
+2. **A location filter undoes BM25's language locking, and more.** With an oracle filter (built from the gold page), translated hard questions go from 2% hit@10 to **45%** when only pages in the gold page's Wikipedia language edition (about its country) are searched, and to **70%** within 25 km; translated easy questions 45% -> 84% / 86%. Within the same language, 25 km lifts hard questions 71% -> 89%; the language edition changes nothing there. With the language-edition filter the anchor query adds nothing: the locking is gone. *Evidence: `oracle_filter.py`, stratified 929 hard + 1,678 easy, 95% intervals. Upper bound: a real resolver must infer the country or region from the question, and the language edition is the easiest level to infer.*
 
-**Next:** an oracle location filter on the translated questions (only pages within 25 km of the gold page, or in its country): the upper bound of what location can recover across languages. Then the same with the region the pipeline's resolver extracts from the question.
+**Next:** a realistic resolver: infer the country / language edition and the region from the question (place names like "Västra Götaland", "in Aragón"; the pipeline's geo resolver), and measure how much of the oracle's gain it keeps. The language edition is the cheapest and recovers the most across languages (2% -> 45%).
 
 ## Decisions
 
@@ -55,5 +55,19 @@ uv run python -m experiments.location.region_density
 ### Plan
 
 1. ~~Candidates per region~~ (done).
-2. **Oracle location filter** on translated questions: BM25 (DuckDB engine, [`../language_anchors/fts.py`](../language_anchors/fts.py)) restricted to pages within 25 km of the gold page, and to its country; compare with the unfiltered translated question and the same-language question.
+2. ~~Oracle location filter~~ (done; see *Oracle filter* below).
+
+### Oracle filter
+
+`oracle_filter.py --per-lang 100` (DuckDB BM25, gentle, ~70 min): full question, realistic anchors and both fused (RRF), each searched without a filter, within the gold page's language edition (prefix `svwiki/`; a stand-in for its country, since each place's article is in its country's language, except Belgium, Finland's Swedish pages and Ireland), and within 25 km of the gold page (any kind of place; median 59 pages). hit@10 [95% interval].
+
+| | none | language edition | 25 km |
+|---|---|---|---|
+| hard, original, full | 71% [68-73] | 71% [68-74] | 89% [87-91] |
+| hard, translated, full | 2% [1-3] | 45% [42-49] | 70% [67-73] |
+| hard, translated, fused with anchors | 25% [22-28] | 46% [43-49] | 71% [68-74] |
+| easy, original, full | 92% [91-93] | 92% [91-93] | 96% [95-97] |
+| easy, translated, full | 45% [42-47] | 84% [82-85] | 86% [85-88] |
+
+By page language, hard, translated, full: Swedish 1% -> 46% (edition) -> 70% (25 km); German 2% -> 47% -> 70%; other Latin 2% -> 45% -> 71%; Greek/Bulgarian 0% -> 50% -> 68%. Same language, 25 km: Swedish 40% -> 68%, other Latin 72% -> 90%.
 3. **Realistic resolver:** the same with the region the pipeline's geo resolver extracts from the question.

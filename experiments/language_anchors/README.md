@@ -19,11 +19,15 @@
 
 9. **Fusing the full question with its anchors is a cheap, deployable fix.** BM25 on the full question and on its numbers + capitalised words, rankings combined with reciprocal rank fusion: translated hard questions 2% -> **25%**, translated easy 45% -> **77%**, and same-language questions do not suffer but gain a little (hard 71% -> 74%, easy 92% -> 96%). No model, no tuning (standard RRF k = 60). Fused is a little below anchors alone on translated questions (31%, 82%): the full question's language-locked list still pulls. Weak for German queries (hard 2%, easy 69%). *Evidence: step 2c, stratified 929 hard + 1,678 easy, 95% intervals.*
 
+10. **No single hybrid is best everywhere.** Combining dense and BM25 with equal weights (RRF) is *worse* than BM25 alone on hard same-language questions (52% vs 71%): a weak component drags the strong one down. The best combination depends on the question: BM25 + anchors for described places in the same language (74%), dense + anchors across languages (hard 29%, easy 95%), dense for named places (99%). So the hybrid needs weights by question type, or a router (named or described? same language as the likely page?). *Evidence: `hybrid.py`, stratified 929 hard + 1,678 easy, RRF k = 60; the pipeline's own hybrid uses 0.7 dense / 0.3 BM25 score fusion instead.*
+
 **Robustness (2026-10-08):** steps 2, 2b, 3 and 4 rerun on a stratified sample (up to 100 per language: 929 hard, 1,678 easy; 95% intervals). The direction of every insight holds. Sizes change: outside Swedish, numbers matter less than the first, Swedish-heavy sample suggested (BM25 70% -> 56% without numbers and names, not -> 12%), and the realistic anchor heuristic recovers 31% of translated hard questions (oracle 33%), but only 10% when the translation is German. Chunk size: at 256 tokens dense improves a little (other Latin script 22% -> 27% full, 14% -> 18% without numbers and names), BM25 hardly changes; dense stays far behind. Details in *Robustness* below.
+
+**Examples** of where each method works or fails, with real questions: [examples.md](examples.md).
 
 **How far to trust each insight** (robust, general, surprise, value for the team): see the [overview](../README.md#how-much-each-finding-is-worth).
 
-**What it suggests:** run BM25 twice, on the full question and on its numbers + capitalised words, and fuse the rankings (tested, insight 9). Open: weighting the anchor list higher for questions likely in another language than the pages, and a German exception. Also: a language-independent location filter (see [location](../location/README.md)), more BM25 weight than the default 30% for detail-rich questions, and a reranker for dense.
+**What it suggests:** run BM25 twice, on the full question and on its numbers + capitalised words, and fuse the rankings (tested, insight 9); weight the hybrid by question type rather than one fixed mix (insight 10); and, stronger still across languages, restrict the search to the likely country or region ([location](../location/README.md): oracle 2% -> 45-70%). Open: weighting the anchor list higher for questions likely in another language than the pages, and a German exception. Also: a language-independent location filter (see [location](../location/README.md)), more BM25 weight than the default 30% for detail-rich questions, and a reranker for dense.
 
 **Scope:** this corpus has one page per place, in the language of its country. In reality a tourist may find a page in their own language, mainly for famous places (49% of places here exist in only one Wikipedia language). So the language locking matters most for places that only exist in their local language: the obscure ones the project wants to surface. In a corpus with several language versions per place, it could favour famous places (inference). Hit rates count the gold page only; fine for steps 1-2 (questions generated to be unique), relevant from step 3 on.
 
@@ -139,6 +143,19 @@ Easy questions, original language: -names (261) 96% -> 21%. Translated questions
 | easy, translated | 1,678 | 45% [42-47] | 82% [80-84] | 77% [75-79] |
 
 By query language, translated hard: other Latin 2% -> 27%, Greek/Bulgarian 0% -> 18%, Swedish 0% -> 29%, German 0% -> 2% (anchors alone 10%). Same language, hard: Swedish 40% -> 52%, other Latin 72% -> 75%, German 89% -> 91%.
+
+### Hybrid fusion
+
+`hybrid.py --per-lang 100`: dense (Qwen3-Embedding-0.6B, 512-token chunks), BM25 on the full question and BM25 on its realistic anchors (DuckDB, cached), combined with RRF (k = 60). hit@10 [95% interval].
+
+| | dense | BM25 | dense+BM25 | BM25+anchors | dense+anchors | all three |
+|---|---|---|---|---|---|---|
+| hard, original (929) | 20% [17-23] | 71% [68-73] | 52% [49-56] | 74% [72-77] | 48% [45-51] | 68% [65-71] |
+| hard, translated (929) | 7% [5-9] | 2% [1-3] | 6% [5-8] | 25% [22-28] | 29% [26-32] | 22% [19-24] |
+| easy, original (1,678) | 99% [99-100] | 92% [91-93] | 99% [98-99] | 96% [94-96] | 99% [98-99] | 98% [97-99] |
+| easy, translated (1,678) | 93% [92-94] | 45% [42-47] | 90% [88-91] | 77% [75-79] | 95% [93-96] | 90% [89-92] |
+
+Easy translated into Greek/Bulgarian: dense 77%, BM25 12%, dense+anchors 74%.
 
 ### Robustness: stratified sample, 95% intervals
 
